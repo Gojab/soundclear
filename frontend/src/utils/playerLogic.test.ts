@@ -1,20 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildSearchFollowUps,
   computeNextIndex,
   computePrevIndex,
+  extractTracksFromArtistDetail,
   findActiveLyricIndex,
   formatArtists,
   formatTime,
   getPlayableVideoId,
   getTrackUniqueId,
+  hasPlayableOfflineAudio,
+  isCollectionPlayableType,
+  isExcludedRegionalItem,
+  isExcludedRegionalText,
   isLocalTrack,
   isPlayableTrack,
   isYouTubeVideoId,
   mergeWatchTracksIntoQueue,
   normalizeRouteId,
+  podcastEpisodesToMediaItems,
 } from './playerLogic';
-import type { LyricLine, MediaItem } from '../types/music';
+import type { ArtistDetailResponse, LyricLine, MediaItem, PodcastEpisode } from '../types/music';
 
 const makeTrack = (id: string, title: string): MediaItem => ({
   id,
@@ -108,4 +115,155 @@ test('normalizeRouteId sanitizes Spotify URIs, URLs, and rejects empty or nullis
   assert.equal(normalizeRouteId('  '), null);
   assert.equal(normalizeRouteId('undefined'), null);
   assert.equal(normalizeRouteId(null), null);
+});
+
+test('isCollectionPlayableType identifies albums, playlists, artists, and podcasts', () => {
+  assert.equal(isCollectionPlayableType('album'), true);
+  assert.equal(isCollectionPlayableType('playlist'), true);
+  assert.equal(isCollectionPlayableType('artist'), true);
+  assert.equal(isCollectionPlayableType('podcast'), true);
+  assert.equal(isCollectionPlayableType('song'), false);
+  assert.equal(isCollectionPlayableType('local'), false);
+});
+
+test('podcastEpisodesToMediaItems converts episodes into playable MediaItem tracks', () => {
+  const episodes: PodcastEpisode[] = [
+    {
+      id: 'ep1',
+      videoId: 'abc12345678',
+      title: 'Episode 1: Pembuka',
+      duration: '12:30',
+      durationSeconds: 750,
+      podcastId: 'pod1',
+      podcastTitle: 'Podcast Harian',
+    },
+    {
+      id: '',
+      videoId: '',
+      title: 'Invalid',
+    },
+  ];
+  const converted = podcastEpisodesToMediaItems(episodes, 'Host', 'https://example.com/cover.jpg');
+  assert.equal(converted.length, 1);
+  assert.equal(converted[0].type, 'episode');
+  assert.equal(converted[0].videoId, 'abc12345678');
+  assert.equal(converted[0].artists[0].name, 'Podcast Harian');
+  assert.equal(converted[0].thumbnail, 'https://example.com/cover.jpg');
+  assert.equal(isPlayableTrack(converted[0]), true);
+});
+
+test('extractTracksFromArtistDetail prefers songs and falls back to videos', () => {
+  const artistWithSongs: ArtistDetailResponse = {
+    id: 'UC123',
+    name: 'Tulus',
+    songs: [makeTrack('5F28ye50-Kc', 'Hati-Hati di Jalan')],
+    albums: [],
+    singles: [],
+    compilations: [],
+    appearsOn: [],
+    videos: [makeTrack('dQw4w9WgXcQ', 'Video Fallback')],
+    related: [],
+  };
+  assert.deepEqual(
+    extractTracksFromArtistDetail(artistWithSongs).map((t) => t.id),
+    ['5F28ye50-Kc'],
+  );
+
+  const artistVideosOnly: ArtistDetailResponse = {
+    ...artistWithSongs,
+    songs: [],
+  };
+  assert.deepEqual(
+    extractTracksFromArtistDetail(artistVideosOnly).map((t) => t.id),
+    ['dQw4w9WgXcQ'],
+  );
+});
+
+test('hasPlayableOfflineAudio validates playable local audio blobs vs metadata cache', () => {
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/mpeg' });
+  const jsonBlob = new Blob(['{"ok":true}'], { type: 'application/json' });
+
+  assert.equal(
+    hasPlayableOfflineAudio({
+      hasAudioBlob: true,
+      mimeType: 'audio/mpeg',
+      blob: audioBlob,
+    }),
+    true,
+  );
+  assert.equal(
+    hasPlayableOfflineAudio({
+      hasAudioBlob: false,
+      mimeType: 'application/json',
+      blob: jsonBlob,
+    }),
+    false,
+  );
+  assert.equal(
+    hasPlayableOfflineAudio({
+      mimeType: 'application/json',
+      blob: audioBlob,
+    }),
+    false,
+  );
+  assert.equal(hasPlayableOfflineAudio(null), false);
+});
+
+test('isExcludedRegionalText and isExcludedRegionalItem block Japanese and Indian songs while keeping ID/EN/KR', () => {
+  assert.equal(isExcludedRegionalText('愛の形 - Ai no Katachi'), true);
+  assert.equal(isExcludedRegionalText('YOASOBI - 夜に駆ける'), true);
+  assert.equal(isExcludedRegionalText('Dilruba Dilnasheen'), true);
+  assert.equal(isExcludedRegionalText('Tum Hi Ho - Arijit Singh'), true);
+  assert.equal(isExcludedRegionalText('A R J I T S I N G H..'), true);
+  assert.equal(isExcludedRegionalText('Y O A S O B I'), true);
+  assert.equal(isExcludedRegionalText('Kis-My-Ft2'), true);
+
+  assert.equal(isExcludedRegionalText('Tulus - Hati-Hati di Jalan'), false);
+  assert.equal(isExcludedRegionalText('NewJeans - Ditto'), false);
+  assert.equal(isExcludedRegionalText('Kira-kira kapan ya'), false);
+
+  assert.equal(
+    isExcludedRegionalItem({
+      title: 'La la la',
+      artists: [{ id: null, name: 'Hey! Say! JUMP' }],
+      album: null,
+      description: null,
+    }),
+    true,
+  );
+  assert.equal(
+    isExcludedRegionalItem({
+      title: 'Monokrom',
+      artists: [{ id: null, name: 'Tulus' }],
+      album: { id: null, name: 'Monokrom' },
+      description: 'Pop Indonesia',
+    }),
+    false,
+  );
+});
+
+test('buildSearchFollowUps produces deduplicated, regionally safe follow-up queries', () => {
+  const sampleItems: MediaItem[] = [
+    {
+      id: '5F28ye50-Kc',
+      videoId: '5F28ye50-Kc',
+      title: 'Hati-Hati di Jalan',
+      artists: [{ id: 'UCtulus', name: 'Tulus' }],
+      thumbnail: null,
+      type: 'song',
+    },
+  ];
+  const followUps = buildSearchFollowUps(
+    'Tulus',
+    sampleItems,
+    ['Tulus', 'Tulus Monokrom', 'Tulus YOASOBI', 'Arijit Singh'],
+    'all',
+  );
+  assert.ok(followUps.length >= 4);
+  assert.ok(followUps.some((f) => f.label.includes('Tulus')));
+  assert.ok(followUps.some((f) => f.query === 'Tulus Monokrom'));
+  assert.equal(
+    followUps.some((f) => /yoasobi|arijit/i.test(f.query)),
+    false,
+  );
 });

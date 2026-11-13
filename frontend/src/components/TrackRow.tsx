@@ -1,8 +1,20 @@
-import { GripVertical, Heart, ListEnd, ListPlus, MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react';
+import {
+  Check,
+  Download,
+  GripVertical,
+  Heart,
+  ListEnd,
+  ListPlus,
+  MoreHorizontal,
+  Pause,
+  Play,
+  Trash2,
+} from 'lucide-react';
 import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
 import { getTrackUniqueId } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
@@ -39,6 +51,7 @@ export function TrackRow({
 
   const navigate = useNavigationStore((s) => s.navigate);
   const openMenu = useContextMenuStore((s) => s.openMenu);
+  const showToast = useContextMenuStore((s) => s.showToast);
 
   const trackKey = getTrackUniqueId(track) || track.id;
   const activeKey = currentTrack ? getTrackUniqueId(currentTrack) || currentTrack.id : null;
@@ -47,6 +60,10 @@ export function TrackRow({
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
   const toggleLike = useLibraryStore((s) => s.toggleLike);
   const isHidden = useLibraryStore((s) => s.isTrackHidden(trackKey));
+  const isOffline = useLibraryStore((s) => s.isTrackDownloadedOffline(trackKey));
+  const downloadTrackOffline = useLibraryStore((s) => s.downloadTrackOffline);
+  const deleteOfflineDownload = useLibraryStore((s) => s.deleteOfflineDownload);
+  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
 
   const handlePrimaryClick = () => {
     if (isCurrent) {
@@ -213,6 +230,35 @@ export function TrackRow({
       )}
 
       <div className="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={() => {
+            if (isOffline) {
+              void deleteOfflineDownload(trackKey);
+              showToast(`"${track.title}" dihapus dari penyimpanan offline`);
+            } else {
+              void downloadTrackOffline(track, downloadQuality).then((res) => {
+                if (res.ok) {
+                  showToast(`"${track.title}" tersimpan offline`);
+                }
+              });
+            }
+          }}
+          aria-label={isOffline ? `Hapus ${track.title} dari offline` : `Unduh ${track.title} offline`}
+          title={isOffline ? 'Tersimpan offline' : 'Unduh offline'}
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+            isOffline
+              ? 'text-[#2EE6A6]'
+              : 'text-white/40 md:hidden md:group-hover:flex hover:text-white hover:bg-white/[0.08]'
+          }`}
+        >
+          {isOffline ? (
+            <Check className="w-4 h-4" strokeWidth={2.2} />
+          ) : (
+            <Download className="w-4 h-4" strokeWidth={1.75} />
+          )}
+        </button>
+
         <button
           type="button"
           onClick={() => toggleLike(track)}

@@ -18,12 +18,14 @@ import {
   FullscreenKaraokeModal,
   FullscreenNowPlayingModal,
 } from './components/FullscreenViews';
+import { Footer } from './components/Footer';
 import { LocalAudioEngine } from './components/LocalAudioEngine';
 import { MobileShell } from './components/MobileShell';
 import { PlayerBar } from './components/PlayerBar';
 import { PlaylistModal } from './components/PlaylistModal';
 import { RightPanel } from './components/RightPanel';
 import { Sidebar } from './components/Sidebar';
+import { TopBarAccountMenu } from './components/TopBarAccountMenu';
 import { GlobalTrackContextMenu } from './components/TrackContextMenu';
 import { YouTubePlayerBridge } from './components/YouTubePlayerBridge';
 import { AlbumDetailPage, ArtistDetailPage, PlaylistDetailPage } from './pages/DetailPages';
@@ -72,7 +74,7 @@ export default function App() {
         .then((status) => {
           void useSettingsStore
             .getState()
-            .setAccountKey(status.authenticated ? 'ytmusic' : 'local');
+            .setAccountKey(status.mode === 'cloud' || status.authenticated ? 'cloud' : 'local');
         })
         .catch(() => {});
     };
@@ -278,6 +280,8 @@ export default function App() {
               <span>Diputar</span>
             </button>
           )}
+
+          <TopBarAccountMenu />
         </div>
       </header>
 
@@ -433,6 +437,9 @@ export default function App() {
             )}
             {currentRoute.name === 'shortcuts' && <ShortcutsPage />}
           </div>
+
+          <Footer />
+          <div className={currentTrack ? 'h-32 md:h-2 shrink-0' : 'h-16 md:h-2 shrink-0'} aria-hidden="true" />
         </main>
 
         <RightPanel onAddToPlaylist={openAddToPlaylistModal} />
@@ -460,7 +467,7 @@ export default function App() {
       <FullscreenNowPlayingModal />
       <FloatingMiniPlayerController />
 
-      {/* Persistent YouTube IFrame Player API bridge + Web Audio API Local Engine */}
+      {/* Persistent Hidden Streaming Audio Bridge + Web Audio API Local Engine */}
       <YouTubePlayerBridge />
       <LocalAudioEngine />
     </div>

@@ -59,6 +59,7 @@ interface SettingsState extends UserSettings {
   renameCustomPreset: (presetId: string, newName: string) => boolean;
   deleteCustomPreset: (presetId: string) => void;
   resetAudioProfileSection: (section: AudioSettingsSection) => void;
+  enableAllDsp: () => void;
   moveHomeSection: (id: HomeSectionId, direction: 'up' | 'down') => void;
   resetHomeSectionOrder: () => void;
 }
@@ -136,6 +137,37 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         }
       }
 
+      let effectiveProfile = accountProfile;
+      try {
+        const dspFlag = await db.kvState.get('dsp_all_enabled_v1');
+        if (!dspFlag?.value) {
+          effectiveProfile = normalizeLocalAudioProfile({
+            ...accountProfile,
+            eqEnabled: true,
+            bassBoostEnabled: true,
+            stereoWidenerEnabled: true,
+            normalizationTarget:
+              accountProfile.normalizationTarget === 'off'
+                ? 'normal'
+                : accountProfile.normalizationTarget,
+            useReplayGain: true,
+            limiterEnabled: true,
+            gaplessPlayback: true,
+            fadeOnPlayPause: true,
+            skipSilence: true,
+            crossfadeSeconds:
+              accountProfile.crossfadeSeconds > 0 ? accountProfile.crossfadeSeconds : 3,
+            directMode: false,
+          });
+          await Promise.all([
+            saveLocalAudioProfile('local', effectiveProfile),
+            db.kvState.put({ key: 'dsp_all_enabled_v1', value: true }),
+          ]);
+        }
+      } catch {
+        // Non-fatal migration fallback
+      }
+
       if (stored) {
         const order =
           Array.isArray(stored.homeSectionOrder) && stored.homeSectionOrder.length > 0
@@ -155,11 +187,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           homeSectionOrder: order,
           youtubeSound: yt,
           episodePlaybackRates: stored.episodePlaybackRates || {},
-          localProfile: accountProfile,
+          localProfile: effectiveProfile,
           hydrated: true,
         });
       } else {
-        set({ localProfile: accountProfile, hydrated: true });
+        set({ localProfile: effectiveProfile, hydrated: true });
       }
 
       void get().syncAudioSettingsFromBackend('local');
@@ -449,6 +481,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     persistSettings(latest);
     void saveLocalAudioProfile(latest.accountKey, freshProfile).catch(() => {});
     void resetAccountAudioSettings(latest.accountKey).catch(() => {});
+  },
+
+  enableAllDsp: () => {
+    const current = get().localProfile;
+    get().updateLocalProfile({
+      eqEnabled: true,
+      bassBoostEnabled: true,
+      bassBoostLevel: current.bassBoostLevel > 0 ? current.bassBoostLevel : 35,
+      stereoWidenerEnabled: true,
+      stereoWidenerLevel: current.stereoWidenerLevel > 0 ? current.stereoWidenerLevel : 35,
+      normalizationTarget:
+        current.normalizationTarget === 'off' ? 'normal' : current.normalizationTarget,
+      useReplayGain: true,
+      limiterEnabled: true,
+      gaplessPlayback: true,
+      fadeOnPlayPause: true,
+      skipSilence: true,
+      crossfadeSeconds: current.crossfadeSeconds > 0 ? current.crossfadeSeconds : 3,
+      directMode: false,
+    });
   },
 
   moveHomeSection: (id, direction) => {

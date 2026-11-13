@@ -6,8 +6,8 @@ import threading
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -25,7 +25,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="SoundClear API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="SoundClear API", version="3.0.0", lifespan=lifespan)
 
 
 class RateBody(BaseModel):
@@ -49,15 +49,9 @@ class SubscribeBody(BaseModel):
     subscribe: bool = True
 
 
-class ImportCookiesBody(BaseModel):
-    identifier: str = "default"
-    cookies: Any
-
-
 class AudioSettingsBody(BaseModel):
     accountKey: Optional[str] = None
     settings: Dict[str, Any]
-
 
 
 @app.exception_handler(MusicProviderError)
@@ -67,7 +61,7 @@ async def music_provider_error_handler(_request: Request, exc: MusicProviderErro
 
 @app.get("/api/health")
 def health() -> Dict[str, str]:
-    return {"status": "ok", "service": "soundclear", "provider": "spotapi"}
+    return {"status": "ok", "service": "soundclear", "provider": "soundclear-cloud"}
 
 
 @app.get("/api/search")
@@ -185,12 +179,6 @@ def account_status() -> Dict[str, Any]:
     return provider.get_account_status()
 
 
-@app.post("/api/account/cookies")
-def account_import_cookies(body: ImportCookiesBody) -> Dict[str, Any]:
-    # Cookies are persisted server-side via JSONSaver only and never returned to frontend.
-    return provider.import_account_cookies(body.identifier, body.cookies, verify=True)
-
-
 @app.get("/api/account/library")
 def account_library() -> Dict[str, Any]:
     return provider.get_account_library()
@@ -230,53 +218,21 @@ def resolve_play(
     artist: str = Query(default=""),
     type: str = Query(default="song"),
     durationSeconds: Optional[int] = Query(default=None),
+    fallback: bool = Query(default=False),
+    exclude: Optional[str] = Query(default=None),
 ) -> Dict[str, Any]:
     if not id and not title:
         raise HTTPException(status_code=400, detail="Parameter id atau title wajib diisi.")
+    exclude_ids = [s.strip() for s in exclude.split(",") if s.strip()] if exclude else None
     return provider.resolve_playable_youtube(
         id,
         title=title,
         artist=artist,
         item_type=type,
         duration_seconds=durationSeconds,
+        fallback=fallback,
+        exclude_ids=exclude_ids,
     )
-
-
-@app.get("/api/play/preview/{track_id}")
-def play_preview(track_id: str, type: Optional[str] = Query(default=None)) -> Dict[str, Any]:
-    return provider.get_track_preview_url(track_id, item_type=type)
-
-
-@app.get("/api/stream/options/{track_id}")
-def stream_options(track_id: str, type: Optional[str] = Query(default=None)) -> Dict[str, Any]:
-    return provider.get_stream_options(track_id, item_type=type)
-
-
-@app.options("/api/stream/{track_id}")
-def stream_audio_options(track_id: str) -> Response:
-    return Response(
-        status_code=204,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "Range, Content-Type",
-            "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
-        },
-    )
-
-
-@app.get("/api/stream/{track_id}")
-def stream_audio(
-    track_id: str,
-    tier: Optional[str] = Query(default=None),
-    range_hdr: Optional[str] = Header(default=None, alias="Range"),
-) -> StreamingResponse:
-    status_code, headers, chunk_iter = provider.open_audio_stream(
-        track_id,
-        tier=tier,
-        range_header=range_hdr,
-    )
-    return StreamingResponse(chunk_iter, status_code=status_code, headers=headers)
 
 
 @app.get("/api/account/audio-settings")
@@ -292,7 +248,6 @@ def put_account_audio_settings(body: AudioSettingsBody) -> Dict[str, Any]:
 @app.post("/api/account/audio-settings/reset")
 def reset_account_audio_settings(accountKey: Optional[str] = Query(default=None)) -> Dict[str, Any]:
     return provider.reset_audio_settings(account_key=accountKey)
-
 
 
 _dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))

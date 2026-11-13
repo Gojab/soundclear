@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
+  Download,
   Edit3,
   Folder,
   FolderPlus,
@@ -27,9 +28,14 @@ import {
 } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
 import type { LocalPlaylist, MediaItem } from '../types/music';
 import { localFileToMediaItem } from '../utils/localAudioImport';
-import { findDuplicateTrackIndices, getTrackUniqueId } from '../utils/playerLogic';
+import {
+  findDuplicateTrackIndices,
+  getTrackUniqueId,
+  hasPlayableOfflineAudio,
+} from '../utils/playerLogic';
 
 interface LibraryPagesProps {
   onAddToPlaylist: (track: MediaItem) => void;
@@ -56,6 +62,7 @@ export function LibraryOverviewPage({
   const followedArtists = useLibraryStore((s) => s.followedArtists);
   const savedPodcasts = useLibraryStore((s) => s.savedPodcasts);
   const localFiles = useLibraryStore((s) => s.localFiles);
+  const offlineDownloads = useLibraryStore((s) => s.offlineDownloads);
 
   const sortMode = useLibraryStore((s) => s.sortMode);
   const filterType = useLibraryStore((s) => s.filterType);
@@ -72,6 +79,7 @@ export function LibraryOverviewPage({
   const togglePinPodcast = useLibraryStore((s) => s.togglePinPodcast);
   const importLocalFiles = useLibraryStore((s) => s.importLocalFiles);
   const deleteLocalFile = useLibraryStore((s) => s.deleteLocalFile);
+  const deleteOfflineDownload = useLibraryStore((s) => s.deleteOfflineDownload);
 
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const showToast = useContextMenuStore((s) => s.showToast);
@@ -210,6 +218,10 @@ export function LibraryOverviewPage({
     { id: 'albums', label: 'Album' },
     { id: 'artists', label: 'Artis' },
     { id: 'podcasts', label: 'Podcast' },
+    {
+      id: 'offline',
+      label: offlineDownloads.length > 0 ? `Offline (${offlineDownloads.length})` : 'Offline',
+    },
     {
       id: 'local',
       label: localFiles.length > 0 ? `File Lokal (${localFiles.length})` : 'File Lokal',
@@ -388,8 +400,84 @@ export function LibraryOverviewPage({
         </div>
       </div>
 
-      {/* File Lokal Dropzone + Section */}
-      {filterType === 'local' ? (
+      {/* Offline Downloads Section */}
+      {filterType === 'offline' ? (
+        <section className="space-y-4">
+          <div className="glass-card rounded-2xl p-5 border border-white/[0.08]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 flex items-center justify-center text-[#2EE6A6] shrink-0">
+                  <Download className="w-5 h-5" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Unduhan Offline</h2>
+                  <p className="text-xs text-white/55 mt-0.5 max-w-xl">
+                    Semua lagu yang Anda simpan untuk akses offline (file audio lokal tersimpan utuh dan lagu katalog terindeks di penyimpanan browser).
+                  </p>
+                </div>
+              </div>
+
+              {offlineDownloads.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    playTrackList(
+                      offlineDownloads.map((d) => d.track),
+                      0,
+                      'Unduhan Offline',
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 shrink-0"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
+                  Putar Semua ({offlineDownloads.length})
+                </button>
+              )}
+            </div>
+          </div>
+
+          {offlineDownloads.length === 0 ? (
+            <div className="glass-card rounded-2xl p-8 text-center space-y-3">
+              <p className="text-sm text-white/80">Belum ada lagu yang disimpan offline.</p>
+              <p className="text-xs text-white/50">
+                Tekan tombol Unduh di baris lagu atau di menu Pengaturan Audio untuk menyimpan lagu apa saja.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white"
+              >
+                Buka Pengaturan Audio
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {offlineDownloads.map((rec, idx) => (
+                <TrackRow
+                  key={rec.id}
+                  track={rec.track}
+                  index={idx}
+                  compact={viewMode === 'compact'}
+                  onPlay={() =>
+                    playTrackList(
+                      offlineDownloads.map((d) => d.track),
+                      idx,
+                      'Unduhan Offline',
+                    )
+                  }
+                  onAddToPlaylist={onAddToPlaylist}
+                  onRemove={() => {
+                    void deleteOfflineDownload(rec.id);
+                    showToast(
+                      `${rec.track.title} (${hasPlayableOfflineAudio(rec) ? 'Audio Lokal' : 'Cache Katalog'}) dihapus dari Offline`,
+                    );
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : filterType === 'local' ? (
         <section className="space-y-4">
           <div
             className={`glass-card rounded-2xl p-5 border transition-colors ${
@@ -516,7 +604,7 @@ export function LibraryOverviewPage({
 
           {/* Quick Spotlight Cards in 'Semua' */}
           {selectedFolderId === 'all' && filterType === 'all' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => navigate({ name: 'liked' })}
@@ -530,6 +618,25 @@ export function LibraryOverviewPage({
                     <p className="text-sm font-semibold text-white">Lagu Disukai</p>
                     <p className="text-xs text-white/55 tabular-nums mt-0.5">
                       {likedCount} lagu tersimpan
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-medium text-[#2EE6A6] shrink-0 pr-1">Buka</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterType('offline')}
+                className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.08] transition-colors"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-white/[0.07] border border-white/[0.1] flex items-center justify-center text-[#2EE6A6] shrink-0">
+                    <Download className="w-5 h-5" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-white">Unduhan Offline</p>
+                    <p className="text-xs text-white/55 tabular-nums mt-0.5">
+                      {offlineDownloads.length} lagu tersimpan
                     </p>
                   </div>
                 </div>
@@ -614,7 +721,7 @@ export function LibraryOverviewPage({
                       type="button"
                       onClick={() => togglePinEntry(entry)}
                       aria-label={
-                        entry.pinned ? `Lepas sematan ${entry.title}` : `Sematkan ${entry.title}`
+                        entry.pinned ? `Lepas pin ${entry.title}` : `Pasang pin ${entry.title}`
                       }
                       className={`absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center backdrop-blur-md transition-opacity ${
                         entry.pinned
@@ -689,7 +796,7 @@ export function LibraryOverviewPage({
                       type="button"
                       onClick={() => togglePinEntry(entry)}
                       aria-label={
-                        entry.pinned ? `Lepas sematan ${entry.title}` : `Sematkan ${entry.title}`
+                        entry.pinned ? `Lepas pin ${entry.title}` : `Pasang pin ${entry.title}`
                       }
                       className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
                         entry.pinned
@@ -717,6 +824,9 @@ export function LikedTracksPage({
 }) {
   const likedTracks = useLibraryStore((s) => s.likedTracks);
   const toggleLike = useLibraryStore((s) => s.toggleLike);
+  const downloadTracksOffline = useLibraryStore((s) => s.downloadTracksOffline);
+  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
+  const showToast = useContextMenuStore((s) => s.showToast);
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const navigate = useNavigationStore((s) => s.navigate);
 
@@ -733,7 +843,7 @@ export function LikedTracksPage({
           </h1>
           <p className="text-xs text-white/55 tabular-nums">{likedTracks.length} lagu tersimpan</p>
           {likedTracks.length > 0 && (
-            <div className="pt-1">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => playTrackList(likedTracks, 0, 'Lagu Disukai')}
@@ -741,6 +851,18 @@ export function LikedTracksPage({
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Semua
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void downloadTracksOffline(likedTracks, downloadQuality).then(({ savedCount }) => {
+                    showToast(`${savedCount} lagu disukai tersimpan offline`);
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white transition-colors"
+              >
+                <Download className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={1.9} />
+                Unduh Offline
               </button>
             </div>
           )}
@@ -796,6 +918,9 @@ export function LocalPlaylistPage({
   const reorderPlaylistTracks = useLibraryStore((s) => s.reorderPlaylistTracks);
   const removeDuplicatesFromPlaylist = useLibraryStore((s) => s.removeDuplicatesFromPlaylist);
   const markPlaylistPlayed = useLibraryStore((s) => s.markPlaylistPlayed);
+  const downloadTracksOffline = useLibraryStore((s) => s.downloadTracksOffline);
+  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
+  const showToast = useContextMenuStore((s) => s.showToast);
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const navigate = useNavigationStore((s) => s.navigate);
 
@@ -869,17 +994,33 @@ export function LocalPlaylistPage({
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {playlist.tracks.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  markPlaylistPlayed(playlist.id);
-                  playTrackList(playlist.tracks, 0, playlist.name);
-                }}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all"
-              >
-                <Play className="w-4 h-4 fill-current" strokeWidth={2} />
-                Putar Semua
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    markPlaylistPlayed(playlist.id);
+                    playTrackList(playlist.tracks, 0, playlist.name);
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all"
+                >
+                  <Play className="w-4 h-4 fill-current" strokeWidth={2} />
+                  Putar Semua
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void downloadTracksOffline(playlist.tracks, downloadQuality).then(
+                      ({ savedCount }) => {
+                        showToast(`${savedCount} lagu di playlist tersimpan offline`);
+                      },
+                    );
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-medium text-white transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={1.9} />
+                  Unduh Offline
+                </button>
+              </>
             )}
 
             <button
@@ -892,7 +1033,7 @@ export function LocalPlaylistPage({
               }`}
             >
               <Pin className="w-3.5 h-3.5" strokeWidth={1.75} />
-              {playlist.pinned ? 'Disematkan' : 'Sematkan'}
+              {playlist.pinned ? 'Dipasang pin' : 'Pasang pin'}
             </button>
 
             {duplicateIndices.size > 0 && (

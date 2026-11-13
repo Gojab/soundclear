@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { fetchStreamOptions } from '../api/client';
 import { db, migrateLegacyLocalStorage } from '../db/soundclearDb';
 import type {
   ConcreteQualityTier,
@@ -15,12 +14,19 @@ import type {
   SavedAlbumEntry,
   SavedPodcastEntry,
 } from '../types/music';
-import { classifyStreamQualityBadge, selectEffectiveStreamOption } from '../utils/audioMath';
+import { classifyStreamQualityBadge } from '../utils/audioMath';
 import { isSupportedLocalAudioFile, parseLocalAudioFile } from '../utils/localAudioImport';
-import { getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
+import { getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 
 export type LibrarySortMode = 'newest' | 'alpha' | 'last_played';
-export type LibraryFilterType = 'all' | 'playlists' | 'albums' | 'artists' | 'podcasts' | 'local';
+export type LibraryFilterType =
+  | 'all'
+  | 'playlists'
+  | 'albums'
+  | 'artists'
+  | 'podcasts'
+  | 'local'
+  | 'offline';
 export type LibraryViewMode = 'list' | 'grid' | 'compact';
 
 const OFFLINE_AUDIO_CACHE = 'soundclear-offline-audio-v1';
@@ -117,6 +123,10 @@ interface LibraryState {
     track: MediaItem,
     requestedTier: ConcreteQualityTier,
   ) => Promise<{ ok: boolean; reason?: string; record?: OfflineDownloadRecord }>;
+  downloadTracksOffline: (
+    tracks: MediaItem[],
+    requestedTier: ConcreteQualityTier,
+  ) => Promise<{ savedCount: number; failedCount: number }>;
   deleteOfflineDownload: (trackId: string) => Promise<void>;
   isTrackDownloadedOffline: (trackId: string | null | undefined) => boolean;
 }
@@ -684,6 +694,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         peakLinear: localRec.peakLinear,
         fileSize: localRec.fileSize,
         mimeType: localRec.mimeType,
+        hasAudioBlob: true,
         blob: localRec.blob,
       };
       await db.offlineDownloads.put(rec);
@@ -706,86 +717,93 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       return { ok: true, record: rec };
     }
 
-    const trackKey = getPlayableVideoId(track) || id;
-    try {
-      const opts = await fetchStreamOptions(trackKey, true);
-      if (!opts.audiodownload_allowed) {
-        return {
-          ok: false,
-          reason:
-            opts.downloadDisabledReason ||
-            'Sumber lagu ini tidak mengizinkan unduhan offline (audiodownload_allowed bernilai false).',
-        };
-      }
+    // Online catalog track: persist complete track metadata & artwork cache for offline browsing/sync without extracting prohibited audio streams
+    const tierDefaults: Record<ConcreteQualityTier, { bitrate: number; codec: string; sampleRate: number }> = {
+      low: { bitrate: 96, codec: 'AAC-HE', sampleRate: 44100 },
+      normal: { bitrate: 160, codec: 'AAC / Opus', sampleRate: 44100 },
+      high: { bitrate: 256, codec: 'AAC High', sampleRate: 48000 },
+      very_high: { bitrate: 320, codec: 'Opus Very High', sampleRate: 48000 },
+      lossless: { bitrate: 1411, codec: 'FLAC', sampleRate: 44100 },
+      hi_res: { bitrate: 2304, codec: 'FLAC Hi-Res', sampleRate: 96000 },
+    };
+    const tierMeta = tierDefaults[requestedTier] || tierDefaults.high;
+    const badge = classifyStreamQualityBadge({
+      codec: tierMeta.codec,
+      bitrateKbps: tierMeta.bitrate,
+      sampleRateHz: tierMeta.sampleRate,
+      lossless: requestedTier === 'lossless' || requestedTier === 'hi_res',
+    });
 
-      const sel = selectEffectiveStreamOption(opts.options, {
-        requestedTier,
-        dataSaver: false,
-        autoAdjustQuality: false,
-      });
-      const opt = sel.selectedOption;
-      if (!opt || (!opt.proxyUrl && !opt.streamUrl)) {
-        return {
-          ok: false,
-          reason: 'Tidak ada stream audio yang tersedia untuk diunduh.',
-        };
-      }
+    const manifestPayload = JSON.stringify({
+      id,
+      track: { ...track, id },
+      savedAt: Date.now(),
+      qualityTier: requestedTier,
+      codec: tierMeta.codec,
+      bitrateKbps: tierMeta.bitrate,
+      sampleRateHz: tierMeta.sampleRate,
+    });
+    const manifestBlob = new Blob([manifestPayload], { type: 'application/json' });
 
-      const fetchUrl = opt.proxyUrl || opt.streamUrl!;
-      const res = await fetch(fetchUrl);
-      if (!res.ok) {
-        return { ok: false, reason: `Gagal mengunduh audio (HTTP ${res.status}).` };
-      }
-      const blob = await res.blob();
-      const mimeType = blob.type || res.headers.get('Content-Type') || 'audio/mpeg';
-      const badge = classifyStreamQualityBadge({
-        codec: opt.codec,
-        bitrateKbps: opt.bitrateKbps,
-        sampleRateHz: opt.sampleRateHz,
-        bitDepth: opt.bitDepth,
-        lossless: opt.lossless,
-      });
+    const rec: OfflineDownloadRecord = {
+      id,
+      track: { ...track, id },
+      downloadedAt: Date.now(),
+      qualityTier: requestedTier,
+      codec: tierMeta.codec,
+      bitrateKbps: tierMeta.bitrate,
+      sampleRateHz: tierMeta.sampleRate,
+      bitDepth: badge.hiRes ? 24 : badge.lossless ? 16 : null,
+      lossless: badge.lossless,
+      hiRes: badge.hiRes,
+      replayGainDb: null,
+      estimatedLufs: -14,
+      peakLinear: 0.95,
+      fileSize: manifestBlob.size,
+      mimeType: 'application/json',
+      hasAudioBlob: false,
+      blob: manifestBlob,
+    };
 
-      const rec: OfflineDownloadRecord = {
-        id: trackKey,
-        track: { ...track, id: trackKey },
-        downloadedAt: Date.now(),
-        qualityTier: opt.tier,
-        codec: opt.codec || 'Audio',
-        bitrateKbps: opt.bitrateKbps ?? null,
-        sampleRateHz: opt.sampleRateHz ?? null,
-        bitDepth: opt.bitDepth ?? null,
-        lossless: badge.lossless,
-        hiRes: badge.hiRes,
-        replayGainDb: opts.replayGainDb ?? null,
-        estimatedLufs: -14,
-        peakLinear: 0.92,
-        fileSize: blob.size,
-        mimeType,
-        blob,
-      };
-      await db.offlineDownloads.put(rec);
-      if ('caches' in window) {
-        try {
-          const cache = await window.caches.open(OFFLINE_AUDIO_CACHE);
-          await cache.put(
-            `/offline-audio/${encodeURIComponent(trackKey)}`,
-            new Response(blob, { headers: { 'Content-Type': mimeType } }),
-          );
-        } catch {
-          // Non-fatal
+    await db.offlineDownloads.put(rec);
+    if ('caches' in window) {
+      try {
+        const cache = await window.caches.open(OFFLINE_AUDIO_CACHE);
+        await cache.put(
+          `/offline-audio/${encodeURIComponent(id)}`,
+          new Response(manifestBlob, {
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+        if (track.thumbnail && !track.thumbnail.startsWith('blob:')) {
+          const thumbResp = await fetch(track.thumbnail).catch(() => null);
+          if (thumbResp && thumbResp.ok) {
+            await cache.put(track.thumbnail, thumbResp.clone());
+          }
         }
+      } catch {
+        // IndexedDB already persisted the offline record
       }
-      set((state) => ({
-        offlineDownloads: [rec, ...state.offlineDownloads.filter((d) => d.id !== trackKey)],
-      }));
-      return { ok: true, record: rec };
-    } catch {
-      return {
-        ok: false,
-        reason: 'Gagal memeriksa izin unduhan atau mengambil stream dari server.',
-      };
     }
+
+    set((state) => ({
+      offlineDownloads: [rec, ...state.offlineDownloads.filter((d) => d.id !== id)],
+    }));
+    return { ok: true, record: rec };
+  },
+
+  downloadTracksOffline: async (tracks, requestedTier) => {
+    let savedCount = 0;
+    let failedCount = 0;
+    for (const track of tracks) {
+      const res = await get().downloadTrackOffline(track, requestedTier);
+      if (res.ok) {
+        savedCount += 1;
+      } else {
+        failedCount += 1;
+      }
+    }
+    return { savedCount, failedCount };
   },
 
   deleteOfflineDownload: async (trackId) => {

@@ -1,7 +1,22 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Clock, Play, Search, Trash2, X } from 'lucide-react';
-import { fetchMoods, fetchSearch, fetchSuggest } from '../api/client';
+import {
+  ChevronRight,
+  Clock,
+  CornerDownRight,
+  Loader2,
+  Play,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
+import {
+  fetchMoods,
+  fetchSearch,
+  fetchSongRelated,
+  fetchSuggest,
+  fetchWatchPlaylist,
+} from '../api/client';
 import { ArtworkImage } from '../components/ArtworkImage';
 import { MediaCard } from '../components/MediaCard';
 import { CardGridSkeleton, ErrorBanner, TrackListSkeleton } from '../components/Skeletons';
@@ -11,7 +26,14 @@ import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem, SearchFilter } from '../types/music';
-import { formatArtists, getPlayableVideoId } from '../utils/playerLogic';
+import { playAnyMediaItem } from '../utils/playCollection';
+import {
+  buildSearchFollowUps,
+  formatArtists,
+  getPlayableVideoId,
+  isExcludedRegionalItem,
+  isExcludedRegionalText,
+} from '../utils/playerLogic';
 
 interface SearchPageProps {
   initialQuery?: string;
@@ -40,6 +62,7 @@ export function SearchPage({
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
   const [filter, setFilter] = useState<SearchFilter>(initialFilter);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [resolvingTopPlay, setResolvingTopPlay] = useState(false);
 
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -52,6 +75,27 @@ export function SearchPage({
   const clearRecentSearches = useLibraryStore((s) => s.clearRecentSearches);
   const hiddenTrackIds = useLibraryStore((s) => s.hiddenTrackIds);
   const hideExplicit = useSettingsStore((s) => s.hideExplicit);
+
+  useEffect(() => {
+    const cleanInit = (initialQuery || '').trim();
+    if (cleanInit) {
+      setInputValue(cleanInit);
+      setDebouncedInput(cleanInit);
+      setSubmittedQuery(cleanInit);
+      setShowSuggestions(false);
+    } else if (initialQuery === '') {
+      setInputValue('');
+      setDebouncedInput('');
+      setSubmittedQuery('');
+      setShowSuggestions(false);
+    }
+  }, [initialQuery]);
+
+  useEffect(() => {
+    if (initialFilter) {
+      setFilter(initialFilter);
+    }
+  }, [initialFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -72,19 +116,30 @@ export function SearchPage({
     enabled: submittedQuery.length > 0,
   });
 
+  const followUpSuggestQuery = useQuery({
+    queryKey: ['followup-suggest', submittedQuery],
+    queryFn: ({ signal }) => fetchSuggest(submittedQuery, signal),
+    enabled: submittedQuery.length >= 2,
+  });
+
   const moodsQuery = useQuery({
     queryKey: ['moods'],
     queryFn: ({ signal }) => fetchMoods(signal),
     enabled: !submittedQuery,
   });
 
-  const runSearch = (q: string) => {
+  const runSearch = (q: string, nextFilter?: SearchFilter) => {
     const clean = q.trim();
     if (!clean) return;
+    const effectiveFilter = nextFilter ?? filter;
     setInputValue(clean);
     setSubmittedQuery(clean);
+    if (nextFilter) setFilter(nextFilter);
     setShowSuggestions(false);
     addRecentSearch(clean);
+    if (clean !== (initialQuery || '').trim() || effectiveFilter !== initialFilter) {
+      navigate({ name: 'search', query: clean, filter: effectiveFilter });
+    }
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -93,12 +148,23 @@ export function SearchPage({
   };
 
   const hiddenSet = new Set(hiddenTrackIds);
-  const items = (searchQuery.data?.items ?? []).filter((item) => {
+  const filterSafeItem = (item: MediaItem) => {
     const k = getPlayableVideoId(item) || item.id;
     if (hiddenSet.has(k)) return false;
     if (hideExplicit && item.isExplicit) return false;
+    if (isExcludedRegionalItem(item)) return false;
     return true;
-  });
+  };
+
+  const items = (searchQuery.data?.items ?? []).filter(filterSafeItem);
+  const filteredSuggestions = useMemo(
+    () => (suggestQuery.data?.suggestions ?? []).filter((s) => !isExcludedRegionalText(s)),
+    [suggestQuery.data],
+  );
+  const filteredFollowUpSuggestions = useMemo(
+    () => (followUpSuggestQuery.data?.suggestions ?? []).filter((s) => !isExcludedRegionalText(s)),
+    [followUpSuggestQuery.data],
+  );
 
   const topResult = filter === 'all' && items.length > 0 ? items[0] : null;
   const remainingItems = topResult ? items.slice(1) : items;
@@ -108,6 +174,79 @@ export function SearchPage({
   const collectionItems = remainingItems.filter(
     (item) => !getPlayableVideoId(item) || item.type === 'podcast',
   );
+
+  const topSongItem = useMemo(
+    () =>
+      items.find(
+        (item) =>
+          (item.type === 'song' || item.type === 'video') && Boolean(getPlayableVideoId(item)),
+      ) ?? null,
+    [items],
+  );
+  const topSongVideoId = topSongItem ? getPlayableVideoId(topSongItem) : null;
+
+  const relatedFollowUpQuery = useQuery({
+    queryKey: ['search-followup-related', topSongVideoId],
+    queryFn: ({ signal }) => fetchSongRelated(topSongVideoId!, signal),
+    enabled: Boolean(submittedQuery && topSongVideoId),
+  });
+
+  const watchFollowUpQuery = useQuery({
+    queryKey: ['search-followup-watch', topSongVideoId],
+    queryFn: ({ signal }) => fetchWatchPlaylist(topSongVideoId!, true, null, signal),
+    enabled:
+      Boolean(submittedQuery && topSongVideoId) &&
+      !relatedFollowUpQuery.isLoading &&
+      (relatedFollowUpQuery.data?.tracks?.length ?? 0) === 0,
+  });
+
+  const followUpChips = useMemo(
+    () =>
+      buildSearchFollowUps(
+        submittedQuery,
+        items,
+        filteredFollowUpSuggestions,
+        filter,
+      ),
+    [submittedQuery, items, filteredFollowUpSuggestions, filter],
+  );
+
+  const relatedFollowUpTracks = useMemo(() => {
+    const existingIds = new Set(items.map((it) => getPlayableVideoId(it) || it.id));
+    const rawTracks = [
+      ...(relatedFollowUpQuery.data?.tracks ?? []),
+      ...(watchFollowUpQuery.data?.tracks ?? []),
+    ];
+    const seen = new Set<string>();
+    const out: MediaItem[] = [];
+    for (const tr of rawTracks) {
+      if (!filterSafeItem(tr)) continue;
+      const vid = getPlayableVideoId(tr) || tr.id;
+      if (!vid || existingIds.has(vid) || seen.has(vid)) continue;
+      seen.add(vid);
+      out.push(tr);
+      if (out.length >= 6) break;
+    }
+    return out;
+  }, [items, relatedFollowUpQuery.data, watchFollowUpQuery.data, hiddenTrackIds, hideExplicit]);
+
+  const relatedFollowUpCollections = useMemo(() => {
+    const existingIds = new Set(items.map((it) => it.id));
+    const combined = [
+      ...(relatedFollowUpQuery.data?.artists ?? []),
+      ...(relatedFollowUpQuery.data?.playlists ?? []),
+    ];
+    const seen = new Set<string>();
+    const out: MediaItem[] = [];
+    for (const entry of combined) {
+      if (!filterSafeItem(entry)) continue;
+      if (existingIds.has(entry.id) || seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      out.push(entry);
+      if (out.length >= 5) break;
+    }
+    return out;
+  }, [items, relatedFollowUpQuery.data, hiddenTrackIds, hideExplicit]);
 
   return (
     <div className="space-y-6">
@@ -156,14 +295,13 @@ export function SearchPage({
 
           {showSuggestions &&
             debouncedInput.length >= 2 &&
-            suggestQuery.data &&
-            suggestQuery.data.suggestions.length > 0 && (
+            filteredSuggestions.length > 0 && (
               <div
                 role="listbox"
                 aria-label="Saran pencarian"
                 className="absolute left-0 right-0 top-12 z-20 glass-panel rounded-xl p-1.5 bg-[#121216]/95 shadow-2xl"
               >
-                {suggestQuery.data.suggestions.map((suggestion) => (
+                {filteredSuggestions.map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
@@ -206,6 +344,29 @@ export function SearchPage({
             );
           })}
         </div>
+
+        {/* Inline Follow-up Query Chips right below filter tabs when searching */}
+        {submittedQuery && followUpChips.length > 0 && (
+          <div
+            aria-label="Follow-up pencarian"
+            className="flex items-center gap-2 flex-wrap pt-1"
+          >
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-white/45 mr-0.5">
+              Follow-up:
+            </span>
+            {followUpChips.slice(0, 6).map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => runSearch(chip.query, chip.filter)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] hover:bg-[#2EE6A6]/15 border border-white/[0.08] hover:border-[#2EE6A6]/45 text-xs text-white/80 hover:text-white transition-colors"
+              >
+                <CornerDownRight className="w-3 h-3 text-[#2EE6A6] shrink-0" strokeWidth={2} />
+                <span className="truncate max-w-[220px]">{chip.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {!submittedQuery ? (
@@ -314,13 +475,30 @@ export function SearchPage({
           onRetry={() => void searchQuery.refetch()}
         />
       ) : items.length === 0 ? (
-        <div className="glass-card rounded-2xl p-8 text-center">
-          <p className="text-sm font-medium text-white/80">
-            Tidak ada hasil untuk &ldquo;{submittedQuery}&rdquo;
-          </p>
-          <p className="text-xs text-white/45 mt-1">
-            Coba kata kunci lain atau ubah tab filter di atas.
-          </p>
+        <div className="glass-card rounded-2xl p-8 text-center space-y-4">
+          <div>
+            <p className="text-sm font-medium text-white/80">
+              Tidak ada hasil untuk &ldquo;{submittedQuery}&rdquo;
+            </p>
+            <p className="text-xs text-white/45 mt-1">
+              Lagu Jepang &amp; India disembunyikan dari pencarian. Coba kata kunci atau follow-up berikut:
+            </p>
+          </div>
+          {followUpChips.length > 0 && (
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              {followUpChips.slice(0, 6).map((chip) => (
+                <button
+                  key={`empty-${chip.id}`}
+                  type="button"
+                  onClick={() => runSearch(chip.query, chip.filter)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.07] hover:bg-[#2EE6A6] hover:text-[#06130E] text-xs font-medium text-white/85 transition-colors"
+                >
+                  <CornerDownRight className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+                  <span>{chip.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
@@ -358,29 +536,45 @@ export function SearchPage({
                     <p className="text-xs text-white/60 truncate mt-0.5">
                       {topResult.artists.length > 0
                         ? formatArtists(topResult.artists)
-                        : topResult.year || topResult.views || 'YouTube Music'}
+                        : topResult.year || topResult.views || 'Katalog SoundClear'}
                     </p>
                   </div>
                 </button>
 
-                {getPlayableVideoId(topResult) && topResult.type !== 'podcast' ? (
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => playTrack(topResult)}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold shrink-0 hover:brightness-105"
+                    disabled={resolvingTopPlay}
+                    onClick={async () => {
+                      if (resolvingTopPlay) return;
+                      setResolvingTopPlay(true);
+                      try {
+                        await playAnyMediaItem(topResult);
+                      } finally {
+                        setResolvingTopPlay(false);
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold shrink-0 hover:brightness-105 disabled:opacity-70"
                   >
-                    <Play className="w-4 h-4 fill-current" strokeWidth={2} />
+                    {resolvingTopPlay ? (
+                      <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
+                    ) : (
+                      <Play className="w-4 h-4 fill-current" strokeWidth={2} />
+                    )}
                     Putar
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => navigateToItem(topResult)}
-                    className="px-4 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white shrink-0"
-                  >
-                    Buka
-                  </button>
-                )}
+                  {(!getPlayableVideoId(topResult) ||
+                    topResult.type === 'podcast' ||
+                    topResult.type === 'episode') && (
+                    <button
+                      type="button"
+                      onClick={() => navigateToItem(topResult)}
+                      className="px-4 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white shrink-0"
+                    >
+                      Buka
+                    </button>
+                  )}
+                </div>
               </div>
             </section>
           )}
@@ -425,6 +619,117 @@ export function SearchPage({
                   />
                 ))}
               </div>
+            </section>
+          )}
+
+          {/* Follow-up Pencarian & Lagu Terkait */}
+          {(followUpChips.length > 0 ||
+            relatedFollowUpTracks.length > 0 ||
+            relatedFollowUpCollections.length > 0 ||
+            relatedFollowUpQuery.isLoading) && (
+            <section
+              aria-labelledby="search-followup-heading"
+              className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-4 sm:p-5 space-y-5"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2
+                    id="search-followup-heading"
+                    className="text-base font-semibold text-white"
+                  >
+                    Follow-up Pencarian &amp; Rekomendasi Lanjutan
+                  </h2>
+                  <p className="text-xs text-white/55 mt-0.5">
+                    Jelajahi pencarian terkait atau putar lagu mirip dari &ldquo;{submittedQuery}&rdquo;
+                  </p>
+                </div>
+                {relatedFollowUpTracks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      playTrackList(
+                        relatedFollowUpTracks,
+                        0,
+                        `Radio Follow-up: ${submittedQuery}`,
+                      )
+                    }
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all shrink-0 self-start sm:self-auto"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
+                    Putar Radio Lanjutan
+                  </button>
+                )}
+              </div>
+
+              {followUpChips.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-white/60">Lanjutkan cari:</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {followUpChips.map((chip) => (
+                      <button
+                        key={`panel-${chip.id}`}
+                        type="button"
+                        onClick={() => runSearch(chip.query, chip.filter)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-xs font-medium text-white/85 hover:text-white transition-colors"
+                      >
+                        <CornerDownRight
+                          className="w-3.5 h-3.5 text-[#2EE6A6] shrink-0"
+                          strokeWidth={1.9}
+                        />
+                        <span>{chip.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {relatedFollowUpQuery.isLoading ? (
+                <TrackListSkeleton count={4} />
+              ) : (
+                <>
+                  {relatedFollowUpTracks.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-white/60">
+                        Lagu terkait yang mungkin kamu suka
+                      </p>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1">
+                        {relatedFollowUpTracks.map((track, idx) => (
+                          <TrackRow
+                            key={`relfu-${track.id}-${idx}`}
+                            track={track}
+                            showAlbum={false}
+                            onPlay={() =>
+                              playTrackList(
+                                relatedFollowUpTracks,
+                                idx,
+                                `Follow-up: ${submittedQuery}`,
+                              )
+                            }
+                            onAddToPlaylist={onAddToPlaylist}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {relatedFollowUpCollections.length > 0 && (
+                    <div className="space-y-2.5">
+                      <p className="text-xs font-medium text-white/60">
+                        Artis &amp; Playlist terkait
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        {relatedFollowUpCollections.map((item, idx) => (
+                          <MediaCard
+                            key={`relcol-${item.id}-${idx}`}
+                            item={item}
+                            onAddToPlaylist={onAddToPlaylist}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </section>
           )}
         </div>

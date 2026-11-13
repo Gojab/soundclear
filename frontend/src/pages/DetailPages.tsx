@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bookmark, Check, Play, UserCheck, UserPlus } from 'lucide-react';
+import { Bookmark, Check, Download, Play, UserCheck, UserPlus } from 'lucide-react';
 import { fetchAlbum, fetchArtist, fetchPlaylist, postAccountSubscribe } from '../api/client';
 import { ArtworkImage } from '../components/ArtworkImage';
 import { MediaCard } from '../components/MediaCard';
 import { ErrorBanner, TrackListSkeleton } from '../components/Skeletons';
 import { TrackRow } from '../components/TrackRow';
+import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
 import { normalizeRouteId } from '../utils/playerLogic';
 
@@ -252,6 +254,9 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
   const cleanId = normalizeRouteId(id);
   const saved = useLibraryStore((s) => s.isAlbumSaved(cleanId || id));
   const toggleSaveAlbum = useLibraryStore((s) => s.toggleSaveAlbum);
+  const downloadTracksOffline = useLibraryStore((s) => s.downloadTracksOffline);
+  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
+  const showToast = useContextMenuStore((s) => s.showToast);
   const libraryAlbumHint = useLibraryStore((s) => {
     const entry = s.savedAlbums.find((a) => a.id === (cleanId || id));
     if (entry?.item.title) return entry.item.title;
@@ -410,6 +415,22 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
                 </>
               )}
             </button>
+            {album.tracks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  void downloadTracksOffline(album.tracks, downloadQuality).then(
+                    ({ savedCount }) => {
+                      showToast(`${savedCount} lagu dari "${album.title}" tersimpan offline`);
+                    },
+                  );
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-semibold text-white transition-colors"
+              >
+                <Download className="w-4 h-4 text-[#2EE6A6]" strokeWidth={1.75} />
+                Unduh Offline
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -460,6 +481,9 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
   const navigate = useNavigationStore((s) => s.navigate);
   const cleanId = normalizeRouteId(id);
   const resolvedFallback = fallbackQuery?.trim() || undefined;
+  const downloadTracksOffline = useLibraryStore((s) => s.downloadTracksOffline);
+  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
+  const showToast = useContextMenuStore((s) => s.showToast);
 
   const query = useQuery({
     queryKey: ['playlist', cleanId || '', resolvedFallback || ''],
@@ -533,7 +557,7 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
             )}
           </div>
           {pl.tracks.length > 0 && (
-            <div className="pt-2">
+            <div className="flex flex-wrap items-center gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => playTrackList(pl.tracks, 0, pl.title)}
@@ -541,6 +565,18 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Playlist
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void downloadTracksOffline(pl.tracks, downloadQuality).then(({ savedCount }) => {
+                    showToast(`${savedCount} lagu dari "${pl.title}" tersimpan offline`);
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-semibold text-white transition-colors"
+              >
+                <Download className="w-4 h-4 text-[#2EE6A6]" strokeWidth={1.75} />
+                Unduh Offline
               </button>
             </div>
           )}

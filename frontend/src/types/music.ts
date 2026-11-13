@@ -230,7 +230,7 @@ export interface ArtworkColorResponse {
 
 export interface AccountStatusResponse {
   authenticated: boolean;
-  mode: 'local' | 'ytmusic';
+  mode: 'local' | 'ytmusic' | 'cloud';
   message: string;
 }
 
@@ -377,7 +377,7 @@ export type AudioSourceMode =
 export interface ActiveStreamMeta {
   trackId: string;
   requestedTier: StreamQualityTier;
-  actualTier: ConcreteQualityTier | 'youtube' | 'local' | 'offline';
+  actualTier: ConcreteQualityTier | 'cloud' | 'youtube' | 'local' | 'offline';
   codec: string;
   bitrateKbps?: number | null;
   sampleRateHz?: number | null;
@@ -465,6 +465,7 @@ export interface OfflineDownloadRecord {
   peakLinear: number;
   fileSize: number;
   mimeType: string;
+  hasAudioBlob?: boolean;
   blob: Blob;
 }
 

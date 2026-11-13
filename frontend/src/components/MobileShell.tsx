@@ -57,7 +57,6 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
   const ambientColor = usePlayerStore((s) => s.ambientColor);
   const mobileExpanded = usePlayerStore((s) => s.mobileExpanded);
   const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
-  const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
   const togglePlayPause = usePlayerStore((s) => s.togglePlayPause);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
@@ -269,11 +268,10 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                             ? 'text-[#F5C451]'
                             : activeStreamMeta.lossless
                               ? 'text-[#2EE6A6]'
-                              : 'text-white/45'
+                              : 'text-white/55'
                         }`}
                       >
                         {activeStreamMeta.badgeLabel}
-                        {webAudioWarning ? ` · ${webAudioWarning}` : ''}
                       </p>
                     )}
                   </div>

@@ -13,13 +13,17 @@ import { db } from '../db/soundclearDb';
 import { useLibraryStore } from '../store/libraryStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import type { ActiveStreamMeta, ConcreteQualityTier, StreamQualityOption } from '../types/music';
+import type { ActiveStreamMeta } from '../types/music';
 import {
   classifyStreamQualityBadge,
   computeEqualPowerCrossfade,
-  selectEffectiveStreamOption,
 } from '../utils/audioMath';
-import { getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
+import {
+  getPlayableVideoId,
+  getTrackUniqueId,
+  hasPlayableOfflineAudio,
+  isLocalTrack,
+} from '../utils/playerLogic';
 
 function revokeDeckUrl(
   objectUrls: [string | null, string | null],
@@ -43,13 +47,9 @@ export function LocalAudioEngine() {
   const pendingSeekSeconds = usePlayerStore((s) => s.pendingSeekSeconds);
   const manualQueue = usePlayerStore((s) => s.manualQueue);
   const sourceQueue = usePlayerStore((s) => s.sourceQueue);
-  const streamOptions = usePlayerStore((s) => s.streamOptions);
-  const selectedQualityOverride = usePlayerStore((s) => s.selectedQualityOverride);
   const sourceLabel = usePlayerStore((s) => s.sourceLabel);
-  const bufferingStallCount = usePlayerStore((s) => s.bufferingStallCount);
 
   const localProfile = useSettingsStore((s) => s.localProfile);
-  const dataSaver = useSettingsStore((s) => s.dataSaver);
   const localFiles = useLibraryStore((s) => s.localFiles);
   const offlineDownloads = useLibraryStore((s) => s.offlineDownloads);
 
@@ -60,60 +60,26 @@ export function LocalAudioEngine() {
       ? offlineDownloads.find((d) => d.id === trackUniqueId) ?? null
       : null;
 
-  // Engine takes over `<audio>` Web Audio playback for:
+  // Engine takes over `<audio>` Web Audio playback strictly for:
   // 1. Local imported files
-  // 2. Offline downloaded tracks when offline OR explicitly played from Offline collection
-  // 3. Online catalog tracks when user explicitly picked a direct/proxied audio tier
+  // 2. Existing playable offline audio blobs when offline OR played from Offline collection
   const useOfflineBlob =
-    Boolean(offlineRec) &&
+    hasPlayableOfflineAudio(offlineRec) &&
     (sourceLabel === 'Unduhan Offline' ||
       (typeof navigator !== 'undefined' && navigator.onLine === false));
-
-  const effectiveStreamSelection =
-    !localActive && !useOfflineBlob && selectedQualityOverride && streamOptions
-      ? selectEffectiveStreamOption(streamOptions.options, {
-          requestedTier: selectedQualityOverride,
-          dataSaver,
-          autoAdjustQuality: localProfile.autoAdjustQuality,
-          effectiveType: usePlayerStore.getState().networkEffectiveType,
-          bufferingStalls: bufferingStallCount,
-        })
-      : null;
-
-  const streamOptionActive: StreamQualityOption | null =
-    effectiveStreamSelection?.selectedOption ?? null;
 
   const htmlAudioTrackKey = localActive
     ? trackUniqueId
     : useOfflineBlob && offlineRec
       ? `offline:${offlineRec.id}`
-      : streamOptionActive && trackUniqueId
-        ? `stream:${trackUniqueId}:${streamOptionActive.tier}`
-        : null;
+      : null;
 
   const loadedKeyRef = useRef<string | null>(null);
-  const lastTrackIdRef = useRef<string | null>(null);
   const transitionInProgressRef = useRef(false);
   const pauseTimerRef = useRef<number | null>(null);
   const silenceAccumMsRef = useRef(0);
   const lastSilentSeekAtRef = useRef(0);
   const dynamicLufsDoneRef = useRef(false);
-  const fallbackNoCorsAudioRef = useRef<HTMLAudioElement | null>(null);
-  const usingFallbackNoCorsRef = useRef(false);
-
-  const stopNoCorsFallback = () => {
-    usingFallbackNoCorsRef.current = false;
-    const el = fallbackNoCorsAudioRef.current;
-    if (el) {
-      try {
-        el.pause();
-        el.removeAttribute('src');
-        el.load();
-      } catch {
-        // Ignore
-      }
-    }
-  };
 
   // Sync output device (setSinkId) when configured
   useEffect(() => {
@@ -124,9 +90,10 @@ export function LocalAudioEngine() {
 
   // Apply Web Audio DSP graph parameters live without reloading audio
   useEffect(() => {
-    const activeLocal = localActive && trackUniqueId
-      ? localFiles.find((f) => f.id === trackUniqueId) ?? null
-      : null;
+    const activeLocal =
+      localActive && trackUniqueId
+        ? localFiles.find((f) => f.id === trackUniqueId) ?? null
+        : null;
     const activeOffline = useOfflineBlob ? offlineRec : null;
 
     applyAudioProfileToGraph({
@@ -138,16 +105,9 @@ export function LocalAudioEngine() {
       replayGainDb:
         activeLocal?.replayGainDb ??
         activeOffline?.replayGainDb ??
-        streamOptions?.replayGainDb ??
         null,
     });
 
-    if (usingFallbackNoCorsRef.current && fallbackNoCorsAudioRef.current) {
-      fallbackNoCorsAudioRef.current.volume = isMuted ? 0 : Math.max(0, Math.min(1, volume / 100));
-      fallbackNoCorsAudioRef.current.muted = isMuted;
-    }
-
-    // Also update directMode reflection in activeStreamMeta badge if an audio track is loaded
     const currentMeta = usePlayerStore.getState().activeStreamMeta;
     if (
       currentMeta &&
@@ -170,7 +130,6 @@ export function LocalAudioEngine() {
     localFiles,
     useOfflineBlob,
     offlineRec,
-    streamOptions,
   ]);
 
   // Apply playbackRate with pitch preservation
@@ -187,12 +146,9 @@ export function LocalAudioEngine() {
         m.webkitPreservesPitch = true;
       });
     }
-    if (fallbackNoCorsAudioRef.current) {
-      fallbackNoCorsAudioRef.current.playbackRate = playbackRate;
-    }
   }, [playbackRate]);
 
-  // Load source when track or quality tier changes (preserving exact position on mid-track quality switch)
+  // Load local/offline source when track changes
   useEffect(() => {
     if (!hydrated) return;
     const graph = ensureAudioGraph();
@@ -200,8 +156,6 @@ export function LocalAudioEngine() {
 
     if (!htmlAudioTrackKey) {
       loadedKeyRef.current = null;
-      lastTrackIdRef.current = trackUniqueId;
-      stopNoCorsFallback();
       graph.decks.forEach((d) => d.pause());
       return;
     }
@@ -210,7 +164,6 @@ export function LocalAudioEngine() {
     if (localActive && trackUniqueId && graph.crossfadeTargetId === trackUniqueId) {
       graph.crossfadeTargetId = null;
       loadedKeyRef.current = htmlAudioTrackKey;
-      lastTrackIdRef.current = trackUniqueId;
       transitionInProgressRef.current = false;
       dynamicLufsDoneRef.current = false;
       setDynamicMeasuredLufs(null);
@@ -219,18 +172,10 @@ export function LocalAudioEngine() {
 
     if (loadedKeyRef.current === htmlAudioTrackKey) return;
 
-    const isSameTrackQualitySwitch =
-      Boolean(trackUniqueId) && lastTrackIdRef.current === trackUniqueId;
-    const preservedTimeSec = isSameTrackQualitySwitch
-      ? usePlayerStore.getState().currentTime
-      : 0;
-
     loadedKeyRef.current = htmlAudioTrackKey;
-    lastTrackIdRef.current = trackUniqueId;
     dynamicLufsDoneRef.current = false;
     setDynamicMeasuredLufs(null);
     silenceAccumMsRef.current = 0;
-    stopNoCorsFallback();
 
     let cancelled = false;
 
@@ -243,7 +188,6 @@ export function LocalAudioEngine() {
 
       const audio = graph.decks[nextDeckIdx];
       let urlToLoad: string | null = null;
-      let isObjectUrl = false;
       let metaToReport: ActiveStreamMeta | null = null;
 
       if (localActive && trackUniqueId) {
@@ -260,7 +204,6 @@ export function LocalAudioEngine() {
         }
         revokeDeckUrl(graph.objectUrls, nextDeckIdx);
         urlToLoad = URL.createObjectURL(record.blob);
-        isObjectUrl = true;
         graph.objectUrls[nextDeckIdx] = urlToLoad;
         graph.trackIds[nextDeckIdx] = record.id;
 
@@ -290,7 +233,6 @@ export function LocalAudioEngine() {
       } else if (useOfflineBlob && offlineRec) {
         revokeDeckUrl(graph.objectUrls, nextDeckIdx);
         urlToLoad = URL.createObjectURL(offlineRec.blob);
-        isObjectUrl = true;
         graph.objectUrls[nextDeckIdx] = urlToLoad;
         graph.trackIds[nextDeckIdx] = offlineRec.id;
 
@@ -317,53 +259,16 @@ export function LocalAudioEngine() {
           audiodownloadAllowed: true,
           replayGainDb: offlineRec.replayGainDb ?? null,
         };
-      } else if (streamOptionActive && trackUniqueId) {
-        revokeDeckUrl(graph.objectUrls, nextDeckIdx);
-        // Prefer CORS-capable URL or backend CORS/Range proxy
-        const chosenUrl = streamOptionActive.corsSupported
-          ? streamOptionActive.streamUrl || streamOptionActive.proxyUrl
-          : streamOptionActive.proxyUrl || streamOptionActive.streamUrl;
-        urlToLoad = chosenUrl || null;
-        graph.trackIds[nextDeckIdx] = trackUniqueId;
-
-        if (urlToLoad) {
-          const badge = classifyStreamQualityBadge({
-            codec: streamOptionActive.codec,
-            bitrateKbps: streamOptionActive.bitrateKbps,
-            sampleRateHz: streamOptionActive.sampleRateHz,
-            bitDepth: streamOptionActive.bitDepth,
-            lossless: streamOptionActive.lossless,
-          });
-          metaToReport = {
-            trackId: trackUniqueId,
-            requestedTier: (selectedQualityOverride || localProfile.wifiQuality) as ConcreteQualityTier,
-            actualTier: streamOptionActive.tier,
-            codec: streamOptionActive.codec || 'Audio',
-            bitrateKbps: streamOptionActive.bitrateKbps ?? null,
-            sampleRateHz: streamOptionActive.sampleRateHz ?? null,
-            bitDepth: streamOptionActive.bitDepth ?? null,
-            lossless: badge.lossless,
-            hiRes: badge.hiRes,
-            badgeLabel: streamOptionActive.isPreview ? `${badge.badgeLabel} · Pratinjau` : badge.badgeLabel,
-            sourceMode: localProfile.directMode ? 'direct' : 'webaudio',
-            proxiedViaBackend: Boolean(urlToLoad.startsWith('/api/stream/')),
-            audiodownloadAllowed: streamOptions?.audiodownload_allowed ?? false,
-            replayGainDb: streamOptions?.replayGainDb ?? null,
-          };
-        }
       }
 
       if (!urlToLoad || cancelled) return;
 
-      audio.crossOrigin = isObjectUrl ? null : 'anonymous';
+      audio.crossOrigin = null;
       audio.src = urlToLoad;
       audio.playbackRate = usePlayerStore.getState().playbackRate;
 
       const storeState = usePlayerStore.getState();
-      const targetSeek =
-        preservedTimeSec > 0.5
-          ? preservedTimeSec
-          : storeState.pendingSeekSeconds ?? storeState.currentTime ?? 0;
+      const targetSeek = storeState.pendingSeekSeconds ?? storeState.currentTime ?? 0;
 
       const handleLoadedMeta = () => {
         if (cancelled) return;
@@ -386,57 +291,8 @@ export function LocalAudioEngine() {
 
       const handleMediaError = () => {
         if (cancelled) return;
-        // If direct external URL failed CORS/load, automatically retry via backend proxy first
-        if (
-          streamOptionActive?.proxyUrl &&
-          audio.src !== new URL(streamOptionActive.proxyUrl, window.location.origin).href
-        ) {
-          audio.crossOrigin = 'anonymous';
-          audio.src = streamOptionActive.proxyUrl;
-          audio.load();
-          return;
-        }
-
-        // Fallback: play without Web Audio CORS so track never goes silent + warn user honestly
-        const rawFallbackUrl = streamOptionActive?.rawUrl || streamOptionActive?.proxyUrl;
-        if (rawFallbackUrl) {
-          const el = fallbackNoCorsAudioRef.current || new Audio();
-          el.preload = 'auto';
-          el.crossOrigin = null;
-          el.src = rawFallbackUrl;
-          el.volume = storeState.isMuted ? 0 : Math.max(0, Math.min(1, storeState.volume / 100));
-          el.muted = storeState.isMuted;
-          el.playbackRate = storeState.playbackRate;
-          el.onloadedmetadata = () => {
-            if (targetSeek > 0 && Number.isFinite(el.duration) && targetSeek < el.duration) {
-              el.currentTime = targetSeek;
-            }
-            usePlayerStore.getState().setIsBuffering(false);
-            if (usePlayerStore.getState().isPlaying) {
-              void el.play().catch(() => {});
-            }
-          };
-          el.onended = () => {
-            if (usingFallbackNoCorsRef.current) {
-              usePlayerStore.getState().handleTrackEnded();
-            }
-          };
-          fallbackNoCorsAudioRef.current = el;
-          usingFallbackNoCorsRef.current = true;
-          usePlayerStore
-            .getState()
-            .setWebAudioWarning('Efek suara tidak tersedia untuk lagu ini');
-          if (metaToReport) {
-            usePlayerStore.getState().setActiveStreamMeta({
-              ...metaToReport,
-              sourceMode: 'fallback-no-fx',
-            });
-          }
-          el.load();
-        } else {
-          usePlayerStore.getState().setIsBuffering(false);
-          usePlayerStore.getState().setPlayerError('Stream audio gagal dimuat.');
-        }
+        usePlayerStore.getState().setIsBuffering(false);
+        usePlayerStore.getState().setPlayerError('File audio lokal gagal diputar.');
       };
 
       audio.addEventListener('loadedmetadata', handleLoadedMeta, { once: true });
@@ -455,8 +311,8 @@ export function LocalAudioEngine() {
     localActive,
     useOfflineBlob,
     offlineRec,
-    streamOptionActive,
     trackUniqueId,
+    localProfile.directMode,
   ]);
 
   // Sync Play / Pause with smooth fade in/out when fadeOnPlayPause is enabled
@@ -467,16 +323,6 @@ export function LocalAudioEngine() {
     if (pauseTimerRef.current !== null) {
       window.clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = null;
-    }
-
-    if (usingFallbackNoCorsRef.current && fallbackNoCorsAudioRef.current) {
-      const el = fallbackNoCorsAudioRef.current;
-      if (isPlaying && el.paused) {
-        void el.play().catch(() => {});
-      } else if (!isPlaying && !el.paused) {
-        el.pause();
-      }
-      return;
     }
 
     const activeAudio = graph.decks[graph.activeDeck];
@@ -520,18 +366,8 @@ export function LocalAudioEngine() {
   // Explicit Seek
   useEffect(() => {
     const graph = ensureAudioGraph();
-    if (!htmlAudioTrackKey || pendingSeekSeconds === null) return;
+    if (!htmlAudioTrackKey || pendingSeekSeconds === null || !graph) return;
 
-    if (usingFallbackNoCorsRef.current && fallbackNoCorsAudioRef.current) {
-      const el = fallbackNoCorsAudioRef.current;
-      if (Number.isFinite(el.duration) && el.duration > 0) {
-        el.currentTime = Math.max(0, Math.min(pendingSeekSeconds, el.duration));
-        usePlayerStore.getState().clearPendingSeek();
-      }
-      return;
-    }
-
-    if (!graph) return;
     const activeAudio = graph.decks[graph.activeDeck];
     if (Number.isFinite(activeAudio.duration) && activeAudio.duration > 0) {
       activeAudio.currentTime = Math.max(0, Math.min(pendingSeekSeconds, activeAudio.duration));
@@ -564,16 +400,6 @@ export function LocalAudioEngine() {
     };
 
     const interval = window.setInterval(() => {
-      if (usingFallbackNoCorsRef.current && fallbackNoCorsAudioRef.current) {
-        const el = fallbackNoCorsAudioRef.current;
-        const cur = el.currentTime;
-        const dur = Number.isFinite(el.duration) ? el.duration : 0;
-        if (Number.isFinite(cur)) {
-          usePlayerStore.getState().setProgress(cur, dur > 0 ? dur : undefined);
-        }
-        return;
-      }
-
       const activeIdx = graph.activeDeck;
       const standbyIdx: 0 | 1 = activeIdx === 0 ? 1 : 0;
       const audio = graph.decks[activeIdx];
@@ -588,7 +414,6 @@ export function LocalAudioEngine() {
         store.setProgress(cur, dur > 0 ? dur : undefined);
       }
 
-      // Dynamic loudness measurement during first 3.5 seconds if normalization active and no ReplayGain
       if (
         !profile.directMode &&
         profile.normalizationTarget !== 'off' &&
@@ -610,7 +435,6 @@ export function LocalAudioEngine() {
         }
       }
 
-      // Real-time Skip Silence via AnalyserNode
       if (
         !profile.directMode &&
         profile.skipSilence &&
@@ -636,7 +460,6 @@ export function LocalAudioEngine() {
         silenceAccumMsRef.current = 0;
       }
 
-      // Upcoming track check for crossfade / gapless (bypassed in Direct Mode)
       const upcoming = store.manualQueue[0] ?? store.sourceQueue[0] ?? null;
       const nextLocalId =
         upcoming && isLocalTrack(upcoming) && store.repeat !== 'one'
@@ -652,7 +475,6 @@ export function LocalAudioEngine() {
         void preloadStandbyTrack(nextLocalId);
       }
 
-      // Equal-power crossfade (0-12s), disabled in Direct Mode
       if (
         !profile.directMode &&
         nextLocalId &&
@@ -678,7 +500,6 @@ export function LocalAudioEngine() {
         }
       }
 
-      // Sleep timer gentle fade-out in final 1.5s
       if (store.sleepTimerMode === 'minutes' && store.sleepTimerEndsAt) {
         const remainingMs = store.sleepTimerEndsAt - Date.now();
         if (remainingMs > 0 && remainingMs <= 1500) {
@@ -688,7 +509,6 @@ export function LocalAudioEngine() {
         }
       }
 
-      // Handle gapless / crossfade completion or normal end
       if (dur > 0 && (audio.ended || dur - cur <= 0.06)) {
         if (
           !profile.directMode &&
@@ -728,13 +548,11 @@ export function LocalAudioEngine() {
     return () => window.clearInterval(interval);
   }, [htmlAudioTrackKey, isPlaying, manualQueue, sourceQueue]);
 
-  // Also ensure active track's offline status isn't lost if played via catalog ID
   useEffect(() => {
     if (!currentTrack || localActive) return;
     const vid = getPlayableVideoId(currentTrack);
     if (!vid) return;
-    const isOffline = useOfflineBlob;
-    if (isOffline && usePlayerStore.getState().isBuffering) {
+    if (useOfflineBlob && usePlayerStore.getState().isBuffering) {
       usePlayerStore.getState().setIsBuffering(false);
     }
   }, [currentTrack, localActive, useOfflineBlob]);

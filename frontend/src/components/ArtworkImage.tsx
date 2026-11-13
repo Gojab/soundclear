@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Disc3, Headphones, Music, Podcast, User } from 'lucide-react';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItemType } from '../types/music';
@@ -22,6 +22,10 @@ export function ArtworkImage({
   const [failed, setFailed] = useState(false);
   const dataSaver = useSettingsStore((s) => s.dataSaver);
   const resolvedSrc = getEffectiveThumbnail(src, dataSaver);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [resolvedSrc]);
 
   if (!resolvedSrc || failed) {
     const Icon =

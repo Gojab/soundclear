@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  Check,
   Copy,
   Disc3,
+  Download,
   EyeOff,
   FileText,
   Heart,
@@ -19,6 +21,7 @@ import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { formatArtists, getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 
 export function GlobalTrackContextMenu({
@@ -42,6 +45,10 @@ export function GlobalTrackContextMenu({
   const hideTrack = useLibraryStore((s) => s.hideTrack);
   const unhideTrack = useLibraryStore((s) => s.unhideTrack);
   const isTrackHidden = useLibraryStore((s) => s.isTrackHidden);
+  const isTrackDownloadedOffline = useLibraryStore((s) => s.isTrackDownloadedOffline);
+  const downloadTrackOffline = useLibraryStore((s) => s.downloadTrackOffline);
+  const deleteOfflineDownload = useLibraryStore((s) => s.deleteOfflineDownload);
+  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -67,6 +74,7 @@ export function GlobalTrackContextMenu({
   const localFile = isLocalTrack(track);
   const liked = isLiked(trackKey);
   const hidden = isTrackHidden(trackKey);
+  const downloadedOffline = isTrackDownloadedOffline(trackKey);
   const primaryArtist = track?.artists.find((a) => Boolean(a.id));
   const primaryAlbum = track?.album?.id ? track.album : null;
 
@@ -78,11 +86,10 @@ export function GlobalTrackContextMenu({
   const handleCopyLink = async () => {
     if (!track) return;
     const vid = getPlayableVideoId(track);
+    const origin = window.location.origin;
     const link = vid
-      ? `https://music.youtube.com/watch?v=${vid}`
-      : track.type === 'album'
-        ? `https://music.youtube.com/browse/${track.id}`
-        : `https://music.youtube.com/browse/${track.id}`;
+      ? `${origin}/?play=${encodeURIComponent(vid)}`
+      : `${origin}/?open=${encodeURIComponent(track.type)}:${encodeURIComponent(track.id)}`;
     try {
       await navigator.clipboard.writeText(link);
       showToast('Tautan disalin ke papan klip');
@@ -191,6 +198,32 @@ export function GlobalTrackContextMenu({
                   strokeWidth={1.75}
                 />
                 <span>{liked ? 'Batal sukai' : 'Sukai lagu'}</span>
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  if (downloadedOffline && trackKey) {
+                    void deleteOfflineDownload(trackKey);
+                    showToast(`"${track.title}" dihapus dari Unduhan Offline`);
+                  } else {
+                    void downloadTrackOffline(track, downloadQuality).then((res) => {
+                      if (res.ok) {
+                        showToast(`"${track.title}" tersimpan untuk akses offline`);
+                      }
+                    });
+                  }
+                  closeMenu();
+                }}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+              >
+                {downloadedOffline ? (
+                  <Check className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={2} />
+                ) : (
+                  <Download className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                )}
+                <span>{downloadedOffline ? 'Hapus dari offline' : 'Unduh offline'}</span>
               </button>
 
               {!localFile && <div className="my-1 border-t border-white/[0.08]" />}

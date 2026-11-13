@@ -18,7 +18,6 @@ import type {
   SearchResponse,
   SongCreditsResponse,
   SongRelatedResponse,
-  StreamOptionsResponse,
   SuggestResponse,
   WatchPlaylistResponse,
 } from '../types/music';
@@ -313,9 +312,12 @@ export function resolvePlayableYoutube(
     artist?: string;
     type?: string;
     durationSeconds?: number | null;
+    fallback?: boolean;
+    exclude?: string[];
   },
 ): Promise<PlayResolveResponse> {
-  const key = `${id}|${meta?.title || ''}|${meta?.artist || ''}`;
+  const excludeStr = (meta?.exclude || []).filter(Boolean).join(',');
+  const key = `${id}|${meta?.title || ''}|${meta?.artist || ''}|${meta?.fallback ? '1' : '0'}|${excludeStr}`;
   const cached = playResolveCache.get(key);
   if (cached) return cached;
 
@@ -326,51 +328,14 @@ export function resolvePlayableYoutube(
   if (meta?.durationSeconds && meta.durationSeconds > 0) {
     params.set('durationSeconds', String(Math.round(meta.durationSeconds)));
   }
+  if (meta?.fallback) params.set('fallback', 'true');
+  if (excludeStr) params.set('exclude', excludeStr);
 
   const req = requestJson<PlayResolveResponse>(`/play/resolve?${params.toString()}`).catch((err) => {
     playResolveCache.delete(key);
     throw err;
   });
   playResolveCache.set(key, req);
-  return req;
-}
-
-export function fetchTrackPreviewUrl(
-  trackId: string,
-  itemType?: string,
-): Promise<{ id: string; previewUrl: string }> {
-  const cleanId = trackId.trim();
-  if (!cleanId) return Promise.reject(new ApiError('ID lagu tidak valid.', 400));
-  const qs = itemType ? `?type=${encodeURIComponent(itemType)}` : '';
-  return requestJson<{ id: string; previewUrl: string }>(
-    `/play/preview/${encodeURIComponent(cleanId)}${qs}`,
-  );
-}
-
-const streamOptionsCache = new Map<string, Promise<StreamOptionsResponse>>();
-
-export function fetchStreamOptions(
-  trackId: string,
-  forceRefresh = false,
-  itemType?: string,
-): Promise<StreamOptionsResponse> {
-  const cleanId = trackId.trim();
-  if (!cleanId) return Promise.reject(new ApiError('ID lagu tidak valid.', 400));
-  const cacheKey = `${cleanId}|${itemType || ''}`;
-  if (forceRefresh) {
-    streamOptionsCache.delete(cacheKey);
-  }
-  const hit = streamOptionsCache.get(cacheKey);
-  if (hit) return hit;
-
-  const qs = itemType ? `?type=${encodeURIComponent(itemType)}` : '';
-  const req = requestJson<StreamOptionsResponse>(
-    `/stream/options/${encodeURIComponent(cleanId)}${qs}`,
-  ).catch((err) => {
-    streamOptionsCache.delete(cacheKey);
-    throw err;
-  });
-  streamOptionsCache.set(cacheKey, req);
   return req;
 }
 

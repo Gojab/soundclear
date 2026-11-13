@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Check,
+  Download,
   Headphones,
   Info,
   ListMusic,
@@ -18,6 +19,7 @@ import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
 import { formatArtists, getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
@@ -243,11 +245,16 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
 
   const navigate = useNavigationStore((s) => s.navigate);
   const openMenu = useContextMenuStore((s) => s.openMenu);
+  const showToast = useContextMenuStore((s) => s.showToast);
 
   const trackKey = getTrackUniqueId(currentTrack);
   const localPlaying = isLocalTrack(currentTrack);
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
   const toggleLike = useLibraryStore((s) => s.toggleLike);
+  const isOffline = useLibraryStore((s) => s.isTrackDownloadedOffline(trackKey));
+  const downloadTrackOffline = useLibraryStore((s) => s.downloadTrackOffline);
+  const deleteOfflineDownload = useLibraryStore((s) => s.deleteOfflineDownload);
+  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
 
   if (!rightPanelOpen) return null;
 
@@ -305,10 +312,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                 )}
               </div>
             ) : (
-              <div
-                data-yt-visible-slot="true"
-                className="relative aspect-square w-full overflow-hidden rounded-lg bg-[#1F1F1F]"
-              >
+              <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-[#1F1F1F]">
                 <ArtworkImage
                   src={currentTrack.thumbnail}
                   alt={currentTrack.title}
@@ -365,6 +369,31 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    if (!currentTrack || !trackKey) return;
+                    if (isOffline) {
+                      void deleteOfflineDownload(trackKey);
+                      showToast(`"${currentTrack.title}" dihapus dari penyimpanan offline`);
+                    } else {
+                      void downloadTrackOffline(currentTrack, downloadQuality).then((res) => {
+                        if (res.ok) {
+                          showToast(`"${currentTrack.title}" tersimpan offline`);
+                        }
+                      });
+                    }
+                  }}
+                  aria-label={isOffline ? 'Hapus dari offline' : 'Simpan lagu offline'}
+                  title={isOffline ? 'Tersimpan offline (klik untuk hapus)' : 'Simpan ke offline'}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                    isOffline
+                      ? 'bg-[#2EE6A6]/15 text-[#2EE6A6]'
+                      : 'text-white/60 hover:text-white hover:bg-white/[0.08]'
+                  }`}
+                >
+                  <Download className="w-4 h-4" strokeWidth={1.9} />
+                </button>
+                <button
+                  type="button"
                   onClick={() => onAddToPlaylist(currentTrack)}
                   aria-label="Simpan lagu ke playlist"
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
@@ -410,7 +439,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             )}
 
             {webAudioWarning && (
-              <p className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-2">
+              <p className="text-[11px] text-[#2EE6A6]/90 bg-[#2EE6A6]/10 border border-[#2EE6A6]/20 rounded-xl px-3 py-2">
                 {webAudioWarning}
               </p>
             )}

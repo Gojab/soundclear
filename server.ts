@@ -83,7 +83,7 @@ async function checkPythonDepsReady(pythonBin: string): Promise<boolean> {
   try {
     const res = await runCommandAsync(
       pythonBin,
-      ['-c', 'import spotapi, fastapi, uvicorn, PIL, dotenv, requests'],
+      ['-c', 'import ytmusicapi, fastapi, uvicorn, PIL, dotenv, requests'],
       { stdio: 'ignore' },
     );
     return res.code === 0;
@@ -98,7 +98,7 @@ async function ensurePythonDependencies(): Promise<string> {
   }
 
   const sysPython = await findSystemPython();
-  console.log('[soundclear] Menyiapkan lingkungan Python & dependensi SpotAPI...');
+  console.log('[soundclear] Menyiapkan lingkungan Python & dependensi SoundClear...');
 
   if (!fs.existsSync(VENV_PYTHON)) {
     const venvRes = await runCommandAsync(sysPython, ['-m', 'venv', VENV_DIR]);
@@ -226,7 +226,7 @@ async function bootstrapPythonInBackground(): Promise<void> {
     if (await isPythonHealthy()) {
       notifyPythonReady();
       console.log(
-        `[soundclear] Python FastAPI SpotAPI backend already running on ${PYTHON_HOST}:${PYTHON_PORT}`,
+        `[soundclear] Python FastAPI music backend already running on ${PYTHON_HOST}:${PYTHON_PORT}`,
       );
       return;
     }
@@ -243,7 +243,7 @@ async function bootstrapPythonInBackground(): Promise<void> {
     await waitForPythonHealth(30000);
     if (!shuttingDown) {
       notifyPythonReady();
-      console.log(`[soundclear] Python FastAPI SpotAPI backend ready on ${PYTHON_HOST}:${PYTHON_PORT}`);
+      console.log(`[soundclear] Python FastAPI music backend ready on ${PYTHON_HOST}:${PYTHON_PORT}`);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -283,7 +283,7 @@ function proxyApiToPython(req: Request, res: Response): void {
       res.status(200).json({
         status: pythonInitError ? 'degraded' : 'starting',
         service: 'soundclear',
-        provider: 'spotapi',
+        provider: 'soundclear-cloud',
         ready: false,
         ...(pythonInitError ? { error: pythonInitError } : {}),
       });
@@ -309,7 +309,6 @@ function proxyApiToPython(req: Request, res: Response): void {
 }
 
 function forwardToPython(req: Request, res: Response, targetPath: string): void {
-  const isStreamRequest = targetPath.startsWith('/api/stream');
   const headers: http.OutgoingHttpHeaders = { ...req.headers };
   delete headers.host;
 
@@ -320,7 +319,7 @@ function forwardToPython(req: Request, res: Response, targetPath: string): void 
       path: targetPath,
       method: req.method,
       headers,
-      timeout: isStreamRequest ? 120000 : 30000,
+      timeout: 30000,
     },
     (proxyRes) => {
       res.status(proxyRes.statusCode || 502);
@@ -343,7 +342,7 @@ function forwardToPython(req: Request, res: Response, targetPath: string): void 
   proxyReq.on('error', (err) => {
     if (!res.headersSent) {
       res.status(502).json({
-        detail: `Gagal menghubungi backend Python SpotAPI: ${err.message}`,
+        detail: `Gagal menghubungi backend musik Python: ${err.message}`,
       });
     }
   });

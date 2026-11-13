@@ -18,7 +18,11 @@ import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { HomeSectionId, MediaItem } from '../types/music';
-import { getPlayableVideoId } from '../utils/playerLogic';
+import {
+  getPlayableVideoId,
+  isExcludedRegionalItem,
+  isExcludedRegionalText,
+} from '../utils/playerLogic';
 import { getGreetingByHour } from '../utils/recapLogic';
 
 interface HomePageProps {
@@ -82,6 +86,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
       const key = getPlayableVideoId(item) || item.id;
       if (hiddenSet.has(key)) return false;
       if (hideExplicit && item.isExplicit) return false;
+      if (isExcludedRegionalItem(item)) return false;
       return true;
     });
   };
@@ -181,13 +186,13 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
         }
       }
     }
-    return items.slice(0, 10);
-  }, [followedArtistQueries]);
+    return filterList(items).slice(0, 10);
+  }, [followedArtistQueries, hiddenTrackIds, hideExplicit]);
 
   const { greeting, moodLabel } = getGreetingByHour(new Date().getHours());
   const chartSongs = filterList(chartsQuery.data?.songs ?? []);
-  const chartPlaylists = chartsQuery.data?.videos ?? [];
-  const chartArtists = chartsQuery.data?.artists ?? [];
+  const chartPlaylists = filterList(chartsQuery.data?.videos ?? []);
+  const chartArtists = filterList(chartsQuery.data?.artists ?? []);
   const dailyMixTracks = filterList(dailyMixQuery.data?.tracks ?? []).slice(0, 8);
   const moodCategories = useMemo(
     () => (moodsQuery.data?.groups ?? []).flatMap((g) => g.items).slice(0, 12),
@@ -560,6 +565,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
               />
             ) : (
               homeQuery.data?.sections.map((section) => {
+                if (isExcludedRegionalText(section.title)) return null;
                 const visibleItems = filterList(section.items);
                 if (visibleItems.length === 0) return null;
                 const playableItems = visibleItems.filter((i) => Boolean(getPlayableVideoId(i)));
@@ -726,9 +732,9 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
             </div>
             {podcastDiscoverQuery.isLoading ? (
               <CardGridSkeleton count={5} />
-            ) : podcastDiscoverQuery.data && podcastDiscoverQuery.data.items.length > 0 ? (
+            ) : podcastDiscoverQuery.data && filterList(podcastDiscoverQuery.data.items).length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                {podcastDiscoverQuery.data.items.slice(0, 10).map((item) => (
+                {filterList(podcastDiscoverQuery.data.items).slice(0, 10).map((item) => (
                   <MediaCard key={item.id} item={item} />
                 ))}
               </div>

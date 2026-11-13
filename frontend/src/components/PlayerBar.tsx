@@ -163,25 +163,17 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                   <button
                     type="button"
                     onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
-                    title={webAudioWarning || `Kualitas termuat: ${activeStreamMeta.badgeLabel}`}
+                    title={`Kualitas termuat: ${activeStreamMeta.badgeLabel}`}
                     className={`text-[10px] font-medium truncate hover:underline ${
                       activeStreamMeta.hiRes
                         ? 'text-[#F5C451]'
                         : activeStreamMeta.lossless
                           ? 'text-[#2EE6A6]'
-                          : 'text-white/45'
+                          : 'text-white/55'
                     }`}
                   >
                     {activeStreamMeta.badgeLabel}
                   </button>
-                  {webAudioWarning && (
-                    <span
-                      title={webAudioWarning}
-                      className="text-[10px] text-amber-300/85 truncate"
-                    >
-                      · Tanpa FX
-                    </span>
-                  )}
                 </div>
               )}
             </div>
@@ -595,7 +587,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                 <span>Pengaturan Audio &amp; EQ</span>
               </button>
               {webAudioWarning && (
-                <p className="text-[11px] text-amber-300/85 text-center leading-snug">
+                <p className="text-[11px] text-[#2EE6A6]/85 text-center leading-snug">
                   {webAudioWarning}
                 </p>
               )}

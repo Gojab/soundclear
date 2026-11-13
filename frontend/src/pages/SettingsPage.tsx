@@ -26,7 +26,7 @@ const SECTION_LABELS: Record<HomeSectionId, string> = {
   artist_releases: 'Rilisan Baru Artis Diikuti',
   for_you_mix: 'Mix Untukmu',
   charts: 'Tangga Lagu Indonesia',
-  home_feed: 'Beranda YouTube Music',
+  home_feed: 'Beranda Rekomendasi',
   moods: 'Rak Mood & Genre',
 };
 
@@ -146,7 +146,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
       }
       showToast(`Sinkronisasi selesai (${added} item baru ditambahkan)`);
     } catch {
-      showToast('Gagal menyinkronkan akun YouTube Music');
+      showToast('Gagal menyinkronkan koleksi pustaka');
     } finally {
       setSyncing(false);
     }
@@ -191,76 +191,128 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
           <AudioSettingsTab />
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Preferensi Umum */}
-          <section className="glass-card rounded-2xl p-5 space-y-4">
-            <h2 className="text-base font-semibold text-white">Pemutaran &amp; Tampilan</h2>
+          <section className="rounded-xl bg-[#181818] border border-white/[0.07] p-5 space-y-1">
+            <h2 className="text-base font-bold text-white pb-2">Pemutaran &amp; Tampilan</h2>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer">
-              <div>
-                <p className="text-sm font-medium text-white">Sembunyikan konten eksplisit</p>
-                <p className="text-xs text-white/50">
-                  Saring lagu yang ditandai eksplisit di beranda dan pencarian
-                </p>
+            <div className="divide-y divide-white/[0.07]">
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <div className="min-w-0">
+                  <p id="lbl-hide-explicit" className="text-sm font-medium text-white">
+                    Sembunyikan konten eksplisit
+                  </p>
+                  <p className="text-xs text-white/55 mt-0.5">
+                    Saring lagu yang ditandai eksplisit di beranda dan pencarian
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={hideExplicit}
+                  aria-labelledby="lbl-hide-explicit"
+                  onClick={() => updateSetting('hideExplicit', !hideExplicit)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#2EE6A6] ${
+                    hideExplicit ? 'bg-[#2EE6A6]' : 'bg-white/20 hover:bg-white/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                      hideExplicit
+                        ? 'translate-x-6 bg-[#06130E]'
+                        : 'translate-x-1 bg-white'
+                    }`}
+                  />
+                </button>
               </div>
-              <input
-                type="checkbox"
-                checked={hideExplicit}
-                onChange={(e) => updateSetting('hideExplicit', e.target.checked)}
-                className="w-4 h-4 accent-[#2EE6A6]"
-              />
-            </label>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer pt-3 border-t border-white/[0.07]">
-              <div>
-                <p className="text-sm font-medium text-white">Putar otomatis (Autoplay radio)</p>
-                <p className="text-xs text-white/50">
-                  Lanjutkan otomatis dengan lagu terkait saat antrean habis
-                </p>
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <div className="min-w-0">
+                  <p id="lbl-autoplay" className="text-sm font-medium text-white">
+                    Putar otomatis (Autoplay radio)
+                  </p>
+                  <p className="text-xs text-white/55 mt-0.5">
+                    Lanjutkan otomatis dengan lagu terkait saat antrean habis
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoplay}
+                  aria-labelledby="lbl-autoplay"
+                  onClick={() => updateSetting('autoplay', !autoplay)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#2EE6A6] ${
+                    autoplay ? 'bg-[#2EE6A6]' : 'bg-white/20 hover:bg-white/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                      autoplay ? 'translate-x-6 bg-[#06130E]' : 'translate-x-1 bg-white'
+                    }`}
+                  />
+                </button>
               </div>
-              <input
-                type="checkbox"
-                checked={autoplay}
-                onChange={(e) => updateSetting('autoplay', e.target.checked)}
-                className="w-4 h-4 accent-[#2EE6A6]"
-              />
-            </label>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer pt-3 border-t border-white/[0.07]">
-              <div>
-                <p className="text-sm font-medium text-white">Mode hemat data</p>
-                <p className="text-xs text-white/50">
-                  Muat thumbnail beresolusi lebih kecil untuk menghemat kuota
-                </p>
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <div className="min-w-0">
+                  <p id="lbl-datasaver" className="text-sm font-medium text-white">
+                    Mode hemat data
+                  </p>
+                  <p className="text-xs text-white/55 mt-0.5">
+                    Muat thumbnail beresolusi lebih kecil untuk menghemat kuota
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={dataSaver}
+                  aria-labelledby="lbl-datasaver"
+                  onClick={() => updateSetting('dataSaver', !dataSaver)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#2EE6A6] ${
+                    dataSaver ? 'bg-[#2EE6A6]' : 'bg-white/20 hover:bg-white/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                      dataSaver ? 'translate-x-6 bg-[#06130E]' : 'translate-x-1 bg-white'
+                    }`}
+                  />
+                </button>
               </div>
-              <input
-                type="checkbox"
-                checked={dataSaver}
-                onChange={(e) => updateSetting('dataSaver', e.target.checked)}
-                className="w-4 h-4 accent-[#2EE6A6]"
-              />
-            </label>
 
-            <label className="flex items-center justify-between gap-4 cursor-pointer pt-3 border-t border-white/[0.07]">
-              <div>
-                <p className="text-sm font-medium text-white">
-                  Tampilkan panel kanan &ldquo;Sedang diputar&rdquo;
-                </p>
-                <p className="text-xs text-white/50">
-                  Tampilkan pemutar YouTube, antrean, lirik, dan kredit lagu
-                </p>
+              <div className="flex items-center justify-between gap-4 pt-3.5 pb-1">
+                <div className="min-w-0">
+                  <p id="lbl-right-panel" className="text-sm font-medium text-white">
+                    Tampilkan panel kanan &ldquo;Sedang diputar&rdquo;
+                  </p>
+                  <p className="text-xs text-white/55 mt-0.5">
+                    Tampilkan pemutar, antrean, lirik, dan kredit lagu di sisi kanan
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showRightPanel}
+                  aria-labelledby="lbl-right-panel"
+                  onClick={() => setRightPanelOpen(!showRightPanel)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#2EE6A6] ${
+                    showRightPanel ? 'bg-[#2EE6A6]' : 'bg-white/20 hover:bg-white/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                      showRightPanel
+                        ? 'translate-x-6 bg-[#06130E]'
+                        : 'translate-x-1 bg-white'
+                    }`}
+                  />
+                </button>
               </div>
-              <input
-                type="checkbox"
-                checked={showRightPanel}
-                onChange={(e) => setRightPanelOpen(e.target.checked)}
-                className="w-4 h-4 accent-[#2EE6A6]"
-              />
-            </label>
+            </div>
           </section>
 
           {/* Urutan Bagian Beranda */}
-          <section className="glass-card rounded-2xl p-5 space-y-3">
+          <section className="rounded-xl bg-[#181818] border border-white/[0.07] p-5 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-white">Urutan Bagian Beranda</h2>
@@ -313,12 +365,12 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
             </div>
           </section>
 
-          {/* Akun YouTube Music Opsional */}
-          <section className="glass-card rounded-2xl p-5 space-y-3">
-            <h2 className="text-base font-semibold text-white">Akun YouTube Music (Opsional)</h2>
+          {/* Mode Katalog & Pustaka */}
+          <section className="rounded-xl bg-[#181818] border border-white/[0.07] p-5 space-y-3">
+            <h2 className="text-base font-semibold text-white">Mode Katalog &amp; Pustaka</h2>
             <p className="text-xs text-white/60">
               {accountStatusQuery.data?.message ||
-                'Memeriksa konfigurasi autentikasi backend (YTMUSIC_AUTH_FILE)...'}
+                'Mode tanpa login aktif. Katalog musik tersedia langsung tanpa memerlukan masuk akun.'}
             </p>
             {accountStatusQuery.data?.authenticated && (
               <button
@@ -335,7 +387,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
           {/* Lagu Disembunyikan */}
           {hiddenTrackIds.length > 0 && (
-            <section className="glass-card rounded-2xl p-5 space-y-3">
+            <section className="rounded-xl bg-[#181818] border border-white/[0.07] p-5 space-y-3">
               <h2 className="text-base font-semibold text-white">
                 Lagu Disembunyikan ({hiddenTrackIds.length})
               </h2>
@@ -361,7 +413,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
           )}
 
           {/* Ekspor / Impor & Hapus Riwayat */}
-          <section className="glass-card rounded-2xl p-5 space-y-4">
+          <section className="rounded-xl bg-[#181818] border border-white/[0.07] p-5 space-y-4">
             <h2 className="text-base font-semibold text-white">Data Lokal &amp; Cadangan</h2>
             <div className="flex flex-wrap gap-2.5">
               <button

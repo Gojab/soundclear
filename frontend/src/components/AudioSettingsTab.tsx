@@ -9,8 +9,8 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  ShieldAlert,
   Sliders,
+  Sparkles,
   Trash2,
   Volume2,
   VolumeX,
@@ -45,7 +45,7 @@ import {
   PLAYBACK_RATE_OPTIONS,
   STREAM_QUALITY_TIERS,
 } from '../utils/audioMath';
-import { getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
+import { getTrackUniqueId, hasPlayableOfflineAudio, isLocalTrack } from '../utils/playerLogic';
 import { SpectrumAnalyzer } from './SpectrumAnalyzer';
 
 function EqResponseCurveSvg({
@@ -208,6 +208,7 @@ export function AudioSettingsTab() {
   const renameCustomPreset = useSettingsStore((s) => s.renameCustomPreset);
   const deleteCustomPreset = useSettingsStore((s) => s.deleteCustomPreset);
   const resetAudioProfileSection = useSettingsStore((s) => s.resetAudioProfileSection);
+  const enableAllDsp = useSettingsStore((s) => s.enableAllDsp);
 
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const volume = usePlayerStore((s) => s.volume);
@@ -216,9 +217,6 @@ export function AudioSettingsTab() {
   const sleepTimerMode = usePlayerStore((s) => s.sleepTimerMode);
   const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
   const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
-  const streamOptions = usePlayerStore((s) => s.streamOptions);
-  const selectedQualityOverride = usePlayerStore((s) => s.selectedQualityOverride);
-  const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
   const networkEffectiveType = usePlayerStore((s) => s.networkEffectiveType);
   const bufferingStallCount = usePlayerStore((s) => s.bufferingStallCount);
 
@@ -226,11 +224,12 @@ export function AudioSettingsTab() {
   const toggleMute = usePlayerStore((s) => s.toggleMute);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
-  const setSelectedQualityOverride = usePlayerStore((s) => s.setSelectedQualityOverride);
   const playTrack = usePlayerStore((s) => s.playTrack);
 
+  const likedTracks = useLibraryStore((s) => s.likedTracks);
   const offlineDownloads = useLibraryStore((s) => s.offlineDownloads);
   const downloadTrackOffline = useLibraryStore((s) => s.downloadTrackOffline);
+  const downloadTracksOffline = useLibraryStore((s) => s.downloadTracksOffline);
   const deleteOfflineDownload = useLibraryStore((s) => s.deleteOfflineDownload);
   const showToast = useContextMenuStore((s) => s.showToast);
 
@@ -285,6 +284,20 @@ export function AudioSettingsTab() {
     }
   };
 
+  const handleDownloadLikedBatch = async () => {
+    if (likedTracks.length === 0) return;
+    setDownloadingOffline(true);
+    try {
+      const { savedCount } = await downloadTracksOffline(
+        likedTracks,
+        localProfile.downloadQuality,
+      );
+      showToast(`${savedCount} lagu disukai tersimpan untuk akses offline`);
+    } finally {
+      setDownloadingOffline(false);
+    }
+  };
+
   const localPlaying = isLocalTrack(currentTrack);
   const effectiveVolume = localPlaying
     ? isMuted
@@ -302,9 +315,7 @@ export function AudioSettingsTab() {
   const alreadyOffline = Boolean(
     currentTrackId && offlineDownloads.some((d) => d.id === currentTrackId),
   );
-  const downloadAllowedForCurrent = Boolean(
-    currentTrack && (localPlaying || streamOptions?.audiodownload_allowed),
-  );
+  const downloadAllowedForCurrent = Boolean(currentTrack);
 
   const connectionApiSupported =
     typeof navigator !== 'undefined' &&
@@ -312,43 +323,38 @@ export function AudioSettingsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Top Action & Global Warning */}
+      {/* Top Action & Global DSP Controls */}
       <div className="glass-card rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-white">
             Pengaturan Audio Lengkap ({accountKey})
           </p>
           <p className="text-xs text-white/55 mt-0.5">
-            Semua kontrol diterapkan langsung ke mesin audio tanpa memuat ulang halaman.
+            Semua kontrol DSP aktif dan diterapkan langsung ke mesin audio tanpa memuat ulang halaman.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => handleResetSection('all', 'Seluruh pengaturan audio')}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white shrink-0 self-start sm:self-auto transition-colors"
-        >
-          <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.85} />
-          Reset ke default
-        </button>
-      </div>
-
-      {webAudioWarning && (
-        <div
-          role="status"
-          className="rounded-2xl bg-amber-500/10 border border-amber-400/25 px-4 py-3 flex items-start gap-3"
-        >
-          <ShieldAlert className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" strokeWidth={1.9} />
-          <div className="text-xs space-y-0.5">
-            <p className="font-semibold text-amber-200">{webAudioWarning}</p>
-            <p className="text-amber-100/75">
-              Lagu tetap diputar normal. Untuk menguji Equalizer, Bass Boost, Stereo Widener,
-              Mono, dan Balance secara langsung sekarang, putar file lokal atau gunakan tombol{' '}
-              <span className="font-semibold text-white">Tes Nada</span> di panel Diagnostik
-              Audio di bawah.
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => {
+              enableAllDsp();
+              showToast('Semua modul DSP aktif (EQ, Bass Boost, Stereo Widener, Normalisasi, Limiter, Crossfade)');
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
+            Aktifkan Semua DSP
+          </button>
+          <button
+            type="button"
+            onClick={() => handleResetSection('all', 'Seluruh pengaturan audio')}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.85} />
+            Reset ke default
+          </button>
         </div>
-      )}
+      </div>
 
       {/* 1. KUALITAS STREAMING */}
       <section className="glass-card rounded-2xl p-5 space-y-5">
@@ -431,26 +437,17 @@ export function AudioSettingsTab() {
           </label>
         </div>
 
-        {/* Real stream availability from get_stream_options(track_id) */}
+        {/* Active stream status */}
         <div className="pt-3 border-t border-white/[0.07] space-y-2.5">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-white/80">
-              Ketersediaan Kualitas Nyata Pada Lagu Aktif
+              Status Kualitas Pada Lagu Aktif
             </p>
-            {selectedQualityOverride && (
-              <button
-                type="button"
-                onClick={() => setSelectedQualityOverride(null)}
-                className="text-[11px] text-[#2EE6A6] hover:underline"
-              >
-                Kembali ke pemutar default
-              </button>
-            )}
           </div>
 
           {!currentTrack ? (
             <p className="text-xs text-white/45">
-              Putar sebuah lagu untuk melihat codec, bitrate, sample rate, dan tier kualitas asli dari sumbernya.
+              Putar sebuah lagu atau impor berkas audio lokal untuk melihat informasi pemutaran aktif.
             </p>
           ) : localPlaying ? (
             <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -473,73 +470,35 @@ export function AudioSettingsTab() {
                 </span>
               )}
             </div>
-          ) : streamOptions ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {streamOptions.options.map((opt) => {
-                const isSelected = selectedQualityOverride === opt.tier;
-                const specParts = [
-                  opt.codec,
-                  opt.bitrateKbps ? `${opt.bitrateKbps} kbps` : null,
-                  opt.sampleRateHz ? `${(opt.sampleRateHz / 1000).toFixed(1)} kHz` : null,
-                  opt.bitDepth ? `${opt.bitDepth}-bit` : null,
-                ].filter(Boolean);
-
-                return (
-                  <button
-                    key={opt.tier}
-                    type="button"
-                    disabled={!opt.available}
-                    onClick={() => {
-                      if (!opt.available) return;
-                      setSelectedQualityOverride(opt.tier);
-                      showToast(
-                        `Beralih ke stream ${opt.label} (${specParts.join(' · ')}) tanpa mengulang posisi`,
-                      );
-                    }}
-                    className={`text-left p-3 rounded-xl border transition-colors ${
-                      !opt.available
-                        ? 'bg-white/[0.02] border-white/[0.05] text-white/35 cursor-not-allowed'
-                        : isSelected
-                          ? 'bg-[#2EE6A6]/15 border-[#2EE6A6]/50 text-white'
-                          : 'bg-white/[0.05] border-white/[0.08] hover:bg-white/[0.09] text-white'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold">{opt.label}</span>
-                      {opt.available ? (
-                        <span className="text-[10px] font-medium text-[#2EE6A6]">
-                          {opt.isPreview ? 'Pratinjau CORS' : 'Tersedia'}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-white/40">Tidak tersedia</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-white/50 mt-0.5">
-                      {opt.available
-                        ? specParts.join(' · ') || 'Stream langsung tersedia'
-                        : opt.unavailableReason || 'Tidak tersedia untuk lagu ini'}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
           ) : (
-            <p className="text-xs text-white/45">Memeriksa opsi stream dari backend...</p>
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div>
+                <p className="font-semibold text-white">
+                  {activeStreamMeta?.badgeLabel || 'Streaming Cloud'}
+                </p>
+                <p className="text-white/50 mt-0.5">
+                  Katalog online diputar langsung melalui pemutar streaming cloud adaptif tanpa mengunduh berkas audio.
+                </p>
+              </div>
+              <span className="px-2 py-1 rounded-lg bg-[#2EE6A6]/15 text-[#2EE6A6] font-semibold">
+                Adaptif
+              </span>
+            </div>
           )}
         </div>
       </section>
 
-      {/* 2. KUALITAS UNDUHAN & OFFLINE */}
+      {/* 2. PENYIMPANAN & UNDUHAN OFFLINE */}
       <section className="glass-card rounded-2xl p-5 space-y-4">
         <SectionHeader
-          title="2. Kualitas Unduhan & Offline"
-          subtitle="Unduhan offline hanya diizinkan jika sumber lagu menetapkan audiodownload_allowed = true"
+          title="2. Penyimpanan & Unduhan Offline"
+          subtitle="Simpan semua lagu pilihan Anda—file audio lokal maupun katalog online—ke cache offline browser (IndexedDB + Cache Storage)"
           onReset={() => handleResetSection('download', 'Kualitas Unduhan')}
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
           <label className="space-y-1.5 block">
-            <span className="text-xs font-medium text-white/80 block">Kualitas Unduhan</span>
+            <span className="text-xs font-medium text-white/80 block">Preferensi Kualitas Offline</span>
             <select
               aria-label="Kualitas unduhan offline"
               value={localProfile.downloadQuality}
@@ -558,27 +517,39 @@ export function AudioSettingsTab() {
             </select>
           </label>
 
-          <button
-            type="button"
-            disabled={!currentTrack || !downloadAllowedForCurrent || downloadingOffline}
-            onClick={() => void handleDownloadCurrentTrack()}
-            className="h-10 px-4 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold inline-flex items-center justify-center gap-2 hover:brightness-105 disabled:bg-white/[0.08] disabled:text-white/35 disabled:cursor-not-allowed transition-colors"
-          >
-            <Download className="w-4 h-4" strokeWidth={2} />
-            {downloadingOffline
-              ? 'Menyimpan...'
-              : alreadyOffline
-                ? 'Perbarui Salinan Offline'
-                : 'Simpan Lagu Aktif Offline'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!downloadAllowedForCurrent || downloadingOffline}
+              onClick={() => void handleDownloadCurrentTrack()}
+              className="flex-1 min-w-[160px] h-10 px-4 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold inline-flex items-center justify-center gap-2 hover:brightness-105 disabled:bg-white/[0.08] disabled:text-white/35 disabled:cursor-not-allowed transition-colors"
+            >
+              <Download className="w-4 h-4" strokeWidth={2} />
+              {downloadingOffline
+                ? 'Menyimpan...'
+                : !currentTrack
+                  ? 'Putar Lagu untuk Unduh'
+                  : alreadyOffline
+                    ? 'Perbarui Salinan Offline'
+                    : 'Unduh Lagu Aktif Offline'}
+            </button>
+            {likedTracks.length > 0 && (
+              <button
+                type="button"
+                disabled={downloadingOffline}
+                onClick={() => void handleDownloadLikedBatch()}
+                className="h-10 px-3.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white inline-flex items-center justify-center gap-1.5 disabled:opacity-45 transition-colors shrink-0"
+              >
+                <Download className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={2} />
+                Unduh Disukai ({likedTracks.length})
+              </button>
+            )}
+          </div>
         </div>
 
-        {currentTrack && !downloadAllowedForCurrent && (
-          <p className="text-xs text-white/50">
-            {streamOptions?.downloadDisabledReason ||
-              'Unduhan offline dinonaktifkan: sumber lagu katalog ini tidak mengizinkan unduhan (audiodownload_allowed = false). File lokal milik Anda sendiri tetap dapat di-cache ke penyimpanan offline.'}
-          </p>
-        )}
+        <p className="text-xs text-white/50">
+          Unduhan offline tersedia untuk semua lagu: file audio lokal tersimpan utuh di penyimpanan browser, sedangkan lagu katalog online menyimpan data trek serta sampul album di Cache Storage.
+        </p>
 
         {offlineDownloads.length > 0 && (
           <div className="pt-3 border-t border-white/[0.07] space-y-2">
@@ -586,43 +557,48 @@ export function AudioSettingsTab() {
               Tersimpan Offline ({offlineDownloads.length} lagu · IndexedDB + Cache Storage)
             </p>
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {offlineDownloads.map((rec) => (
-                <div
-                  key={rec.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06]"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">{rec.track.title}</p>
-                    <p className="text-[11px] text-white/50 truncate">
-                      {rec.codec}
-                      {rec.bitrateKbps ? ` · ${rec.bitrateKbps} kbps` : ''}
-                      {rec.sampleRateHz ? ` · ${(rec.sampleRateHz / 1000).toFixed(1)} kHz` : ''}
-                      {rec.bitDepth ? ` · ${rec.bitDepth}-bit` : ''} ·{' '}
-                      {(rec.fileSize / (1024 * 1024)).toFixed(2)} MB
-                    </p>
+              {offlineDownloads.map((rec) => {
+                const fullBlob = hasPlayableOfflineAudio(rec);
+                return (
+                  <div
+                    key={rec.id}
+                    className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06]"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white truncate">{rec.track.title}</p>
+                      <p className="text-[11px] text-white/50 truncate tabular-nums">
+                        {rec.codec}
+                        {rec.bitrateKbps ? ` · ${rec.bitrateKbps} kbps` : ''}
+                        {rec.sampleRateHz ? ` · ${(rec.sampleRateHz / 1000).toFixed(1)} kHz` : ''}
+                        {rec.bitDepth ? ` · ${rec.bitDepth}-bit` : ''} ·{' '}
+                        {fullBlob
+                          ? `${(rec.fileSize / (1024 * 1024)).toFixed(2)} MB (Audio Lokal)`
+                          : 'Cache Katalog'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          playTrack(rec.track, { sourceLabel: 'Unduhan Offline' })
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-[#2EE6A6]/15 text-[#2EE6A6] text-[11px] font-medium hover:bg-[#2EE6A6]/25 inline-flex items-center gap-1"
+                      >
+                        <Play className="w-3 h-3 fill-current" strokeWidth={2} />
+                        Putar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteOfflineDownload(rec.id)}
+                        aria-label={`Hapus unduhan offline ${rec.track.title}`}
+                        className="p-1.5 rounded-lg text-white/50 hover:text-red-300 hover:bg-white/[0.08]"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        playTrack(rec.track, { sourceLabel: 'Unduhan Offline' })
-                      }
-                      className="px-2.5 py-1 rounded-lg bg-[#2EE6A6]/15 text-[#2EE6A6] text-[11px] font-medium hover:bg-[#2EE6A6]/25 inline-flex items-center gap-1"
-                    >
-                      <Play className="w-3 h-3 fill-current" strokeWidth={2} />
-                      Putar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void deleteOfflineDownload(rec.id)}
-                      aria-label={`Hapus unduhan offline ${rec.track.title}`}
-                      className="p-1.5 rounded-lg text-white/50 hover:text-red-300 hover:bg-white/[0.08]"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -883,13 +859,18 @@ export function AudioSettingsTab() {
               min={0}
               max={100}
               step={5}
-              disabled={!localProfile.bassBoostEnabled}
               value={localProfile.bassBoostLevel}
-              onChange={(e) => updateLocalProfile({ bassBoostLevel: Number(e.target.value) })}
+              onChange={(e) => {
+                const level = Number(e.target.value);
+                updateLocalProfile({
+                  bassBoostEnabled: level > 0,
+                  bassBoostLevel: level,
+                });
+              }}
               style={{
                 background: `linear-gradient(to right, #2EE6A6 ${localProfile.bassBoostLevel}%, rgba(255,255,255,0.16) ${localProfile.bassBoostLevel}%)`,
               }}
-              className="sc-range-visible w-full disabled:opacity-40"
+              className="sc-range-visible w-full"
             />
           </div>
 
@@ -915,13 +896,18 @@ export function AudioSettingsTab() {
               min={0}
               max={100}
               step={5}
-              disabled={!localProfile.stereoWidenerEnabled}
               value={localProfile.stereoWidenerLevel}
-              onChange={(e) => updateLocalProfile({ stereoWidenerLevel: Number(e.target.value) })}
+              onChange={(e) => {
+                const level = Number(e.target.value);
+                updateLocalProfile({
+                  stereoWidenerEnabled: level > 0,
+                  stereoWidenerLevel: level,
+                });
+              }}
               style={{
                 background: `linear-gradient(to right, #2EE6A6 ${localProfile.stereoWidenerLevel}%, rgba(255,255,255,0.16) ${localProfile.stereoWidenerLevel}%)`,
               }}
-              className="sc-range-visible w-full disabled:opacity-40"
+              className="sc-range-visible w-full"
             />
           </div>
         </div>
@@ -1048,7 +1034,7 @@ export function AudioSettingsTab() {
             <div>
               <p className="text-sm font-medium text-white">Batas Volume Maksimum (Player Web)</p>
               <p className="text-xs text-white/50">
-                Pembatas volume pelindung pendengaran untuk pemutar sematan
+                Pembatas volume pelindung pendengaran untuk pemutar streaming
               </p>
             </div>
             <span className="text-xs text-[#2EE6A6] tabular-nums">

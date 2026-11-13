@@ -1,622 +1,576 @@
 import io
-import json
 import os
-import struct
 import tempfile
 import unittest
-from unittest.mock import patch
+from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 from PIL import Image
+from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
 
 import backend.main as main_app
 from backend.music_provider import (
     MusicProvider,
     MusicProviderError,
-    SpotAPIClientGateway,
     TTLCache,
-    classify_stream_tier,
-    parse_cookie_input,
-    probe_audio_stream_metadata,
+    pick_largest_thumbnail,
 )
 
 
-class FakeGateway:
+@dataclass
+class FakeLyricLine:
+    text: str
+    start_time: int
+    end_time: int
+    id: int
+
+
+class FakeYTMusicGateway:
     def __init__(self) -> None:
         self.search_calls = 0
-        self.album_calls = 0
-        self.artist_calls = 0
-        self.playlist_calls = 0
         self.fail_times = 0
-        self.authenticated = False
+        self.raise_user_error = False
 
-    def query_songs(self, query: str, limit: int = 10, offset: int = 0):
+    def search(self, query: str, filter=None, limit: int = 20):
         self.search_calls += 1
+        if self.raise_user_error:
+            raise YTMusicUserError("Invalid filter or query")
         if self.fail_times > 0:
             self.fail_times -= 1
-            raise RuntimeError("Transient 429 rate limit")
-        return {
-            "data": {
-                "searchV2": {
-                    "tracksV2": {
-                        "items": [
-                            {
-                                "item": {
-                                    "data": {
-                                        "__typename": "Track",
-                                        "id": "trk123",
-                                        "uri": "spotify:track:trk123",
-                                        "name": f"{query} Song",
-                                        "duration": {"totalMilliseconds": 212000},
-                                        "contentRating": {"label": "NONE"},
-                                        "artists": {
-                                            "items": [
-                                                {
-                                                    "uri": "spotify:artist:art123",
-                                                    "profile": {"name": "Tulus"},
-                                                }
-                                            ]
-                                        },
-                                        "albumOfTrack": {
-                                            "id": "alb123",
-                                            "uri": "spotify:album:alb123",
-                                            "name": "Manusia",
-                                            "coverArt": {
-                                                "sources": [
-                                                    {"url": "https://i.scdn.co/image/300", "width": 300, "height": 300},
-                                                    {"url": "https://i.scdn.co/image/640", "width": 640, "height": 640},
-                                                ]
-                                            },
-                                        },
-                                    }
-                                }
-                            }
-                        ]
-                    },
-                    "albumsV2": {
-                        "items": [
-                            {
-                                "data": {
-                                    "uri": "spotify:album:alb123",
-                                    "name": "Manusia",
-                                    "date": {"year": 2022},
-                                    "artists": {"items": [{"uri": "spotify:artist:art123", "profile": {"name": "Tulus"}}]},
-                                    "coverArt": {"sources": [{"url": "https://i.scdn.co/image/640", "width": 640, "height": 640}]},
-                                }
-                            }
-                        ]
-                    },
-                    "artists": {
-                        "items": [
-                            {
-                                "data": {
-                                    "uri": "spotify:artist:art123",
-                                    "profile": {"name": "Tulus"},
-                                    "visuals": {"avatarImage": {"sources": [{"url": "https://i.scdn.co/image/art640", "width": 640, "height": 640}]}},
-                                }
-                            }
-                        ]
-                    },
-                    "playlists": {
-                        "items": [
-                            {
-                                "data": {
-                                    "uri": "spotify:playlist:pl123",
-                                    "name": "Top 50 Indonesia",
-                                    "ownerV2": {"data": {"name": "Spotify"}},
-                                    "images": {"items": [{"sources": [{"url": "https://i.scdn.co/image/pl640", "width": 640, "height": 640}]}]},
-                                }
-                            }
-                        ]
-                    },
-                    "podcasts": {"items": []},
-                    "episodes": {"items": []},
-                }
+            raise YTMusicServerError("Upstream temporary error")
+        return [
+            {
+                "category": "Songs",
+                "resultType": "song",
+                "title": f"{query} - Hati-Hati di Jalan",
+                "videoId": "5F28ye50-Kc",
+                "duration": "4:02",
+                "duration_seconds": 242,
+                "artists": [{"name": "Tulus", "id": "UC_DHlXllTSMB8pTC38_leFg"}],
+                "album": {"name": "Manusia", "id": "MPREb_RVAbNZdUasD"},
+                "thumbnails": [
+                    {"url": "https://lh3.googleusercontent.com/abc=w60-h60-l90-rj", "width": 60, "height": 60},
+                    {"url": "https://lh3.googleusercontent.com/abc=w120-h120-l90-rj", "width": 120, "height": 120},
+                ],
+                "isExplicit": False,
             }
-        }
+        ]
 
-    def query_artists(self, query: str, limit: int = 10, offset: int = 0):
-        return self.query_songs(query, limit=limit, offset=offset)
+    def get_search_suggestions(self, query: str):
+        return [f"{query}", f"{query} lagu", f"{query} album"]
 
-    def get_track_info(self, track_id: str):
-        return {
-            "data": {
-                "trackUnion": {
-                    "id": track_id,
-                    "name": "Hati-Hati di Jalan",
-                    "playcount": "1234567",
-                    "firstArtist": {
-                        "items": [{"id": "art123", "uri": "spotify:artist:art123", "profile": {"name": "Tulus"}}]
-                    },
-                    "otherArtists": {"items": []},
-                }
-            }
-        }
-
-    def get_artist(self, artist_id: str):
-        self.artist_calls += 1
-        return {
-            "data": {
-                "artistUnion": {
-                    "id": artist_id,
-                    "profile": {"name": "Tulus", "biography": {"text": "Penyanyi Indonesia"}},
-                    "stats": {"followers": 1000000, "monthlyListeners": 5000000},
-                    "visuals": {"avatarImage": {"sources": [{"url": "https://i.scdn.co/image/art640", "width": 640, "height": 640}]}},
-                    "discography": {
-                        "topTracks": {
-                            "items": [
-                                {
-                                    "track": {
-                                        "id": "trk123",
-                                        "name": "Hati-Hati di Jalan",
-                                        "duration": {"totalMilliseconds": 242000},
-                                        "artists": {"items": [{"uri": "spotify:artist:art123", "profile": {"name": "Tulus"}}]},
-                                        "albumOfTrack": {
-                                            "uri": "spotify:album:alb123",
-                                            "coverArt": {"sources": [{"url": "https://i.scdn.co/image/640", "width": 640, "height": 640}]},
-                                        },
-                                    }
-                                }
-                            ]
-                        },
-                        "albums": {"items": []},
-                        "singles": {"items": []},
-                        "compilations": {"items": []},
-                    },
-                    "relatedContent": {"appearsOn": {"items": []}, "relatedArtists": {"items": []}},
-                }
-            }
-        }
-
-    def get_album_info(self, album_id: str, limit: int = 50, offset: int = 0):
-        self.album_calls += 1
-        return {
-            "data": {
-                "albumUnion": {
-                    "uri": f"spotify:album:{album_id}",
-                    "name": "Manusia",
-                    "date": {"isoString": "2022-03-03T00:00:00Z"},
-                    "label": "TulusCompany",
-                    "copyright": {"items": [{"text": "2022 TulusCompany", "type": "C"}]},
-                    "artists": {"items": [{"id": "art123", "uri": "spotify:artist:art123", "profile": {"name": "Tulus"}}]},
-                    "coverArt": {"sources": [{"url": "https://i.scdn.co/image/640", "width": 640, "height": 640}]},
-                    "tracksV2": {
-                        "totalCount": 1,
-                        "items": [
-                            {
-                                "track": {
-                                    "uri": "spotify:track:trk123",
-                                    "name": "Tujuh Belas",
-                                    "duration": {"totalMilliseconds": 185000},
-                                    "contentRating": {"label": "EXPLICIT"},
-                                    "artists": {"items": [{"uri": "spotify:artist:art123", "profile": {"name": "Tulus"}}]},
-                                }
-                            }
+    def get_home(self, limit: int = 8):
+        return [
+            {
+                "title": "Pilihan Cepat",
+                "contents": [
+                    {
+                        "title": "Monokrom",
+                        "videoId": "dQw4w9WgXcQ",
+                        "artists": [{"name": "Tulus", "id": "UC_DHlXllTSMB8pTC38_leFg"}],
+                        "thumbnails": [
+                            {"url": "https://lh3.googleusercontent.com/mono=w544-h544-l90-rj", "width": 544, "height": 544}
                         ],
-                    },
-                    "moreAlbumsByArtist": {"items": []},
-                }
+                    }
+                ],
             }
-        }
+        ]
 
-    def get_playlist_info(self, playlist_id: str, limit: int = 100, offset: int = 0):
-        self.playlist_calls += 1
+    def get_charts(self, country: str = "ID"):
         return {
-            "data": {
-                "playlistV2": {
-                    "uri": f"spotify:playlist:{playlist_id}",
-                    "name": "Top 50 Indonesia",
-                    "description": "Lagu teratas",
-                    "ownerV2": {"data": {"name": "Spotify"}},
-                    "images": {"items": [{"sources": [{"url": "https://i.scdn.co/image/pl640", "width": 640, "height": 640}]}]},
-                    "content": {
-                        "totalCount": 1,
-                        "items": [
-                            {
-                                "itemV2": {
-                                    "data": {
-                                        "__typename": "Track",
-                                        "uri": "spotify:track:trk123",
-                                        "name": "Interaksi",
-                                        "trackDuration": {"totalMilliseconds": 195000},
-                                        "artists": {"items": [{"uri": "spotify:artist:art123", "profile": {"name": "Tulus"}}]},
-                                        "albumOfTrack": {
-                                            "uri": "spotify:album:alb123",
-                                            "name": "Manusia",
-                                            "coverArt": {"sources": [{"url": "https://i.scdn.co/image/640", "width": 640, "height": 640}]},
-                                        },
-                                    }
-                                }
-                            }
-                        ],
-                    },
+            "videos": [
+                {
+                    "title": "Trending 20 Indonesia",
+                    "playlistId": "PL4fGSI1pDJn4lW6MJA2q37CfnraqAizqE",
+                    "thumbnails": [{"url": "https://yt3.googleusercontent.com/chart=s192", "width": 192, "height": 192}],
                 }
-            }
+            ],
+            "artists": [
+                {
+                    "title": "Tulus",
+                    "browseId": "UC_DHlXllTSMB8pTC38_leFg",
+                    "subscribers": "5M",
+                    "thumbnails": [{"url": "https://lh3.googleusercontent.com/art=w544-h544-l90-rj", "width": 544, "height": 544}],
+                }
+            ],
+            "songs": [],
+            "trending": [],
         }
 
-    def get_account_status(self):
+    def get_mood_categories(self):
         return {
-            "authenticated": self.authenticated,
-            "mode": "ytmusic" if self.authenticated else "local",
-            "message": "Mode lokal aktif",
+            "Moods & moments": [{"title": "Santai", "params": "ggMoodChill"}],
+            "Genres": [{"title": "Pop Indonesia", "params": "ggGenrePop"}],
         }
 
-    def get_account_library_raw(self):
-        return None
+    def get_mood_playlists(self, params: str):
+        return [
+            {
+                "title": f"Playlist {params}",
+                "playlistId": "RDCLAK5uy_test123",
+                "thumbnails": [{"url": "https://lh3.googleusercontent.com/mood=w544-h544-l90-rj", "width": 544, "height": 544}],
+            }
+        ]
+
+    def get_artist(self, channel_id: str):
+        return {
+            "name": "Tulus",
+            "channelId": channel_id,
+            "description": "Penyanyi Indonesia",
+            "subscribers": "5M",
+            "views": "200M",
+            "thumbnails": [{"url": "https://lh3.googleusercontent.com/art=w544-h544-l90-rj", "width": 544, "height": 544}],
+            "songs": {
+                "results": [
+                    {
+                        "videoId": "5F28ye50-Kc",
+                        "title": "Hati-Hati di Jalan",
+                        "duration": "4:02",
+                        "artists": [{"name": "Tulus", "id": channel_id}],
+                        "album": {"name": "Manusia", "id": "MPREb_RVAbNZdUasD"},
+                    }
+                ]
+            },
+            "albums": {"results": []},
+            "singles": {"results": []},
+            "videos": {"results": []},
+            "related": {"results": []},
+        }
+
+    def get_artist_albums(self, channel_id: str, params: str, limit: int = 100):
+        return []
+
+    def get_album_browse_id(self, audio_playlist_id: str):
+        return "MPREb_RVAbNZdUasD"
+
+    def get_album(self, browse_id: str):
+        return {
+            "title": "Manusia",
+            "year": "2022",
+            "artists": [{"name": "Tulus", "id": "UC_DHlXllTSMB8pTC38_leFg"}],
+            "thumbnails": [{"url": "https://lh3.googleusercontent.com/alb=w544-h544-l90-rj", "width": 544, "height": 544}],
+            "trackCount": 1,
+            "duration": "3:05",
+            "tracks": [
+                {
+                    "videoId": "zyLmavBAY7k",
+                    "title": "Tujuh Belas",
+                    "duration": "3:05",
+                    "duration_seconds": 185,
+                    "isExplicit": True,
+                    "artists": [{"name": "Tulus", "id": "UC_DHlXllTSMB8pTC38_leFg"}],
+                    "album": "Manusia",
+                }
+            ],
+        }
+
+    def get_playlist(self, playlist_id: str, limit: int = 100):
+        return {
+            "id": playlist_id,
+            "title": "Top Indonesia",
+            "author": {"name": "SoundClear Kurasi", "id": None},
+            "description": "Lagu teratas",
+            "thumbnails": [{"url": "https://lh3.googleusercontent.com/pl=w544-h544-l90-rj", "width": 544, "height": 544}],
+            "tracks": [
+                {
+                    "videoId": "5F28ye50-Kc",
+                    "title": "Interaksi",
+                    "duration": "3:15",
+                    "duration_seconds": 195,
+                    "artists": [{"name": "Tulus", "id": "UC_DHlXllTSMB8pTC38_leFg"}],
+                    "album": {"name": "Manusia", "id": "MPREb_RVAbNZdUasD"},
+                    "thumbnails": [{"url": "https://lh3.googleusercontent.com/trk=w544-h544-l90-rj", "width": 544, "height": 544}],
+                }
+            ],
+        }
+
+    def get_watch_playlist(self, video_id=None, playlist_id=None, radio=True, limit=25):
+        return {
+            "playlistId": "RDAMVM5F28ye50-Kc",
+            "lyrics": "MPLYt_RVAbNZdUasD-1",
+            "related": "MPTRt_RVAbNZdUasD-1",
+            "tracks": [
+                {
+                    "videoId": video_id or "5F28ye50-Kc",
+                    "title": "Hati-Hati di Jalan",
+                    "length": "4:02",
+                    "artists": [{"name": "Tulus", "id": "UC_DHlXllTSMB8pTC38_leFg"}],
+                    "album": {"name": "Manusia", "id": "MPREb_RVAbNZdUasD"},
+                    "thumbnail": [
+                        {"url": "https://lh3.googleusercontent.com/w60=w60-h60-l90-rj", "width": 60, "height": 60},
+                        {"url": "https://lh3.googleusercontent.com/w544=w544-h544-l90-rj", "width": 544, "height": 544},
+                    ],
+                }
+            ],
+        }
+
+    def get_lyrics(self, browse_id: str, timestamps: bool = True):
+        if browse_id == "PLAIN_LYRICS":
+            return {"lyrics": "Baris satu\nBaris dua", "source": "SoundClear", "hasTimestamps": False}
+        return {
+            "hasTimestamps": True,
+            "source": "LyricFind",
+            "lyrics": [
+                FakeLyricLine(text="Hari-hari berulang", start_time=1000, end_time=4000, id=0),
+                FakeLyricLine(text="Langkah terasa tenang", start_time=4000, end_time=7500, id=1),
+            ],
+        }
+
+    def get_song_related(self, browse_id: str):
+        return [
+            {
+                "title": "You might also like",
+                "contents": [
+                    {
+                        "videoId": "dQw4w9WgXcQ",
+                        "title": "Gajah",
+                        "artists": [{"name": "Tulus", "id": "UC_DHlXllTSMB8pTC38_leFg"}],
+                        "thumbnails": [{"url": "https://lh3.googleusercontent.com/g=w544-h544-l90-rj", "width": 544, "height": 544}],
+                    }
+                ],
+            }
+        ]
+
+    def get_podcast(self, playlist_id: str, limit: int = 100):
+        return {
+            "title": "PODKESMAS",
+            "author": {"name": "Podkesmas", "id": "UCpod123"},
+            "description": "Obrolan santai",
+            "thumbnails": [{"url": "https://i.ytimg.com/vi/pod123/hqdefault.jpg", "width": 480, "height": 360}],
+            "episodes": [
+                {
+                    "videoId": "epVid123456",
+                    "title": "Episode 1",
+                    "duration": "42:10",
+                    "date": "2025-11-01",
+                    "thumbnails": [{"url": "https://i.ytimg.com/vi/epVid123456/hqdefault.jpg", "width": 480, "height": 360}],
+                }
+            ],
+        }
+
+    def get_episode(self, video_id: str):
+        return {
+            "title": "Episode 1",
+            "author": {"name": "Podkesmas", "id": "UCpod123"},
+            "duration": "42:10",
+            "date": "2025-11-01",
+            "description": "Deskripsi episode",
+            "playlistId": "MPSPpod123",
+            "thumbnails": [{"url": "https://i.ytimg.com/vi/epVid123456/hqdefault.jpg", "width": 480, "height": 360}],
+        }
+
+    def get_channel_episodes(self, channel_id: str, params: str):
+        return []
 
 
 class MusicProviderTests(unittest.TestCase):
-    def test_ttl_cache_expires_and_evicts(self) -> None:
-        cache = TTLCache(default_ttl=10, max_items=20)
+    def test_ttl_cache_stores_and_expires(self) -> None:
+        cache = TTLCache(default_ttl=300, max_items=20)
         cache.set("k1", {"v": 1}, ttl_seconds=60)
         self.assertEqual(cache.get("k1"), {"v": 1})
 
-    def test_search_normalization_cache_and_retry_backoff(self) -> None:
-        gw = FakeGateway()
-        gw.fail_times = 2
+    def test_pick_largest_thumbnail_upgrades_small_googleusercontent(self) -> None:
+        thumbs = [
+            {"url": "https://lh3.googleusercontent.com/abc=w60-h60-l90-rj", "width": 60, "height": 60},
+            {"url": "https://lh3.googleusercontent.com/abc=w120-h120-l90-rj", "width": 120, "height": 120},
+        ]
+        best = pick_largest_thumbnail(thumbs)
+        self.assertEqual(best, "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj")
+
+    def test_search_normalization_cache_and_ytmusic_errors(self) -> None:
+        gw = FakeYTMusicGateway()
+        gw.fail_times = 1
         sleeps = []
         provider = MusicProvider(
             gateway=gw,  # type: ignore[arg-type]
-            cache_ttl_seconds=300,
-            max_retries=3,
+            cache_ttl_seconds=420,
+            max_retries=2,
             base_backoff_seconds=0.1,
             sleep_fn=lambda d: sleeps.append(d),
         )
 
         res1 = provider.search("Tulus", "songs", 10)
-        self.assertEqual(len(sleeps), 2)
-        self.assertEqual(gw.search_calls, 3)
-        self.assertEqual(len(res1["items"]), 1)
+        self.assertEqual(len(sleeps), 1)
+        self.assertEqual(gw.search_calls, 2)
         track = res1["items"][0]
-        self.assertEqual(track["id"], "trk123")
-        self.assertEqual(track["title"], "Tulus Song")
-        self.assertEqual(track["artists"], [{"id": "art123", "name": "Tulus"}])
-        self.assertEqual(track["album"], {"id": "alb123", "name": "Manusia"})
-        self.assertEqual(track["thumbnail"], "https://i.scdn.co/image/640")
-        self.assertEqual(track["duration"], "3:32")
-        self.assertEqual(track["durationSeconds"], 212)
+        self.assertEqual(track["id"], "5F28ye50-Kc")
+        self.assertEqual(track["videoId"], "5F28ye50-Kc")
+        self.assertEqual(track["artists"], [{"id": "UC_DHlXllTSMB8pTC38_leFg", "name": "Tulus"}])
+        self.assertEqual(track["album"], {"id": "MPREb_RVAbNZdUasD", "name": "Manusia"})
+        self.assertEqual(track["duration"], "4:02")
+        self.assertEqual(track["durationSeconds"], 242)
+        self.assertEqual(track["thumbnail"], "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj")
 
-        # Second call hits TTL cache with zero extra SpotAPI invocations
+        # Second call hits TTL cache
         res2 = provider.search("Tulus", "songs", 10)
         self.assertEqual(res2, res1)
-        self.assertEqual(gw.search_calls, 3)
+        self.assertEqual(gw.search_calls, 2)
 
-    def test_album_artist_playlist_details(self) -> None:
-        gw = FakeGateway()
+        # YTMusicUserError raises clear MusicProviderError
+        gw.raise_user_error = True
+        with self.assertRaises(MusicProviderError) as ctx:
+            provider.search("Another", "songs", 10)
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("Permintaan tidak valid", ctx.exception.message)
+
+    def test_album_artist_playlist_charts_watch_and_lyrics(self) -> None:
+        gw = FakeYTMusicGateway()
         provider = MusicProvider(gateway=gw, sleep_fn=lambda _d: None)  # type: ignore[arg-type]
 
-        alb = provider.get_album("alb123")
+        alb = provider.get_album("OLAK5uy_dummy123")
+        self.assertEqual(alb["id"], "MPREb_RVAbNZdUasD")
         self.assertEqual(alb["title"], "Manusia")
-        self.assertEqual(alb["year"], "2022")
-        self.assertEqual(alb["tracks"][0]["duration"], "3:05")
+        self.assertEqual(alb["tracks"][0]["videoId"], "zyLmavBAY7k")
         self.assertTrue(alb["tracks"][0]["isExplicit"])
 
-        art = provider.get_artist("art123")
-        self.assertEqual(art["name"], "Tulus")
-        self.assertEqual(art["songs"][0]["id"], "trk123")
+        charts = provider.get_charts("ID")
+        self.assertEqual(charts["country"], "ID")
+        self.assertEqual(charts["videos"][0]["type"], "playlist")
+        self.assertEqual(charts["songs"][0]["videoId"], "5F28ye50-Kc")
 
-        pl = provider.get_playlist("pl123")
-        self.assertEqual(pl["title"], "Top 50 Indonesia")
-        self.assertEqual(pl["tracks"][0]["title"], "Interaksi")
-        self.assertEqual(pl["tracks"][0]["duration"], "3:15")
+        watch = provider.get_watch_playlist("5F28ye50-Kc", radio=True)
+        self.assertEqual(watch["lyricsBrowseId"], "MPLYt_RVAbNZdUasD-1")
+        self.assertEqual(watch["tracks"][0]["thumbnail"], "https://lh3.googleusercontent.com/w544=w544-h544-l90-rj")
 
-        credits = provider.get_song_credits("trk999")
-        self.assertEqual(credits["credits"][0]["names"], ["Tulus"])
+        timed = provider.get_lyrics("MPLYt_RVAbNZdUasD-1")
+        self.assertTrue(timed["hasTimestamps"])
+        self.assertEqual(len(timed["lines"]), 2)
+        self.assertEqual(timed["lines"][0]["startTimeMs"], 1000)
 
-        watch = provider.get_watch_playlist("trk999")
-        self.assertEqual(watch["tracks"][0]["id"], "trk123")
+        plain = provider.get_lyrics("PLAIN_LYRICS")
+        self.assertFalse(plain["hasTimestamps"])
+        self.assertEqual(plain["plainText"], "Baris satu\nBaris dua")
 
-    def test_cookie_saver_and_login_from_saver_no_leak(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            session_path = os.path.join(tmpdir, "sessions.json")
-            gw = SpotAPIClientGateway(session_file=session_path)
-            status = gw.get_account_status()
-            self.assertFalse(status["authenticated"])
-            self.assertEqual(status["mode"], "local")
-
-            cookies = parse_cookie_input("sp_dc=secret_cookie==; sp_key=secret_key_val")
-            self.assertEqual(cookies["sp_dc"], "secret_cookie==")
-            self.assertEqual(cookies["sp_key"], "secret_key_val")
-
-            with patch("backend.music_provider.User.verify_login", return_value=True):
-                ok = gw.import_cookies("user@example.com", cookies, verify=True)
-                self.assertTrue(ok)
-                self.assertTrue(os.path.exists(session_path))
-
-                with open(session_path, "r", encoding="utf-8") as fh:
-                    saved = json.load(fh)
-                self.assertEqual(saved[0]["identifier"], "user@example.com")
-                self.assertEqual(saved[0]["cookies"]["sp_dc"], "secret_cookie==")
-
-                acc_status = gw.get_account_status()
-                self.assertTrue(acc_status["authenticated"])
-                # Ensure cookies never leak in API status response
-                serialized = json.dumps(acc_status)
-                self.assertNotIn("secret_cookie", serialized)
-                self.assertNotIn("secret_key_val", serialized)
-                self.assertNotIn("sp_dc", serialized)
-
-    def test_artwork_color_rejects_disallowed_host_and_decodes_spotify_cdn(self) -> None:
-        provider = MusicProvider(gateway=FakeGateway())  # type: ignore[arg-type]
-        with self.assertRaises(MusicProviderError) as ctx:
-            provider.extract_artwork_color("https://evil.example.com/cover.jpg")
-        self.assertEqual(ctx.exception.status_code, 400)
-
+    def test_artwork_color_and_fastapi_routes(self) -> None:
         buf = io.BytesIO()
-        Image.new("RGB", (32, 32), (46, 200, 150)).save(buf, format="JPEG")
+        Image.new("RGB", (24, 24), (46, 200, 150)).save(buf, format="JPEG")
         fake_resp = type("Resp", (), {"status_code": 200, "content": buf.getvalue()})()
-        provider_img = MusicProvider(gateway=FakeGateway(), http_get_fn=lambda *_a, **_kw: fake_resp)  # type: ignore[arg-type]
-        color = provider_img.extract_artwork_color("https://i.scdn.co/image/sample")
-        self.assertTrue(color["hex"].startswith("#"))
-        self.assertGreater(color["g"], color["r"])
-
-    def test_fastapi_routes_delegate_to_provider(self) -> None:
-        orig_provider = main_app.provider
-        try:
-            main_app.provider = MusicProvider(gateway=FakeGateway())  # type: ignore[arg-type]
-            client = TestClient(main_app.app)
-            self.assertEqual(client.get("/api/health").json()["provider"], "spotapi")
-            s_resp = client.get("/api/search?q=Tulus&filter=songs")
-            self.assertEqual(s_resp.status_code, 200)
-            self.assertEqual(s_resp.json()["items"][0]["id"], "trk123")
-            self.assertEqual(client.get("/api/album/alb123").json()["title"], "Manusia")
-            self.assertEqual(client.get("/api/artist/art123").json()["name"], "Tulus")
-            self.assertEqual(client.get("/api/playlist/pl123").json()["title"], "Top 50 Indonesia")
-            self.assertEqual(client.get("/api/account/status").json()["mode"], "local")
-
-            yt_html = (
-                '<script>var ytInitialData = {"contents":{"twoColumnSearchResultsRenderer":'
-                '{"primaryContents":{"sectionListRenderer":{"contents":[{"itemSectionRenderer":'
-                '{"contents":[{"videoRenderer":{"videoId":"badLong1234","title":{"runs":[{"text":"Tulus Full Album 1 Jam"}]},'
-                '"ownerText":{"runs":[{"text":"SpamChannel"}]},"lengthText":{"simpleText":"1:02:10"}}},'
-                '{"videoRenderer":{"videoId":"goodVid1234","title":{"runs":[{"text":"Tulus - Hati-Hati di Jalan (Official Audio)"}]},'
-                '"ownerText":{"runs":[{"text":"Tulus"}]},"lengthText":{"simpleText":"4:02"}}}]}}]}}}}};</script>'
-            )
-            fake_yt_resp = type("Resp", (), {"status_code": 200, "text": yt_html})()
-            main_app.provider = MusicProvider(gateway=FakeGateway(), http_get_fn=lambda *_a, **_kw: fake_yt_resp)  # type: ignore[arg-type]
-            client2 = TestClient(main_app.app)
-            res_play = client2.get("/api/play/resolve?id=4R9G7azXaZe93KTX65P9fU&title=Hati-Hati%20di%20Jalan&artist=Tulus&durationSeconds=242")
-            self.assertEqual(res_play.status_code, 200)
-            self.assertEqual(res_play.json()["youtubeVideoId"], "goodVid1234")
-            self.assertEqual(res_play.json()["candidates"], ["goodVid1234"])
-            # Direct 11-char YouTube ID passes through unchanged
-            res_direct = client2.get("/api/play/resolve?id=dQw4w9WgXcQ")
-            self.assertEqual(res_direct.status_code, 200)
-            self.assertEqual(res_direct.json()["youtubeVideoId"], "dQw4w9WgXcQ")
-        finally:
-            main_app.provider = orig_provider
-
-    def test_resolve_playable_youtube_fetches_spotify_metadata_when_title_missing(self) -> None:
-        yt_html = (
-            '<script>var ytInitialData = {"contents":{"twoColumnSearchResultsRenderer":'
-            '{"primaryContents":{"sectionListRenderer":{"contents":[{"itemSectionRenderer":'
-            '{"contents":[{"videoRenderer":{"videoId":"ytTrack9876","title":{"runs":[{"text":"Tulus - Hati-Hati di Jalan (Official Lyric Video)"}]},'
-            '"ownerText":{"runs":[{"text":"Tulus"}]},"lengthText":{"simpleText":"4:03"}}}]}}]}}}}};</script>'
-        )
-        calls = []
-
-        def fake_get(*args, **kwargs):
-            calls.append((args, kwargs))
-            return type("Resp", (), {"status_code": 200, "text": yt_html})()
-
-        provider = MusicProvider(gateway=FakeGateway(), http_get_fn=fake_get)  # type: ignore[arg-type]
-        res1 = provider.resolve_playable_youtube("trk123")
-        self.assertEqual(res1["youtubeVideoId"], "ytTrack9876")
-        calls_after_first = len(calls)
-        self.assertGreaterEqual(calls_after_first, 1)
-        # Second call hits TTLCache without hitting YouTube again
-        res2 = provider.resolve_playable_youtube("trk123")
-        self.assertEqual(res2, res1)
-        self.assertEqual(len(calls), calls_after_first)
-
-    def test_track_preview_url_extraction_caching_and_route(self) -> None:
-        embed_html = (
-            '<html><body><script>{"audioPreview":{"url":'
-            '"https://p.scdn.co/mp3-preview/abc123def456_789"}}</script></body></html>'
-        )
-        calls = 0
-
-        def fake_get(*_args, **_kwargs):
-            nonlocal calls
-            calls += 1
-            return type("Resp", (), {"status_code": 200, "text": embed_html})()
-
-        orig_provider = main_app.provider
-        try:
-            provider = MusicProvider(gateway=FakeGateway(), http_get_fn=fake_get)  # type: ignore[arg-type]
-            main_app.provider = provider
-            client = TestClient(main_app.app)
-
-            r1 = client.get("/api/play/preview/4xoY4lZNoTjEuHsSmhgF1G")
-            self.assertEqual(r1.status_code, 200)
-            self.assertEqual(
-                r1.json(),
-                {
-                    "id": "4xoY4lZNoTjEuHsSmhgF1G",
-                    "previewUrl": "https://p.scdn.co/mp3-preview/abc123def456_789",
-                },
-            )
-            self.assertEqual(calls, 1)
-
-            # Second call hits TTLCache
-            r2 = client.get("/api/play/preview/4xoY4lZNoTjEuHsSmhgF1G")
-            self.assertEqual(r2.status_code, 200)
-            self.assertEqual(calls, 1)
-
-            # 404 when preview is absent from Spotify embed page
-            provider_missing = MusicProvider(
-                gateway=FakeGateway(),  # type: ignore[arg-type]
-                http_get_fn=lambda *_a, **_kw: type("Resp", (), {"status_code": 200, "text": "<html></html>"})(),
-            )
-            with self.assertRaises(MusicProviderError) as ctx:
-                provider_missing.get_track_preview_url("4xoY4lZNoTjEuHsSmhgF1G")
-            self.assertEqual(ctx.exception.status_code, 404)
-        finally:
-            main_app.provider = orig_provider
-
-    def test_probe_audio_stream_metadata_wav_flac_mp3_and_honest_tiers(self) -> None:
-        # 24-bit / 48 kHz WAV header
-        wav_header = (
-            b"RIFF"
-            + struct.pack("<I", 44)
-            + b"WAVEfmt "
-            + struct.pack("<IHHIIHH", 16, 1, 2, 48000, 48000 * 6, 6, 24)
-            + b"data"
-            + struct.pack("<I", 8)
-            + b"\x00" * 8
-        )
-        wav_meta = probe_audio_stream_metadata(wav_header, url="sample.wav")
-        self.assertEqual(wav_meta["codec"], "WAV (PCM)")
-        self.assertEqual(wav_meta["sampleRateHz"], 48000)
-        self.assertEqual(wav_meta["bitDepth"], 24)
-        self.assertTrue(wav_meta["lossless"])
-        self.assertTrue(wav_meta["hiRes"])
-        self.assertEqual(classify_stream_tier(wav_meta), "hi_res")
-
-        # 16-bit / 44.1 kHz FLAC STREAMINFO header
-        packed = ((44100 & 0xFFFFF) << 12) | ((1 & 0x7) << 9) | ((15 & 0x1F) << 4)
-        flac_header = b"fLaC" + b"\x80\x00\x00\x22" + (b"\x00" * 10) + packed.to_bytes(4, "big") + (b"\x00" * 16)
-        flac_meta = probe_audio_stream_metadata(flac_header, url="track.flac")
-        self.assertEqual(flac_meta["codec"], "FLAC")
-        self.assertEqual(flac_meta["sampleRateHz"], 44100)
-        self.assertEqual(flac_meta["bitDepth"], 16)
-        self.assertTrue(flac_meta["lossless"])
-        self.assertFalse(flac_meta["hiRes"])
-        self.assertEqual(classify_stream_tier(flac_meta), "lossless")
-
-        # MP3 128 kbps 44.1 kHz MPEG1 Layer III sync frame (0xFF 0xFB 0x90 0x00)
-        mp3_bytes = b"\xFF\xFB\x90\x00" + b"\x00" * 64
-        mp3_meta = probe_audio_stream_metadata(mp3_bytes, url="preview.mp3")
-        self.assertEqual(mp3_meta["codec"], "MP3")
-        self.assertEqual(mp3_meta["bitrateKbps"], 128)
-        self.assertEqual(mp3_meta["sampleRateHz"], 44100)
-        self.assertFalse(mp3_meta["lossless"])
-        self.assertFalse(mp3_meta["hiRes"])
-        self.assertEqual(classify_stream_tier(mp3_meta), "normal")
-
-    def test_stream_options_range_cors_proxy_and_audio_settings_persistence(self) -> None:
-        embed_html = (
-            '<html><body><script>{"audioPreview":{"url":'
-            '"https://p.scdn.co/mp3-preview/abc123def456_789"}}</script></body></html>'
-        )
-        mp3_payload = b"\xFF\xFB\x90\x00" + bytes(range(256))
-
-        def fake_get(url: str, headers=None, **_kwargs):
-            if "open.spotify.com/embed" in url:
-                return type("Resp", (), {"status_code": 200, "text": embed_html})()
-            req_range = (headers or {}).get("Range", "")
-            if req_range == "bytes=0-15":
-                return type(
-                    "Resp",
-                    (),
-                    {
-                        "status_code": 206,
-                        "headers": {
-                            "Content-Type": "audio/mpeg",
-                            "Content-Range": f"bytes 0-15/{len(mp3_payload)}",
-                            "Content-Length": "16",
-                            "Accept-Ranges": "bytes",
-                        },
-                        "content": mp3_payload[:16],
-                    },
-                )()
-            return type(
-                "Resp",
-                (),
-                {
-                    "status_code": 200,
-                    "headers": {
-                        "Content-Type": "audio/mpeg",
-                        "Content-Length": str(len(mp3_payload)),
-                        "Accept-Ranges": "bytes",
-                    },
-                    "content": mp3_payload,
-                },
-            )()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             settings_path = os.path.join(tmpdir, "audio_settings.json")
             orig_provider = main_app.provider
             try:
                 provider = MusicProvider(
-                    gateway=FakeGateway(),  # type: ignore[arg-type]
-                    http_get_fn=fake_get,
+                    gateway=FakeYTMusicGateway(),  # type: ignore[arg-type]
+                    http_get_fn=lambda *_a, **_kw: fake_resp,
                     audio_settings_file=settings_path,
                 )
                 main_app.provider = provider
                 client = TestClient(main_app.app)
 
-                opts_resp = client.get("/api/stream/options/4xoY4lZNoTjEuHsSmhgF1G")
-                self.assertEqual(opts_resp.status_code, 200)
-                opts = opts_resp.json()
-                self.assertFalse(opts["audiodownload_allowed"])
-                by_tier = {o["tier"]: o for o in opts["options"]}
-                self.assertTrue(by_tier["normal"]["available"])
-                self.assertEqual(by_tier["normal"]["codec"], "MP3")
-                self.assertFalse(by_tier["lossless"]["available"])
-                self.assertFalse(by_tier["hi_res"]["available"])
-                self.assertEqual(by_tier["lossless"]["unavailableReason"], "Tidak tersedia untuk lagu ini")
+                self.assertEqual(client.get("/api/health").json()["provider"], "soundclear-cloud")
+                self.assertEqual(client.get("/api/home").status_code, 200)
+                self.assertEqual(client.get("/api/charts?country=ID").status_code, 200)
+                self.assertEqual(client.get("/api/suggest?q=tulus").json()["suggestions"][0], "tulus")
+                self.assertEqual(client.get("/api/moods").json()["groups"][0]["items"][0]["params"], "ggMoodChill")
+                self.assertEqual(client.get("/api/moods/ggMoodChill").status_code, 200)
+                self.assertEqual(client.get("/api/artist/UC_DHlXllTSMB8pTC38_leFg").json()["name"], "Tulus")
+                self.assertEqual(client.get("/api/album/MPREb_RVAbNZdUasD").json()["title"], "Manusia")
+                self.assertEqual(client.get("/api/playlist/PL123").json()["title"], "Top Indonesia")
+                self.assertEqual(client.get("/api/watch/5F28ye50-Kc?radio=true").status_code, 200)
+                self.assertEqual(client.get("/api/lyrics/MPLYt_RVAbNZdUasD-1").json()["hasTimestamps"], True)
+                self.assertEqual(client.get("/api/account/status").json()["authenticated"], False)
 
-                # Proxy honors Range header (206 Partial Content) and adds CORS headers
-                stream_resp = client.get(
-                    "/api/stream/4xoY4lZNoTjEuHsSmhgF1G?tier=normal",
-                    headers={"Range": "bytes=0-15"},
+                # Stream extraction/download routes must not exist
+                self.assertEqual(client.get("/api/stream/options/5F28ye50-Kc").status_code, 404)
+                self.assertEqual(client.get("/api/play/preview/5F28ye50-Kc").status_code, 404)
+
+                # Artwork color rejects non-allowed host and parses googleusercontent
+                self.assertEqual(
+                    client.get("/api/artwork-color?url=https://evil.example.com/a.jpg").status_code,
+                    400,
                 )
-                self.assertEqual(stream_resp.status_code, 206)
-                self.assertEqual(stream_resp.headers.get("access-control-allow-origin"), "*")
-                self.assertEqual(stream_resp.headers.get("accept-ranges"), "bytes")
-                self.assertEqual(len(stream_resp.content), 16)
-
-                # Account audio settings CRUD persistence
-                put_resp = client.put(
-                    "/api/account/audio-settings",
-                    json={"accountKey": "local", "settings": {"eqEnabled": False, "preampDb": -3}},
-                )
-                self.assertEqual(put_resp.status_code, 200)
-                get_resp = client.get("/api/account/audio-settings?accountKey=local")
-                self.assertEqual(get_resp.status_code, 200)
-                self.assertEqual(get_resp.json()["settings"]["preampDb"], -3)
-
-                reset_resp = client.post("/api/account/audio-settings/reset?accountKey=local")
-                self.assertEqual(reset_resp.status_code, 200)
-                self.assertIsNone(reset_resp.json()["settings"])
+                color_resp = client.get("/api/artwork-color?url=https://lh3.googleusercontent.com/abc")
+                self.assertEqual(color_resp.status_code, 200)
+                self.assertTrue(color_resp.json()["hex"].startswith("#"))
             finally:
                 main_app.provider = orig_provider
 
-    def test_episode_preview_embed_with_mp3_ext_and_legacy_fallback(self) -> None:
-        ep_html = (
-            '<html><body><script id="__NEXT_DATA__" type="application/json">'
-            '{"props":{"audioPreview":{"url":"https://p.scdn.co/mp3-preview/ep999.mp3"}}}'
-            '</script></body></html>'
+    def test_brand_sanitization_top_artist_and_fallback_resolve(self) -> None:
+        class EdgeSearchGateway(FakeYTMusicGateway):
+            def search(self, query: str, filter=None, limit: int = 20):
+                if filter == "videos":
+                    return [
+                        {
+                            "videoId": "longAlbum12",
+                            "title": f"{query} FULL ALBUM",
+                            "duration": "45:00",
+                            "duration_seconds": 2700,
+                        },
+                        {
+                            "videoId": "altVideo123",
+                            "title": f"{query} Official Video",
+                            "duration": "3:56",
+                            "duration_seconds": 236,
+                        },
+                    ]
+                if filter == "songs":
+                    return [
+                        {
+                            "videoId": "origTrack11",
+                            "title": query,
+                            "duration": "3:55",
+                            "duration_seconds": 235,
+                        },
+                        {
+                            "videoId": "altSong4567",
+                            "title": query,
+                            "duration": "3:58",
+                            "duration_seconds": 238,
+                        },
+                    ]
+                return [
+                    {
+                        "category": "Top result",
+                        "resultType": "artist",
+                        "subscribers": "54.4M",
+                        "artists": [{"name": "Tulus", "id": "UC_DHlXllTSMB8pTC38_leFg"}],
+                        "thumbnails": [{"url": "https://yt3.googleusercontent.com/art=w120-h120-l90-rj", "width": 120, "height": 120}],
+                    },
+                    {
+                        "category": None,
+                        "resultType": "song",
+                        "title": "Jatuh Suka",
+                        "videoId": "qrnJL6P-QqQ",
+                        "duration": "3:55",
+                        "duration_seconds": 235,
+                        "thumbnails": [{"url": "https://yt3.googleusercontent.com/js=w120-h120-l90-rj", "width": 120, "height": 120}],
+                    },
+                    {
+                        "category": None,
+                        "resultType": "playlist",
+                        "title": "Presenting Tulus",
+                        "playlistId": "RDCLAK5uy_tulus",
+                        "author": "YouTube Music",
+                        "thumbnails": [{"url": "https://yt3.googleusercontent.com/pl=w120-h120-l90-rj", "width": 120, "height": 120}],
+                    },
+                ]
+
+        provider = MusicProvider(gateway=EdgeSearchGateway(), sleep_fn=lambda _d: None)  # type: ignore[arg-type]
+        search_res = provider.search("Tulus")
+        self.assertEqual(search_res["items"][0]["type"], "artist")
+        self.assertEqual(search_res["items"][0]["id"], "UC_DHlXllTSMB8pTC38_leFg")
+        self.assertEqual(search_res["items"][0]["title"], "Tulus")
+
+        # Song directly below Top result artist inherits artist fallback when missing
+        self.assertEqual(search_res["items"][1]["artists"], [{"id": "UC_DHlXllTSMB8pTC38_leFg", "name": "Tulus"}])
+
+        # Playlist author "YouTube Music" is sanitized to SoundClear
+        self.assertEqual(search_res["items"][2]["artists"], [{"id": None, "name": "SoundClear"}])
+
+        # Fallback resolution skips restricted ID and prefers closest-duration video over 45m album
+        resolved = provider.resolve_playable_youtube(
+            "origTrack11",
+            title="Jatuh Suka",
+            artist="Tulus",
+            item_type="song",
+            duration_seconds=235,
+            fallback=True,
+            exclude_ids=["origTrack11"],
         )
-        seen_urls: list[str] = []
+        self.assertEqual(resolved["youtubeVideoId"], "altVideo123")
+        self.assertNotIn("origTrack11", resolved["candidates"])
+        self.assertEqual(resolved["candidates"][:2], ["altVideo123", "altSong4567"])
 
-        def fake_get(url: str, **_kwargs):
-            seen_urls.append(url)
-            if "/embed/episode/" in url:
-                return type("Resp", (), {"status_code": 200, "text": ep_html})()
-            return type("Resp", (), {"status_code": 404, "text": ""})()
+    def test_excludes_japanese_and_indian_in_home_and_search(self) -> None:
+        class RegionalGateway(FakeYTMusicGateway):
+            def search(self, query: str, filter=None, limit: int = 20):
+                return [
+                    {
+                        "resultType": "song",
+                        "title": "愛の形 - Ai no Katachi",
+                        "videoId": "jpSong00001",
+                        "artists": [{"name": "Jinto Yoshida", "id": "UCjp1"}],
+                    },
+                    {
+                        "resultType": "song",
+                        "title": "Dilruba Dilnasheen",
+                        "videoId": "inSong00001",
+                        "artists": [{"name": "Rito Riba", "id": "UCin1"}],
+                    },
+                    {
+                        "resultType": "song",
+                        "title": "Idol",
+                        "videoId": "jpSong00002",
+                        "artists": [{"name": "YOASOBI", "id": "UCjp2"}],
+                    },
+                    {
+                        "resultType": "artist",
+                        "title": "A R J I T S I N G H..",
+                        "browseId": "UCin99",
+                    },
+                    {
+                        "resultType": "song",
+                        "title": "Monokrom",
+                        "videoId": "idSong00001",
+                        "artists": [{"name": "Tulus", "id": "UCid1"}],
+                    },
+                    {
+                        "resultType": "song",
+                        "title": "Ditto",
+                        "videoId": "krSong00001",
+                        "artists": [{"name": "NewJeans", "id": "UCkr1"}],
+                    },
+                ]
 
-        provider = MusicProvider(gateway=FakeGateway(), http_get_fn=fake_get)  # type: ignore[arg-type]
-        ep_prev = provider.get_track_preview_url("3KcuqQ6TbW8mpFAnMxw3f7", item_type="episode")
-        self.assertEqual(ep_prev["previewUrl"], "https://p.scdn.co/mp3-preview/ep999.mp3")
-        self.assertTrue(seen_urls[0].startswith("https://open.spotify.com/embed/episode/"))
+            def get_search_suggestions(self, query: str):
+                return [
+                    f"{query} yoasobi",
+                    f"{query} arijit singh",
+                    f"{query} tulus",
+                    f"{query} pop indonesia",
+                ]
 
-        # Legacy YouTube ID without fallback query raises 404 when NotFound, with fallback query resolves
-        class LegacyGateway(FakeGateway):
-            def get_artist(self, artist_id: str):
-                if artist_id.startswith("UC"):
-                    return {"data": {"artistUnion": {"__typename": "NotFound"}}}
-                return super().get_artist(artist_id)
+            def get_home(self, limit: int = 8):
+                return [
+                    {
+                        "title": "J-Pop Hits Teratas",
+                        "contents": [
+                            {"title": "La la la", "videoId": "jpSong00003", "artists": [{"name": "Kis-My-Ft2"}]}
+                        ],
+                    },
+                    {
+                        "title": "Campuran Populer",
+                        "contents": [
+                            {"title": "愛の形", "videoId": "jpSong00004", "artists": [{"name": "Hey! Say! JUMP"}]},
+                            {"title": "Tum Hi Ho", "videoId": "inSong00002", "artists": [{"name": "Arijit Singh"}]},
+                            {"title": "Interaksi", "videoId": "idSong00002", "artists": [{"name": "Tulus"}]},
+                        ],
+                    },
+                ]
 
-        p_legacy = MusicProvider(gateway=LegacyGateway(), sleep_fn=lambda _d: None)  # type: ignore[arg-type]
-        with self.assertRaises(MusicProviderError) as ctx:
-            p_legacy.get_artist("UC1234567890123456789012")
-        self.assertEqual(ctx.exception.status_code, 404)
+            def get_charts(self, country: str = "ID"):
+                return {
+                    "songs": [
+                        {"title": "Dilruba Dilnasheen", "videoId": "inSong00003", "artists": [{"name": "Siddhant kaushal"}]},
+                        {"title": "夜に駆ける", "videoId": "jpSong00005", "artists": [{"name": "YOASOBI"}]},
+                        {"title": "Sial", "videoId": "idSong00003", "artists": [{"name": "Mahalini"}]},
+                    ],
+                    "videos": [],
+                    "artists": [
+                        {"title": "Arijit Singh", "browseId": "UCin9"},
+                        {"title": "Mahalini", "browseId": "UCid9"},
+                    ],
+                    "trending": [],
+                }
 
-        recovered = p_legacy.get_artist("UC1234567890123456789012", fallback_query="Tulus")
-        self.assertEqual(recovered["name"], "Tulus")
-        self.assertEqual(recovered["id"], "art123")
+        provider = MusicProvider(gateway=RegionalGateway(), sleep_fn=lambda _d: None)  # type: ignore[arg-type]
+
+        search_res = provider.search("pop", None, 20)
+        titles = [item["title"] for item in search_res["items"]]
+        self.assertEqual(titles, ["Monokrom", "Ditto"])
+
+        suggest_res = provider.suggest("lagu")
+        self.assertEqual(suggest_res["suggestions"], ["lagu tulus", "lagu pop indonesia"])
+
+        home_res = provider.get_home(10)
+        self.assertEqual(len(home_res["sections"]), 1)
+        self.assertEqual(home_res["sections"][0]["title"], "Campuran Populer")
+        self.assertEqual([i["title"] for i in home_res["sections"][0]["items"]], ["Interaksi"])
+
+        charts_res = provider.get_charts("ID")
+        self.assertEqual([s["title"] for s in charts_res["songs"]], ["Sial"])
+        self.assertEqual([a["title"] for a in charts_res["artists"]], ["Mahalini"])
 
 
 if __name__ == "__main__":

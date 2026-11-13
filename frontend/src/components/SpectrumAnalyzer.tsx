@@ -91,7 +91,7 @@ export function SpectrumAnalyzer() {
       ? 'Aktif (Web Audio)'
       : activeStreamMeta?.sourceMode === 'youtube-iframe' ||
           activeStreamMeta?.sourceMode === 'fallback-no-fx'
-        ? 'Tidak tersedia (IFrame / Non-CORS)'
+        ? 'Tidak tersedia (Streaming Cloud)'
         : 'Siaga';
 
   return (

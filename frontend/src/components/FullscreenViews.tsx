@@ -320,7 +320,7 @@ export function FullscreenNowPlayingModal() {
             </p>
           )}
           {webAudioWarning && (
-            <p className="text-[11px] text-amber-200/85 pt-0.5">{webAudioWarning}</p>
+            <p className="text-[11px] text-[#2EE6A6]/85 pt-0.5">{webAudioWarning}</p>
           )}
         </div>
 
