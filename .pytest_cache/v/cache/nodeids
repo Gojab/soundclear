@@ -1,0 +1,9 @@
+[
+  "backend/tests/test_service.py::test_get_home_excludes_indian_and_mandarin",
+  "backend/tests/test_service.py::test_get_moods_returns_groups",
+  "backend/tests/test_service.py::test_normalize_media_item_watch_shape",
+  "backend/tests/test_service.py::test_parse_duration_seconds",
+  "backend/tests/test_service.py::test_pick_largest_thumbnail",
+  "backend/tests/test_service.py::test_ttl_cache_expiration",
+  "backend/tests/test_service.py::test_ytmusic_error_mapped_cleanly"
+]

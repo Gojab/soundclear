@@ -1,0 +1,6 @@
+{
+  "name": "SoundClear",
+  "description": "Pemutar musik web modern dengan antarmuka kaca gelap, lirik tersinkron, tangga lagu Indonesia, dan pustaka lokal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
