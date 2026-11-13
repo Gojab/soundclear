@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import html
 import io
@@ -7,14 +8,16 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import threading
 import time
 import unicodedata
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TypeVar
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
+from requests.adapters import HTTPAdapter
 from PIL import Image
 import yt_dlp
 from ytmusicapi import YTMusic
@@ -240,6 +243,10 @@ def _is_excluded_home_item(item: Mapping[str, Any]) -> bool:
 LRC_TAG_RE = re.compile(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
 LRCLIB_USER_AGENT = "SoundClear/3.0 (https://soundclear.local)"
 STREAM_CACHE_DIR = os.environ.get("SOUNDCLEAR_STREAM_CACHE_DIR", "/tmp/soundclear_stream_cache")
+VERCEL_MAX_STREAM_CHUNK_BYTES = 1_572_864  # 1.5 MiB (stays safely below Vercel 4.5 MB payload limit)
+VERCEL_FULL_RESPONSE_LIMIT_BYTES = 3_145_728  # 3.0 MiB
+M3U8_MAP_URI_RE = re.compile(r'URI="([^"]+)"')
+CONTENT_RANGE_TOTAL_RE = re.compile(r"bytes\s+\d+-\d+/(\d+)", re.IGNORECASE)
 TITLE_NOISE_RE = re.compile(
     r"\s*[\(\[](?:official\s*(?:music\s*)?video|official\s*audio|official\s*lyric\s*video|"
     r"lyric\s*video|lyrics?|mv|m/v|hd|4k|audio|video\s*klip|live\s*performance)[\)\]]",
@@ -2047,12 +2054,270 @@ class MusicProvider:
                 self._stream_locks[cache_key] = lock
             return lock
 
+    def _should_use_ffmpeg_remux(self) -> bool:
+        if "_remux_audio_only" in self.__dict__:
+            return True
+        if os.environ.get("VERCEL"):
+            return False
+        if os.environ.get("SOUNDCLEAR_PURE_PYTHON_STREAM") == "1":
+            return False
+        return bool(shutil.which("ffmpeg"))
+
+    def _create_stream_http_session(self) -> requests.Session:
+        session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=16, pool_maxsize=16)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        return session
+
+    def _probe_url_content_length(
+        self,
+        session: requests.Session,
+        url: str,
+        http_headers: Optional[Mapping[str, str]] = None,
+    ) -> int:
+        req_headers = dict(http_headers or {})
+        req_headers.setdefault("Accept-Encoding", "identity")
+        try:
+            head_resp = session.head(url, headers=req_headers, timeout=8, allow_redirects=True)
+            try:
+                if head_resp.status_code < 400:
+                    cl = head_resp.headers.get("content-length")
+                    if cl and cl.isdigit() and int(cl) > 0:
+                        return int(cl)
+            finally:
+                head_resp.close()
+        except Exception:
+            pass
+
+        range_headers = {**req_headers, "Range": "bytes=0-0"}
+        get_resp = session.get(url, headers=range_headers, stream=True, timeout=10, allow_redirects=True)
+        try:
+            if get_resp.status_code >= 400:
+                raise MusicProviderError(
+                    f"Gagal memeriksa ukuran aliran audio (HTTP {get_resp.status_code}).",
+                    502,
+                )
+            cr = get_resp.headers.get("content-range") or ""
+            match = CONTENT_RANGE_TOTAL_RE.search(cr)
+            if match:
+                return int(match.group(1))
+            cl = get_resp.headers.get("content-length")
+            if cl and cl.isdigit() and int(cl) > 0:
+                return int(cl)
+        finally:
+            get_resp.close()
+
+        raise MusicProviderError("Ukuran aliran audio tidak tersedia dari CDN.", 502)
+
+    def _parse_hls_playlist(
+        self,
+        session: requests.Session,
+        playlist_url: str,
+        http_headers: Optional[Mapping[str, str]] = None,
+    ) -> Tuple[Optional[str], List[str]]:
+        req_headers = dict(http_headers or {})
+        resp = session.get(playlist_url, headers=req_headers, timeout=10)
+        if resp.status_code >= 400:
+            raise MusicProviderError(f"Gagal memuat daftar putar HLS (HTTP {resp.status_code}).", 502)
+        text = resp.text
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+        # Follow master playlist to highest-bitrate variant if present
+        if any(line.startswith("#EXT-X-STREAM-INF") for line in lines):
+            variant_urls: List[Tuple[int, str]] = []
+            pending_bw = 0
+            for line in lines:
+                if line.startswith("#EXT-X-STREAM-INF"):
+                    bw_match = re.search(r"BANDWIDTH=(\d+)", line)
+                    pending_bw = int(bw_match.group(1)) if bw_match else 0
+                elif not line.startswith("#"):
+                    variant_urls.append((pending_bw, urljoin(playlist_url, line)))
+                    pending_bw = 0
+            if variant_urls:
+                variant_urls.sort(key=lambda item: item[0], reverse=True)
+                return self._parse_hls_playlist(session, variant_urls[0][1], http_headers)
+
+        init_url: Optional[str] = None
+        segment_urls: List[str] = []
+        for line in lines:
+            if line.startswith("#EXT-X-KEY"):
+                if "METHOD=NONE" not in line.upper():
+                    raise MusicProviderError("Aliran HLS terenkripsi belum didukung tanpa ffmpeg.", 502)
+            elif line.startswith("#EXT-X-MAP:"):
+                match = M3U8_MAP_URI_RE.search(line)
+                if match:
+                    init_url = urljoin(playlist_url, match.group(1))
+            elif not line.startswith("#"):
+                segment_urls.append(urljoin(playlist_url, line))
+
+        if not segment_urls:
+            raise MusicProviderError("Daftar segmen audio HLS kosong.", 502)
+
+        return init_url, segment_urls
+
+    def _build_virtual_hls_plan(
+        self,
+        m3u8_url: str,
+        http_headers: Optional[Mapping[str, str]] = None,
+    ) -> Dict[str, Any]:
+        session = self._create_stream_http_session()
+        try:
+            init_url, segment_urls = self._parse_hls_playlist(session, m3u8_url, http_headers)
+            all_urls = ([init_url] if init_url else []) + segment_urls
+            with ThreadPoolExecutor(max_workers=min(12, max(1, len(all_urls)))) as pool:
+                lengths = list(
+                    pool.map(
+                        lambda u: self._probe_url_content_length(session, u, http_headers),
+                        all_urls,
+                    )
+                )
+        finally:
+            session.close()
+
+        segments: List[Dict[str, Any]] = []
+        offset = 0
+        for seg_url, seg_len in zip(all_urls, lengths):
+            if seg_len <= 0:
+                continue
+            segments.append(
+                {
+                    "url": seg_url,
+                    "start": offset,
+                    "end": offset + seg_len - 1,
+                    "length": seg_len,
+                }
+            )
+            offset += seg_len
+
+        if offset <= 0 or not segments:
+            raise MusicProviderError("Segmen audio HLS tidak memiliki konten yang valid.", 502)
+
+        return {
+            "kind": "hls",
+            "segments": segments,
+            "totalSize": offset,
+            "httpHeaders": dict(http_headers or {}),
+        }
+
+    def _build_virtual_progressive_plan(
+        self,
+        source_url: str,
+        http_headers: Optional[Mapping[str, str]] = None,
+    ) -> Dict[str, Any]:
+        session = self._create_stream_http_session()
+        try:
+            total_size = self._probe_url_content_length(session, source_url, http_headers)
+        finally:
+            session.close()
+        return {
+            "kind": "progressive",
+            "sourceUrl": source_url,
+            "totalSize": total_size,
+            "httpHeaders": dict(http_headers or {}),
+        }
+
+    def read_virtual_stream_bytes(self, meta: Mapping[str, Any], start: int, end: int) -> bytes:
+        plan = meta.get("plan")
+        if not isinstance(plan, Mapping):
+            raise MusicProviderError("Rencana aliran audio tidak tersedia.", 500)
+
+        kind = str(plan.get("kind") or "")
+        http_headers = plan.get("httpHeaders")
+        req_headers = dict(http_headers) if isinstance(http_headers, Mapping) else {}
+        req_headers.setdefault("Accept-Encoding", "identity")
+        expected_len = max(0, end - start + 1)
+        if expected_len == 0:
+            return b""
+
+        session = self._create_stream_http_session()
+        try:
+            if kind == "progressive":
+                source_url = str(plan.get("sourceUrl") or "")
+                if not source_url:
+                    raise MusicProviderError("URL sumber audio tidak valid.", 502)
+                headers = {**req_headers, "Range": f"bytes={start}-{end}"}
+                resp = session.get(source_url, headers=headers, stream=True, timeout=20)
+                try:
+                    if resp.status_code >= 400:
+                        raise MusicProviderError(
+                            f"Gagal mengambil segmen audio (HTTP {resp.status_code}).",
+                            502,
+                        )
+                    if resp.status_code == 206:
+                        raw = resp.content
+                        return raw[:expected_len]
+                    # Fallback if upstream ignored Range and returned 200
+                    buf = bytearray()
+                    bytes_seen = 0
+                    for chunk in resp.iter_content(chunk_size=65536):
+                        if not chunk:
+                            continue
+                        chunk_start = bytes_seen
+                        chunk_end = bytes_seen + len(chunk) - 1
+                        bytes_seen += len(chunk)
+                        if chunk_end < start:
+                            continue
+                        if chunk_start > end:
+                            break
+                        lo = max(0, start - chunk_start)
+                        hi = min(len(chunk), end - chunk_start + 1)
+                        buf.extend(chunk[lo:hi])
+                        if bytes_seen > end:
+                            break
+                    return bytes(buf[:expected_len])
+                finally:
+                    resp.close()
+
+            if kind == "hls":
+                raw_segments = plan.get("segments") or []
+                overlapping = [
+                    seg
+                    for seg in raw_segments
+                    if isinstance(seg, Mapping)
+                    and int(seg["end"]) >= start
+                    and int(seg["start"]) <= end
+                ]
+                if not overlapping:
+                    return b""
+
+                def _fetch_seg(seg: Mapping[str, Any]) -> bytes:
+                    seg_url = str(seg["url"])
+                    resp = session.get(seg_url, headers=req_headers, timeout=20)
+                    if resp.status_code >= 400:
+                        raise MusicProviderError(
+                            f"Gagal mengunduh segmen audio HLS (HTTP {resp.status_code}).",
+                            502,
+                        )
+                    return resp.content
+
+                with ThreadPoolExecutor(max_workers=min(8, max(1, len(overlapping)))) as pool:
+                    seg_blobs = list(pool.map(_fetch_seg, overlapping))
+
+                out = bytearray()
+                for seg, blob in zip(overlapping, seg_blobs):
+                    seg_start = int(seg["start"])
+                    lo = max(0, start - seg_start)
+                    hi = min(len(blob), end - seg_start + 1)
+                    if hi > lo:
+                        out.extend(blob[lo:hi])
+                return bytes(out[:expected_len])
+
+            raise MusicProviderError(f"Mode aliran audio '{kind}' tidak didukung.", 500)
+        finally:
+            session.close()
+
     def _stream_cache_paths(self, video_id: str, tier: str) -> Tuple[str, str]:
         safe_vid = re.sub(r"[^A-Za-z0-9_-]", "_", video_id)
         os.makedirs(STREAM_CACHE_DIR, exist_ok=True)
         meta_path = os.path.join(STREAM_CACHE_DIR, f"{safe_vid}_{tier}.meta.json")
         m4a_path = os.path.join(STREAM_CACHE_DIR, f"{safe_vid}_{tier}.m4a")
         return meta_path, m4a_path
+
+    def _virtual_plan_cache_path(self, video_id: str, tier: str) -> str:
+        safe_vid = re.sub(r"[^A-Za-z0-9_-]", "_", video_id)
+        os.makedirs(STREAM_CACHE_DIR, exist_ok=True)
+        return os.path.join(STREAM_CACHE_DIR, f"{safe_vid}_{tier}.plan.json")
 
     def _read_cached_stream_meta(self, meta_path: str) -> Optional[Dict[str, Any]]:
         if not os.path.isfile(meta_path):
@@ -2067,7 +2332,36 @@ class MusicProvider:
             pass
         return None
 
-    def _pick_audio_only_format(self, formats: List[Mapping[str, Any]], tier: str) -> Optional[Mapping[str, Any]]:
+    def _read_cached_virtual_plan(self, video_id: str, tier: str) -> Optional[Dict[str, Any]]:
+        mem_key = f"vstream:{video_id}:{tier}"
+        mem = self._cache.get(mem_key)
+        if isinstance(mem, dict) and mem.get("expiresAt", 0) > time.time():
+            return mem
+        plan_path = self._virtual_plan_cache_path(video_id, tier)
+        if not os.path.isfile(plan_path):
+            return None
+        try:
+            with open(plan_path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if (
+                isinstance(data, dict)
+                and data.get("streamMode") == "virtual"
+                and float(data.get("expiresAt") or 0) > time.time()
+                and int(data.get("totalSize") or 0) > 0
+            ):
+                self._cache.set(mem_key, data, ttl_seconds=1800)
+                return data
+        except Exception:
+            pass
+        return None
+
+    def _pick_audio_only_format(
+        self,
+        formats: List[Mapping[str, Any]],
+        tier: str,
+        *,
+        allow_ffmpeg_only: bool = True,
+    ) -> Optional[Mapping[str, Any]]:
         audio_only: List[Mapping[str, Any]] = []
         for fmt in formats:
             if not isinstance(fmt, Mapping) or not fmt.get("url"):
@@ -2078,6 +2372,14 @@ class MusicProvider:
                 continue
             if acodec == "none":
                 continue
+            ext = str(fmt.get("ext") or "").lower()
+            proto = str(fmt.get("protocol") or "").lower()
+            if not allow_ffmpeg_only:
+                # Without ffmpeg, skip raw MPEG-TS or non-HTTP protocols
+                if proto and not (proto.startswith("http") or "m3u8" in proto):
+                    continue
+                if ext == "ts" or "mpegts" in proto:
+                    continue
             audio_only.append(fmt)
 
         if not audio_only:
@@ -2087,15 +2389,30 @@ class MusicProvider:
             ext = str(fmt.get("ext") or "").lower()
             acodec = str(fmt.get("acodec") or "").lower()
             fmt_id = str(fmt.get("format_id") or "").lower()
+            proto = str(fmt.get("protocol") or "").lower()
             abr = float(fmt.get("abr") or fmt.get("tbr") or 0)
-            is_aac_mp3 = 2 if (ext in ("m4a", "mp3", "aac") or "aac" in acodec or "mp3" in acodec or "aac" in fmt_id or "mp3" in fmt_id) else 1
+            is_aac_mp3 = (
+                2
+                if (
+                    ext in ("m4a", "mp3", "aac")
+                    or "aac" in acodec
+                    or "mp3" in acodec
+                    or "aac" in fmt_id
+                    or "mp3" in fmt_id
+                )
+                else 1
+            )
+            is_progressive = 1 if (proto in ("http", "https") and "m3u8" not in str(fmt.get("url") or "").lower()) else 0
+            if not allow_ffmpeg_only and is_aac_mp3 == 1 and ext in ("opus", "ogg"):
+                # Prefer universally supported AAC/MP3 containers over raw opus/ogg when no ffmpeg
+                is_aac_mp3 = 0
             if tier == "low":
                 cap_ok = 1 if abr <= 96 or abr == 0 else 0
-                return (cap_ok, is_aac_mp3 * 100 - abs(abr - 80))
+                return (cap_ok, is_aac_mp3 * 100 + is_progressive * 10 - abs(abr - 80))
             if tier == "normal":
                 cap_ok = 1 if abr <= 145 or abr == 0 else 0
-                return (cap_ok, is_aac_mp3 * 100 - abs(abr - 128))
-            return (is_aac_mp3, abr)
+                return (cap_ok, is_aac_mp3 * 100 + is_progressive * 10 - abs(abr - 128))
+            return (is_aac_mp3, abr + is_progressive * 5)
 
         audio_only.sort(key=_fmt_score, reverse=True)
         return audio_only[0]
@@ -2205,20 +2522,38 @@ class MusicProvider:
         duration_seconds: Optional[int],
         tier: str,
     ) -> Tuple[Mapping[str, Any], str]:
+        allow_ffmpeg_only = self._should_use_ffmpeg_remux()
         ydl_base_opts: Dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
             "nocheckcertificate": True,
             "socket_timeout": 12,
+            "cachedir": False,
         }
 
-        # 1. Try direct YouTube audio-only extraction unless recently bot-blocked
-        if time.monotonic() >= self._yt_bot_blocked_until and VIDEO_ID_RE.fullmatch(video_id):
+        clean_title = _clean_track_title_for_query(title)
+        clean_artist = _clean_artist_for_query(artist)
+        skip_yt_on_vercel = bool(
+            os.environ.get("VERCEL")
+            and os.environ.get("SOUNDCLEAR_TRY_YT_ON_VERCEL") != "1"
+            and clean_title
+        )
+
+        # 1. Try direct YouTube audio-only extraction unless recently bot-blocked or on Vercel serverless
+        if (
+            not skip_yt_on_vercel
+            and time.monotonic() >= self._yt_bot_blocked_until
+            and VIDEO_ID_RE.fullmatch(video_id)
+        ):
             try:
                 with yt_dlp.YoutubeDL({**ydl_base_opts, "skip_download": True}) as ydl:
                     info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
                 if isinstance(info, Mapping):
-                    fmt = self._pick_audio_only_format(list(info.get("formats") or []), tier)
+                    fmt = self._pick_audio_only_format(
+                        list(info.get("formats") or []),
+                        tier,
+                        allow_ffmpeg_only=allow_ffmpeg_only,
+                    )
                     if fmt and fmt.get("url"):
                         return fmt, "YouTube Audio"
             except Exception as exc:
@@ -2226,55 +2561,145 @@ class MusicProvider:
                 if "sign in to confirm" in err_str or "bot" in err_str or "login" in err_str:
                     self._yt_bot_blocked_until = time.monotonic() + 600
 
-        # 2. Fallback to SoundCloud full audio-only search (no video, works reliably)
-        clean_title = _clean_track_title_for_query(title)
-        clean_artist = _clean_artist_for_query(artist)
-        query = f"{clean_artist} {clean_title}".strip()
-        if not query:
+        # 2. Fallback to SoundCloud full audio-only search (works reliably on serverless)
+        core_title = re.split(r"\s*(?:\|\||\|+|//|•)\s*", clean_title, maxsplit=1)[0].strip()
+        core_title = re.sub(
+            r"\s+[-–—]\s+(?:official|lyric|audio|video|live|cover|remix|jazz|acoustic).*$",
+            "",
+            core_title,
+            flags=re.IGNORECASE,
+        ).strip()
+        core_title_plain = re.sub(r"\s+", " ", re.sub(r"[^\w\s-]", " ", core_title or clean_title)).strip()
+
+        raw_queries: List[str] = []
+        if clean_artist and clean_title:
+            raw_queries.append(f"{clean_artist} {clean_title}")
+        if clean_artist and core_title_plain:
+            raw_queries.append(f"{clean_artist} {core_title_plain}")
+        if core_title_plain:
+            raw_queries.append(core_title_plain)
+        words = core_title_plain.split()
+        if len(words) > 6:
+            raw_queries.append(" ".join(words[:6]))
+
+        queries: List[str] = []
+        seen_q: set[str] = set()
+        for q_cand in raw_queries:
+            norm_q = " ".join(q_cand.split()).strip()
+            if norm_q and norm_q.lower() not in seen_q:
+                seen_q.add(norm_q.lower())
+                queries.append(norm_q)
+
+        if not queries:
             raise MusicProviderError("Metadata lagu tidak cukup untuk memutar audio.", 404)
 
         search_opts = {**ydl_base_opts, "extract_flat": True}
-        entries: List[Mapping[str, Any]] = []
-        try:
-            with yt_dlp.YoutubeDL(search_opts) as ydl:
-                res = ydl.extract_info(f"scsearch5:{query}", download=False)
-            if isinstance(res, Mapping):
-                entries = [e for e in (res.get("entries") or []) if isinstance(e, Mapping)]
-        except Exception as exc:
-            raise MusicProviderError(f"Gagal mencari sumber audio: {exc}", 502) from exc
+        last_search_exc: Optional[Exception] = None
+        score_target_title = core_title_plain or clean_title
 
-        scored: List[Tuple[int, Mapping[str, Any]]] = []
-        for entry in entries:
-            s = self._score_soundcloud_entry(entry, clean_title, clean_artist, duration_seconds)
-            if s is not None:
-                scored.append((s, entry))
-        scored.sort(key=lambda pair: pair[0], reverse=True)
-
-        if not scored and entries:
-            # Relax check to any non-excluded entry > 45s if strict title scoring missed
-            for entry in entries:
-                if not _is_excluded_regional_text(f"{entry.get('title') or ''} {entry.get('uploader') or ''}"):
-                    scored.append((0, entry))
-
-        for _, candidate in scored[:3]:
-            target_url = candidate.get("url") or candidate.get("webpage_url")
-            if not isinstance(target_url, str) or not target_url:
-                continue
+        for sc_query in queries[:3]:
+            entries: List[Mapping[str, Any]] = []
             try:
-                with yt_dlp.YoutubeDL({**ydl_base_opts, "skip_download": True}) as ydl:
-                    full_info = ydl.extract_info(target_url, download=False)
-                if not isinstance(full_info, Mapping):
-                    continue
-                dur_val = full_info.get("duration")
-                if duration_seconds and duration_seconds > 45 and isinstance(dur_val, (int, float)) and dur_val <= 35:
-                    continue
-                fmt = self._pick_audio_only_format(list(full_info.get("formats") or []), tier)
-                if fmt and fmt.get("url"):
-                    return fmt, "SoundCloud Audio"
-            except Exception:
+                with yt_dlp.YoutubeDL(search_opts) as ydl:
+                    res = ydl.extract_info(f"scsearch8:{sc_query}", download=False)
+                if isinstance(res, Mapping):
+                    entries = [e for e in (res.get("entries") or []) if isinstance(e, Mapping)]
+            except Exception as exc:
+                last_search_exc = exc
                 continue
 
+            if not entries:
+                continue
+
+            scored: List[Tuple[int, Mapping[str, Any]]] = []
+            for entry in entries:
+                s = self._score_soundcloud_entry(entry, score_target_title, clean_artist, duration_seconds)
+                if s is not None:
+                    scored.append((s, entry))
+            scored.sort(key=lambda pair: pair[0], reverse=True)
+
+            if not scored:
+                for entry in entries:
+                    if _is_excluded_regional_text(f"{entry.get('title') or ''} {entry.get('uploader') or ''}"):
+                        continue
+                    dur = entry.get("duration")
+                    if isinstance(dur, (int, float)) and dur > 35:
+                        scored.append((1, entry))
+                if not scored:
+                    for entry in entries:
+                        if not _is_excluded_regional_text(f"{entry.get('title') or ''} {entry.get('uploader') or ''}"):
+                            scored.append((0, entry))
+
+            for _, candidate in scored[:4]:
+                target_url = candidate.get("url") or candidate.get("webpage_url")
+                if not isinstance(target_url, str) or not target_url:
+                    continue
+                try:
+                    with yt_dlp.YoutubeDL({**ydl_base_opts, "skip_download": True}) as ydl:
+                        full_info = ydl.extract_info(target_url, download=False)
+                    if not isinstance(full_info, Mapping):
+                        continue
+                    dur_val = full_info.get("duration")
+                    if duration_seconds and duration_seconds > 45 and isinstance(dur_val, (int, float)) and dur_val <= 35:
+                        continue
+                    fmt = self._pick_audio_only_format(
+                        list(full_info.get("formats") or []),
+                        tier,
+                        allow_ffmpeg_only=allow_ffmpeg_only,
+                    )
+                    if fmt and fmt.get("url"):
+                        return fmt, "SoundCloud Audio"
+                except Exception:
+                    continue
+
+        if last_search_exc is not None:
+            raise MusicProviderError(f"Gagal mencari sumber audio: {last_search_exc}", 502) from last_search_exc
         raise MusicProviderError("Sumber aliran audio belum tersedia untuk lagu ini.", 404)
+
+    def _resolve_track_metadata_for_stream(
+        self,
+        clean_vid: str,
+        title: str,
+        artist: str,
+        duration_seconds: Optional[int],
+    ) -> Tuple[str, str, Optional[int]]:
+        resolved_title = (title or "").strip()
+        resolved_artist = _clean_artist_for_query(artist)
+        resolved_dur = duration_seconds
+
+        if not resolved_title:
+            try:
+                watch = self.get_watch_playlist(clean_vid, radio=False, limit=1)
+                first = (watch.get("tracks") or [None])[0]
+                if isinstance(first, Mapping):
+                    resolved_title = str(first.get("title") or "").strip()
+                    if not resolved_artist and first.get("artists"):
+                        resolved_artist = _clean_artist_for_query(str(first["artists"][0].get("name") or ""))
+                    if not resolved_dur:
+                        resolved_dur = first.get("durationSeconds")
+            except Exception:
+                pass
+
+        if not resolved_title and VIDEO_ID_RE.fullmatch(clean_vid):
+            try:
+                song_raw = self._gateway.get_song(clean_vid)
+                details = song_raw.get("videoDetails") if isinstance(song_raw, Mapping) else None
+                if isinstance(details, Mapping):
+                    resolved_title = str(details.get("title") or "").strip()
+                    if not resolved_artist and details.get("author"):
+                        resolved_artist = _clean_artist_for_query(str(details.get("author") or ""))
+                    if not resolved_dur and details.get("lengthSeconds"):
+                        try:
+                            resolved_dur = int(details["lengthSeconds"])
+                        except (TypeError, ValueError):
+                            pass
+            except Exception:
+                pass
+
+        if resolved_title and _is_excluded_regional_text(f"{resolved_title} {resolved_artist}"):
+            raise MusicProviderError("Konten regional ini difilter dari pemutaran.", 403)
+
+        return resolved_title, resolved_artist, resolved_dur
 
     def resolve_or_build_audio_stream(
         self,
@@ -2290,6 +2715,92 @@ class MusicProvider:
             raise MusicProviderError("ID lagu tidak valid.", 400)
 
         tier = _normalize_quality_tier(quality)
+        use_ffmpeg = self._should_use_ffmpeg_remux()
+
+        if not use_ffmpeg:
+            existing_virtual = self._read_cached_virtual_plan(clean_vid, tier)
+            if existing_virtual is not None:
+                return existing_virtual
+
+            lock = self._get_stream_lock(f"v:{clean_vid}:{tier}")
+            with lock:
+                existing_virtual = self._read_cached_virtual_plan(clean_vid, tier)
+                if existing_virtual is not None:
+                    return existing_virtual
+
+                resolved_title, resolved_artist, resolved_dur = self._resolve_track_metadata_for_stream(
+                    clean_vid, title, artist, duration_seconds
+                )
+                fmt, source_label = self._extract_audio_source(
+                    clean_vid,
+                    resolved_title,
+                    resolved_artist,
+                    resolved_dur,
+                    tier,
+                )
+                stream_url = str(fmt.get("url") or "")
+                raw_ext = str(fmt.get("ext") or "m4a").lower()
+                proto = str(fmt.get("protocol") or "").lower()
+                acodec_raw = str(fmt.get("acodec") or "").lower()
+                fmt_id = str(fmt.get("format_id") or "").lower()
+                http_headers = fmt.get("http_headers") if isinstance(fmt.get("http_headers"), Mapping) else None
+
+                if raw_ext == "mp3" or "mp3" in acodec_raw or "mp3" in fmt_id:
+                    target_ext = "mp3"
+                    codec_label = "MP3"
+                    mime_type = "audio/mpeg"
+                elif raw_ext in ("webm", "opus") and "aac" not in acodec_raw:
+                    target_ext = "webm" if raw_ext == "webm" else "ogg"
+                    codec_label = "Opus"
+                    mime_type = "audio/webm" if target_ext == "webm" else "audio/ogg"
+                else:
+                    target_ext = "m4a"
+                    codec_label = "AAC"
+                    mime_type = "audio/mp4"
+
+                abr_val = fmt.get("abr") or fmt.get("tbr")
+                bitrate_kbps = (
+                    int(round(float(abr_val)))
+                    if isinstance(abr_val, (int, float)) and abr_val > 0
+                    else (96 if tier == "low" else 128 if tier == "normal" else 160)
+                )
+                asr_val = fmt.get("asr")
+                sample_rate_hz = int(asr_val) if isinstance(asr_val, (int, float)) and asr_val > 0 else 44100
+
+                is_hls = "m3u8" in proto or ".m3u8" in stream_url.lower()
+                plan = (
+                    self._build_virtual_hls_plan(stream_url, http_headers)
+                    if is_hls
+                    else self._build_virtual_progressive_plan(stream_url, http_headers)
+                )
+
+                meta: Dict[str, Any] = {
+                    "trackId": clean_vid,
+                    "available": True,
+                    "codec": codec_label,
+                    "bitrateKbps": bitrate_kbps,
+                    "sampleRateHz": sample_rate_hz,
+                    "ext": target_ext,
+                    "mimeType": mime_type,
+                    "source": source_label,
+                    "tier": tier,
+                    "cacheReady": True,
+                    "streamMode": "virtual",
+                    "totalSize": int(plan["totalSize"]),
+                    "plan": plan,
+                    "expiresAt": time.time() + 1800,
+                }
+                self._cache.set(f"vstream:{clean_vid}:{tier}", meta, ttl_seconds=1800)
+                try:
+                    plan_path = self._virtual_plan_cache_path(clean_vid, tier)
+                    tmp_plan = f"{plan_path}.{os.getpid()}.{threading.get_ident()}.tmp"
+                    with open(tmp_plan, "w", encoding="utf-8") as fh:
+                        json.dump(meta, fh, ensure_ascii=False)
+                    os.replace(tmp_plan, plan_path)
+                except Exception:
+                    pass
+                return meta
+
         meta_path, _ = self._stream_cache_paths(clean_vid, tier)
         existing = self._read_cached_stream_meta(meta_path)
         if existing is not None:
@@ -2301,25 +2812,9 @@ class MusicProvider:
             if existing is not None:
                 return existing
 
-            resolved_title = (title or "").strip()
-            resolved_artist = _clean_artist_for_query(artist)
-            resolved_dur = duration_seconds
-
-            if not resolved_title:
-                try:
-                    watch = self.get_watch_playlist(clean_vid, radio=False, limit=1)
-                    first = (watch.get("tracks") or [None])[0]
-                    if isinstance(first, Mapping):
-                        resolved_title = str(first.get("title") or "").strip()
-                        if not resolved_artist and first.get("artists"):
-                            resolved_artist = _clean_artist_for_query(str(first["artists"][0].get("name") or ""))
-                        if not resolved_dur:
-                            resolved_dur = first.get("durationSeconds")
-                except Exception:
-                    pass
-
-            if resolved_title and _is_excluded_regional_text(f"{resolved_title} {resolved_artist}"):
-                raise MusicProviderError("Konten regional ini difilter dari pemutaran.", 403)
+            resolved_title, resolved_artist, resolved_dur = self._resolve_track_metadata_for_stream(
+                clean_vid, title, artist, duration_seconds
+            )
 
             fmt, source_label = self._extract_audio_source(
                 clean_vid,
@@ -2393,5 +2888,7 @@ class MusicProvider:
             duration_seconds=duration_seconds,
             quality=quality,
         )
-        return {k: v for k, v in meta.items() if k != "filePath"}
+        excluded_keys = {"filePath", "plan", "expiresAt"}
+        return {k: v for k, v in meta.items() if k not in excluded_keys}
+
 

@@ -464,6 +464,65 @@ export function fetchStreamAudioMeta(
   );
 }
 
+export function parseContentRangeHeader(
+  headerValue: string | null,
+): { start: number; end: number; total: number } | null {
+  if (!headerValue) return null;
+  const match = /bytes\s+(\d+)-(\d+)\/(\d+)/i.exec(headerValue.trim());
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const total = Number(match[3]);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(total) || total <= 0) {
+    return null;
+  }
+  return { start, end, total };
+}
+
+export async function fetchAudioBlobWithRangeSupport(
+  url: string,
+  signal?: AbortSignal,
+): Promise<Blob | null> {
+  const firstRes = await fetch(url, { signal });
+  if (!firstRes.ok) return null;
+
+  const mime = firstRes.headers.get('content-type') || 'audio/mp4';
+  if (firstRes.status !== 206) {
+    return await firstRes.blob();
+  }
+
+  const firstRange = parseContentRangeHeader(firstRes.headers.get('content-range'));
+  const firstChunk = await firstRes.arrayBuffer();
+  if (!firstRange || firstRange.end + 1 >= firstRange.total) {
+    return new Blob([firstChunk], { type: mime });
+  }
+
+  const chunks: ArrayBuffer[] = [firstChunk];
+  let nextOffset = firstRange.end + 1;
+  let safetyCounter = 0;
+
+  while (nextOffset < firstRange.total && safetyCounter < 64) {
+    safetyCounter += 1;
+    const res = await fetch(url, {
+      headers: { Range: `bytes=${nextOffset}-` },
+      signal,
+    });
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength === 0) break;
+    chunks.push(buf);
+    const parsed = parseContentRangeHeader(res.headers.get('content-range'));
+    if (parsed && parsed.end + 1 > nextOffset) {
+      nextOffset = parsed.end + 1;
+    } else {
+      nextOffset += buf.byteLength;
+    }
+  }
+
+  return new Blob(chunks, { type: mime });
+}
+
+
 
 
 

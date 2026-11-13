@@ -1,5 +1,9 @@
 import { create } from 'zustand';
-import { buildStreamAudioUrl, fetchStreamAudioMeta } from '../api/client';
+import {
+  buildStreamAudioUrl,
+  fetchAudioBlobWithRangeSupport,
+  fetchStreamAudioMeta,
+} from '../api/client';
 import { db, migrateLegacyLocalStorage } from '../db/soundclearDb';
 import type {
   ConcreteQualityTier,
@@ -740,19 +744,14 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     let resolvedMime = 'audio/mp4';
 
     try {
-      const [metaResp, audioResp] = await Promise.all([
-        fetchStreamAudioMeta(videoId, streamMeta).catch(() => null),
-        fetch(buildStreamAudioUrl(videoId, streamMeta)),
-      ]);
-      if (audioResp.ok) {
-        const blob = await audioResp.blob();
-        if (blob.size > 1024) {
-          downloadedBlob = blob;
-          resolvedCodec = metaResp?.codec || (blob.type.includes('mpeg') ? 'MP3' : 'AAC');
-          resolvedBitrate = metaResp?.bitrateKbps ?? resolvedBitrate;
-          resolvedSampleRate = metaResp?.sampleRateHz ?? resolvedSampleRate;
-          resolvedMime = metaResp?.mimeType || blob.type || 'audio/mp4';
-        }
+      const blob = await fetchAudioBlobWithRangeSupport(buildStreamAudioUrl(videoId, streamMeta));
+      if (blob && blob.size > 1024) {
+        downloadedBlob = blob;
+        const metaResp = await fetchStreamAudioMeta(videoId, streamMeta).catch(() => null);
+        resolvedCodec = metaResp?.codec || (blob.type.includes('mpeg') ? 'MP3' : 'AAC');
+        resolvedBitrate = metaResp?.bitrateKbps ?? resolvedBitrate;
+        resolvedSampleRate = metaResp?.sampleRateHz ?? resolvedSampleRate;
+        resolvedMime = metaResp?.mimeType || blob.type || 'audio/mp4';
       }
     } catch {
       downloadedBlob = null;

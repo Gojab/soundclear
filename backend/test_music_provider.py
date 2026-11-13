@@ -710,6 +710,213 @@ class MusicProviderTests(unittest.TestCase):
             finally:
                 main_app.provider = orig_provider
 
+    def test_vercel_pure_python_hls_and_progressive_streaming_without_ffmpeg(self) -> None:
+        init_bytes = b"INIT_FTYP_MOOV_" * 20  # 300 bytes
+        seg0_bytes = b"SEG0_MOOF_MDAT_" * 100  # 1500 bytes
+        seg1_bytes = b"SEG1_MOOF_MDAT_" * 100  # 1500 bytes
+        expected_full = init_bytes + seg0_bytes + seg1_bytes
+        m3u8_text = "\n".join(
+            [
+                "#EXTM3U",
+                "#EXT-X-VERSION:7",
+                '#EXT-X-MAP:URI="init.mp4"',
+                "#EXTINF:10.0,",
+                "data000.m4s",
+                "#EXTINF:10.0,",
+                "data001.m4s",
+                "#EXT-X-ENDLIST",
+            ]
+        )
+
+        class _FakeHTTPResp:
+            def __init__(self, status_code: int, content: bytes = b"", headers=None, text: str = "") -> None:
+                self.status_code = status_code
+                self.content = content
+                self.headers = headers or {}
+                self.text = text
+
+            def iter_content(self, chunk_size: int = 65536):
+                for i in range(0, len(self.content), chunk_size):
+                    yield self.content[i : i + chunk_size]
+
+            def close(self) -> None:
+                pass
+
+        blob_map = {
+            "https://cdn.example.invalid/hls/init.mp4": init_bytes,
+            "https://cdn.example.invalid/hls/data000.m4s": seg0_bytes,
+            "https://cdn.example.invalid/hls/data001.m4s": seg1_bytes,
+        }
+        large_prog_total = 4_200_000  # > 3 MiB Vercel full response limit
+
+        class _FakeSession:
+            def head(self, url: str, headers=None, timeout=8, allow_redirects=True):
+                if url in blob_map:
+                    return _FakeHTTPResp(200, headers={"content-length": str(len(blob_map[url]))})
+                if url == "https://cdn.example.invalid/prog.mp3":
+                    return _FakeHTTPResp(200, headers={"content-length": str(large_prog_total)})
+                return _FakeHTTPResp(404)
+
+            def get(self, url: str, headers=None, stream=False, timeout=10, allow_redirects=True):
+                if url == "https://cdn.example.invalid/hls/playlist.m3u8":
+                    return _FakeHTTPResp(200, text=m3u8_text)
+                if url in blob_map:
+                    return _FakeHTTPResp(200, content=blob_map[url])
+                if url == "https://cdn.example.invalid/prog.mp3":
+                    rng = (headers or {}).get("Range", "")
+                    if rng.startswith("bytes="):
+                        s, e = rng[6:].split("-")
+                        start = int(s)
+                        end = int(e)
+                        chunk = (b"P" * (end - start + 1))
+                        return _FakeHTTPResp(
+                            206,
+                            content=chunk,
+                            headers={"content-range": f"bytes {start}-{end}/{large_prog_total}"},
+                        )
+                return _FakeHTTPResp(404)
+
+            def close(self) -> None:
+                pass
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig_provider = main_app.provider
+            try:
+                with (
+                    mock.patch.dict(os.environ, {"VERCEL": "1"}),
+                    mock.patch("backend.music_provider.STREAM_CACHE_DIR", tmpdir),
+                    mock.patch("backend.music_provider.shutil.which", return_value=None),
+                ):
+                    provider = MusicProvider(
+                        gateway=FakeYTMusicGateway(),  # type: ignore[arg-type]
+                        audio_settings_file=os.path.join(tmpdir, "audio_settings.json"),
+                    )
+                    provider._create_stream_http_session = lambda: _FakeSession()  # type: ignore[method-assign]
+                    provider._extract_audio_source = lambda *_a, **_kw: (  # type: ignore[method-assign]
+                        {
+                            "url": "https://cdn.example.invalid/hls/playlist.m3u8",
+                            "ext": "m4a",
+                            "protocol": "m3u8_native",
+                            "acodec": "mp4a.40.2",
+                            "vcodec": "none",
+                            "abr": 160,
+                            "asr": 44100,
+                        },
+                        "SoundCloud Audio",
+                    )
+
+                    main_app.provider = provider
+                    client = TestClient(main_app.app)
+
+                    meta_resp = client.get("/api/stream/hlsTest0001/meta?title=Monokrom&artist=Tulus")
+                    self.assertEqual(meta_resp.status_code, 200)
+                    meta_json = meta_resp.json()
+                    self.assertEqual(meta_json["codec"], "AAC")
+                    self.assertEqual(meta_json["streamMode"], "virtual")
+                    self.assertEqual(meta_json["totalSize"], len(expected_full))
+                    self.assertNotIn("plan", meta_json)
+
+                    head_resp = client.head("/api/stream/hlsTest0001?title=Monokrom&artist=Tulus")
+                    self.assertEqual(head_resp.status_code, 200)
+                    self.assertEqual(head_resp.headers.get("accept-ranges"), "bytes")
+                    self.assertEqual(head_resp.headers.get("content-length"), str(len(expected_full)))
+
+                    # Range spanning init.mp4 + seg0 + seg1
+                    range_resp = client.get(
+                        "/api/stream/hlsTest0001?title=Monokrom&artist=Tulus",
+                        headers={"Range": "bytes=200-1999"},
+                    )
+                    self.assertEqual(range_resp.status_code, 206)
+                    self.assertEqual(
+                        range_resp.headers.get("content-range"),
+                        f"bytes 200-1999/{len(expected_full)}",
+                    )
+                    self.assertEqual(range_resp.content, expected_full[200:2000])
+
+                    # Large progressive file on Vercel must cap response to 1.5 MiB chunk (206 Partial Content)
+                    provider._extract_audio_source = lambda *_a, **_kw: (  # type: ignore[method-assign]
+                        {
+                            "url": "https://cdn.example.invalid/prog.mp3",
+                            "ext": "mp3",
+                            "protocol": "https",
+                            "acodec": "mp3",
+                            "vcodec": "none",
+                            "abr": 128,
+                            "asr": 44100,
+                        },
+                        "SoundCloud Audio",
+                    )
+                    prog_resp = client.get("/api/stream/progTest001?title=Lagu&artist=Artis")
+                    self.assertEqual(prog_resp.status_code, 206)
+                    self.assertEqual(
+                        prog_resp.headers.get("content-range"),
+                        f"bytes 0-1572863/{large_prog_total}",
+                    )
+                    self.assertEqual(len(prog_resp.content), 1_572_864)
+            finally:
+                main_app.provider = orig_provider
+
+    def test_soundcloud_fallback_strips_noise_on_empty_primary_query(self) -> None:
+        seen_queries = []
+
+        class _FakeYDL:
+            def __init__(self, opts):
+                self.opts = opts
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def extract_info(self, target: str, download: bool = False):
+                if target.startswith("scsearch8:"):
+                    q = target[len("scsearch8:") :]
+                    seen_queries.append(q)
+                    if "Dimusic" in q or "||" in q:
+                        return {"entries": []}
+                    return {
+                        "entries": [
+                            {
+                                "title": "TULUS - Hati-Hati di Jalan",
+                                "uploader": "Tulus",
+                                "duration": 240,
+                                "url": "https://soundcloud.com/tulus/hati-hati-di-jalan",
+                            }
+                        ]
+                    }
+                if target == "https://soundcloud.com/tulus/hati-hati-di-jalan":
+                    return {
+                        "duration": 240,
+                        "formats": [
+                            {
+                                "url": "https://cdn.example.invalid/tulus/playlist.m3u8",
+                                "ext": "m4a",
+                                "protocol": "m3u8_native",
+                                "acodec": "mp4a.40.2",
+                                "vcodec": "none",
+                                "abr": 160,
+                            }
+                        ],
+                    }
+                return {}
+
+        with mock.patch.dict(os.environ, {"VERCEL": "1"}), mock.patch(
+            "backend.music_provider.yt_dlp.YoutubeDL", _FakeYDL
+        ):
+            provider = MusicProvider(gateway=FakeYTMusicGateway())  # type: ignore[arg-type]
+            fmt, source = provider._extract_audio_source(
+                "hNymL4gxOZI",
+                "Hati - Hati Di Jalan - Tulus || Smooth Jazz Ballad Cover (Duet Version)",
+                "Dimusic",
+                223,
+                "high",
+            )
+        self.assertEqual(source, "SoundCloud Audio")
+        self.assertEqual(fmt["url"], "https://cdn.example.invalid/tulus/playlist.m3u8")
+        self.assertGreaterEqual(len(seen_queries), 2)
+        self.assertNotIn("Dimusic", seen_queries[-1])
+
 
 if __name__ == "__main__":
     unittest.main()

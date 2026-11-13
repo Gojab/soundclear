@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import os
 import re
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -12,7 +12,12 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend.music_provider import MusicProvider, MusicProviderError
+from backend.music_provider import (
+    MusicProvider,
+    MusicProviderError,
+    VERCEL_FULL_RESPONSE_LIMIT_BYTES,
+    VERCEL_MAX_STREAM_CHUNK_BYTES,
+)
 
 load_dotenv()
 
@@ -301,6 +306,32 @@ def stream_audio_meta(
     )
 
 
+def _parse_http_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
+    match = re.match(r"bytes=(\d*)-(\d*)", range_header.strip(), re.IGNORECASE)
+    if not match or (not match.group(1) and not match.group(2)):
+        raise HTTPException(
+            status_code=416,
+            detail="Header Range tidak valid.",
+            headers={"Content-Range": f"bytes */{file_size}"},
+        )
+    if match.group(1):
+        start = int(match.group(1))
+        end = int(match.group(2)) if match.group(2) else file_size - 1
+    else:
+        suffix_len = int(match.group(2))
+        start = max(0, file_size - suffix_len)
+        end = file_size - 1
+
+    if start >= file_size or end < start:
+        raise HTTPException(
+            status_code=416,
+            detail="Rentang byte di luar ukuran berkas audio.",
+            headers={"Content-Range": f"bytes */{file_size}"},
+        )
+    end = min(end, file_size - 1)
+    return start, end
+
+
 @app.api_route("/api/stream/{video_id}", methods=["GET", "HEAD"])
 def stream_audio(
     video_id: str,
@@ -317,44 +348,65 @@ def stream_audio(
         duration_seconds=durationSeconds,
         quality=quality,
     )
-    file_path = str(meta["filePath"])
-    file_size = os.path.getsize(file_path)
     mime_type = str(meta.get("mimeType") or "audio/mp4")
     range_header = request.headers.get("range")
+    is_vercel = bool(os.environ.get("VERCEL"))
 
-    base_headers = {
+    base_headers: Dict[str, str] = {
         "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": "public, max-age=1800",
         "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Accept-Ranges, Content-Range, Content-Length, X-SoundClear-Codec, X-SoundClear-Bitrate",
+        "X-SoundClear-Codec": str(meta.get("codec") or "AAC"),
+        "X-SoundClear-Bitrate": str(meta.get("bitrateKbps") or 160),
     }
+
+    if meta.get("streamMode") == "virtual":
+        file_size = int(meta["totalSize"])
+        start = 0
+        end = file_size - 1
+        status_code = 200
+
+        if range_header:
+            start, end = _parse_http_range_header(range_header, file_size)
+            end = min(end, start + VERCEL_MAX_STREAM_CHUNK_BYTES - 1, file_size - 1)
+            status_code = 206
+            base_headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+        elif (is_vercel and file_size > VERCEL_FULL_RESPONSE_LIMIT_BYTES) or file_size > 12_000_000:
+            end = min(file_size - 1, VERCEL_MAX_STREAM_CHUNK_BYTES - 1)
+            status_code = 206
+            base_headers["Content-Range"] = f"bytes 0-{end}/{file_size}"
+
+        content_length = end - start + 1
+        base_headers["Content-Length"] = str(content_length)
+
+        if request.method == "HEAD":
+            return Response(status_code=status_code, media_type=mime_type, headers=base_headers)
+
+        audio_bytes = provider.read_virtual_stream_bytes(meta, start, end)
+        if len(audio_bytes) != content_length:
+            actual_end = start + len(audio_bytes) - 1
+            base_headers["Content-Length"] = str(len(audio_bytes))
+            if status_code == 206 and len(audio_bytes) > 0:
+                base_headers["Content-Range"] = f"bytes {start}-{actual_end}/{file_size}"
+        return Response(
+            content=audio_bytes,
+            status_code=status_code,
+            media_type=mime_type,
+            headers=base_headers,
+        )
+
+    file_path = str(meta["filePath"])
+    file_size = os.path.getsize(file_path)
 
     start = 0
     end = file_size - 1
     status_code = 200
 
     if range_header:
-        match = re.match(r"bytes=(\d*)-(\d*)", range_header.strip(), re.IGNORECASE)
-        if not match or (not match.group(1) and not match.group(2)):
-            raise HTTPException(
-                status_code=416,
-                detail="Header Range tidak valid.",
-                headers={"Content-Range": f"bytes */{file_size}"},
-            )
-        if match.group(1):
-            start = int(match.group(1))
-            end = int(match.group(2)) if match.group(2) else file_size - 1
-        else:
-            suffix_len = int(match.group(2))
-            start = max(0, file_size - suffix_len)
-            end = file_size - 1
-
-        if start >= file_size or end < start:
-            raise HTTPException(
-                status_code=416,
-                detail="Rentang byte di luar ukuran berkas audio.",
-                headers={"Content-Range": f"bytes */{file_size}"},
-            )
-        end = min(end, file_size - 1)
+        start, end = _parse_http_range_header(range_header, file_size)
+        if is_vercel:
+            end = min(end, start + VERCEL_MAX_STREAM_CHUNK_BYTES - 1, file_size - 1)
         status_code = 206
         base_headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
 

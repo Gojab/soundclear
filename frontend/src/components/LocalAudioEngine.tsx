@@ -233,6 +233,16 @@ export function LocalAudioEngine() {
       const audio = graph.decks[nextDeckIdx];
       let urlToLoad: string | null = null;
       let metaToReport: ActiveStreamMeta | null = null;
+      let streamMetaFetchTarget: {
+        streamVideoId: string;
+        queryMeta: {
+          title: string;
+          artist: string;
+          durationSeconds?: number | null;
+          quality: ConcreteQualityTier;
+        };
+        defaultBitrate: number;
+      } | null = null;
 
       if (localActive && trackUniqueId) {
         const record =
@@ -309,6 +319,8 @@ export function LocalAudioEngine() {
         const artistName = formatArtists(currentTrack.artists);
 
         if (!isYouTubeVideoId(rawVideoId)) {
+          audio.pause();
+          audio.removeAttribute('src');
           try {
             const resolved = await resolvePlayableYoutube(rawVideoId, {
               title: currentTrack.title,
@@ -352,32 +364,11 @@ export function LocalAudioEngine() {
         };
 
         usePlayerStore.getState().setActiveStreamMeta(metaToReport);
-
-        void fetchStreamAudioMeta(streamVideoId, streamQueryMeta)
-          .then((realMeta) => {
-            if (cancelled) return;
-            const latest = usePlayerStore.getState();
-            if (getPlayableVideoId(latest.currentTrack) !== rawVideoId) return;
-            const kbps = realMeta.bitrateKbps ?? defaultBitrate;
-            const latestDirect = useSettingsStore.getState().localProfile.directMode;
-            latest.setActiveStreamMeta({
-              trackId: rawVideoId,
-              requestedTier: targetStreamTier,
-              actualTier: targetStreamTier,
-              codec: realMeta.codec || 'AAC',
-              bitrateKbps: kbps,
-              sampleRateHz: realMeta.sampleRateHz ?? 44100,
-              bitDepth: null,
-              lossless: false,
-              hiRes: false,
-              badgeLabel: `${realMeta.codec || 'AAC'} ${kbps} kbps`,
-              sourceMode: latestDirect ? 'direct' : 'webaudio',
-              proxiedViaBackend: true,
-              audiodownloadAllowed: true,
-              replayGainDb: null,
-            });
-          })
-          .catch(() => {});
+        streamMetaFetchTarget = {
+          streamVideoId,
+          queryMeta: streamQueryMeta,
+          defaultBitrate,
+        };
       }
 
       if (!urlToLoad || cancelled) return;
@@ -388,9 +379,11 @@ export function LocalAudioEngine() {
 
       const storeState = usePlayerStore.getState();
       const targetSeek = storeState.pendingSeekSeconds ?? storeState.currentTime ?? 0;
+      let hasLoadedMeta = false;
 
       const handleLoadedMeta = () => {
         if (cancelled) return;
+        hasLoadedMeta = true;
         clearStallTimer();
         if (targetSeek > 0 && Number.isFinite(audio.duration) && targetSeek < audio.duration) {
           audio.currentTime = targetSeek;
@@ -403,9 +396,43 @@ export function LocalAudioEngine() {
         if (metaToReport && !st.activeStreamMeta?.proxiedViaBackend) {
           st.setActiveStreamMeta(metaToReport);
         }
+        if (streamMetaFetchTarget) {
+          const target = streamMetaFetchTarget;
+          streamMetaFetchTarget = null;
+          void fetchStreamAudioMeta(target.streamVideoId, target.queryMeta)
+            .then((realMeta) => {
+              if (cancelled) return;
+              const latest = usePlayerStore.getState();
+              if (getPlayableVideoId(latest.currentTrack) !== rawVideoId) return;
+              const kbps = realMeta.bitrateKbps ?? target.defaultBitrate;
+              const latestDirect = useSettingsStore.getState().localProfile.directMode;
+              latest.setActiveStreamMeta({
+                trackId: rawVideoId!,
+                requestedTier: targetStreamTier,
+                actualTier: targetStreamTier,
+                codec: realMeta.codec || 'AAC',
+                bitrateKbps: kbps,
+                sampleRateHz: realMeta.sampleRateHz ?? 44100,
+                bitDepth: null,
+                lossless: false,
+                hiRes: false,
+                badgeLabel: `${realMeta.codec || 'AAC'} ${kbps} kbps`,
+                sourceMode: latestDirect ? 'direct' : 'webaudio',
+                proxiedViaBackend: true,
+                audiodownloadAllowed: true,
+                replayGainDb: null,
+              });
+            })
+            .catch(() => {});
+        }
         if (st.isPlaying) {
           void resumeAudioContext();
-          void audio.play().catch(() => {});
+          void audio.play().catch((err: unknown) => {
+            if (!cancelled && err instanceof DOMException && err.name === 'NotAllowedError') {
+              usePlayerStore.getState().setIsPlaying(false);
+              usePlayerStore.getState().setIsBuffering(false);
+            }
+          });
         }
       };
 
@@ -420,11 +447,12 @@ export function LocalAudioEngine() {
         if (cancelled) return;
         usePlayerStore.getState().setIsBuffering(true);
         clearStallTimer();
+        const stallWaitMs = hasLoadedMeta ? 3500 : 9000;
         stallTimerRef.current = window.setTimeout(() => {
           if (!cancelled && usePlayerStore.getState().isPlaying) {
             usePlayerStore.getState().recordBufferingStall();
           }
-        }, 3500);
+        }, stallWaitMs);
       };
 
       const handleMediaError = () => {
