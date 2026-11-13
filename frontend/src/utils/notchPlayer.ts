@@ -121,6 +121,101 @@ export function resolveNotchDisplayLines(
   };
 }
 
+export interface NavigatorPlatformLike {
+  platform?: string;
+  userAgent?: string;
+  userAgentData?: {
+    platform?: string;
+  };
+}
+
+export function isWindowsPlatform(navLike?: NavigatorPlatformLike | null): boolean {
+  const nav =
+    navLike ??
+    (typeof navigator !== 'undefined'
+      ? (navigator as unknown as NavigatorPlatformLike)
+      : undefined);
+  if (!nav) return false;
+
+  const uaDataPlatform = (nav.userAgentData?.platform || '').trim().toLowerCase();
+  if (uaDataPlatform) {
+    return uaDataPlatform === 'windows';
+  }
+
+  const platform = (nav.platform || '').trim().toLowerCase();
+  if (platform) {
+    if (platform.startsWith('win')) return true;
+    if (
+      platform.includes('mac') ||
+      platform.includes('linux') ||
+      platform.includes('iphone') ||
+      platform.includes('ipad') ||
+      platform.includes('android')
+    ) {
+      return false;
+    }
+  }
+
+  const ua = (nav.userAgent || '').toLowerCase();
+  if (!ua) return false;
+  if (ua.includes('android') || ua.includes('iphone') || ua.includes('ipad')) {
+    return false;
+  }
+  return ua.includes('windows nt') || ua.includes('win64') || ua.includes('wow64');
+}
+
+export interface DocumentPiPWindowLike {
+  documentPictureInPicture?: {
+    requestWindow?: (options?: { width?: number; height?: number }) => Promise<Window>;
+  };
+}
+
+export function supportsDocumentPictureInPicture(winLike?: unknown): boolean {
+  const w =
+    (winLike as DocumentPiPWindowLike | undefined) ??
+    (typeof window !== 'undefined' ? (window as unknown as DocumentPiPWindowLike) : undefined);
+  return typeof w?.documentPictureInPicture?.requestWindow === 'function';
+}
+
+export interface WindowsExternalNotchSupport {
+  allowed: boolean;
+  mode: 'desktop-ipc' | 'document-pip' | 'none';
+  reason: 'ok' | 'windows-only' | 'unsupported-browser';
+}
+
+export function resolveWindowsExternalNotchSupport(input: {
+  isWindows: boolean;
+  hasDesktopHost: boolean;
+  hasDocumentPiP: boolean;
+}): WindowsExternalNotchSupport {
+  if (!input.isWindows) {
+    return {
+      allowed: false,
+      mode: 'none',
+      reason: 'windows-only',
+    };
+  }
+  if (input.hasDesktopHost) {
+    return {
+      allowed: true,
+      mode: 'desktop-ipc',
+      reason: 'ok',
+    };
+  }
+  if (input.hasDocumentPiP) {
+    return {
+      allowed: true,
+      mode: 'document-pip',
+      reason: 'ok',
+    };
+  }
+  return {
+    allowed: false,
+    mode: 'none',
+    reason: 'unsupported-browser',
+  };
+}
+
 export interface NotchVisibilityInput {
   hasTrack: boolean;
   isPlaying: boolean;
@@ -129,9 +224,11 @@ export interface NotchVisibilityInput {
   displayMode: NotchDisplayMode;
   isAppInBackground: boolean;
   forceOpen?: boolean;
+  externalWindowActive?: boolean;
 }
 
 export function shouldShowNotchMiniPlayer(input: NotchVisibilityInput): boolean {
+  if (input.externalWindowActive) return false;
   if (!input.hasTrack) return false;
   if (input.manuallyHidden) return false;
 

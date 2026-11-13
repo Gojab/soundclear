@@ -19,9 +19,20 @@ import { useLibraryStore } from '../store/libraryStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { HomeSectionId, NotchDisplayMode } from '../types/music';
-import { listAvailableNotchMonitors } from '../utils/notchDesktopBridge';
+import {
+  isDesktopNotchHost,
+  listAvailableNotchMonitors,
+} from '../utils/notchDesktopBridge';
+import {
+  closeWindowsExternalNotch,
+  openWindowsExternalNotch,
+  useExternalPiPWindow,
+} from '../utils/notchExternalPiP';
 import {
   DEFAULT_NOTCH_MONITOR_OPTIONS,
+  isWindowsPlatform,
+  resolveWindowsExternalNotchSupport,
+  supportsDocumentPictureInPicture,
   type NotchMonitorOption,
 } from '../utils/notchPlayer';
 
@@ -82,8 +93,16 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
   const resetHomeSectionOrder = useSettingsStore((s) => s.resetHomeSectionOrder);
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
 
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
   const setRightPanelOpen = usePlayerStore((s) => s.setRightPanelOpen);
   const hydratePlayer = usePlayerStore((s) => s.hydrate);
+  const pipWindow = useExternalPiPWindow();
+  const externalPipOpen = Boolean(pipWindow && !pipWindow.closed);
+  const windowsExternalSupport = resolveWindowsExternalNotchSupport({
+    isWindows: isWindowsPlatform(),
+    hasDesktopHost: isDesktopNotchHost(),
+    hasDocumentPiP: supportsDocumentPictureInPicture(),
+  });
 
   const hiddenTrackIds = useLibraryStore((s) => s.hiddenTrackIds);
   const unhideTrack = useLibraryStore((s) => s.unhideTrack);
@@ -341,15 +360,69 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
           {/* Pemutar Mini Notch */}
           <section className="rounded-xl bg-[#181818] border border-white/[0.07] p-5 space-y-4">
-            <div>
-              <h2 className="text-base font-bold text-white">Pemutar Mini Notch</h2>
-              <p className="text-xs text-white/55 mt-0.5">
-                Atur kemunculan notch atas dan monitor target untuk pembungkus desktop Electron/Tauri
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-base font-bold text-white">Pemutar Mini Notch</h2>
+                <p className="text-xs text-white/55 mt-0.5">
+                  Pemutar mini keluar dari web khusus Windows (selalu di atas aplikasi lain)
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-lg bg-white/[0.07] border border-white/[0.08] text-[11px] font-medium text-white/80">
+                Khusus Windows
+              </span>
             </div>
 
             <div className="space-y-4 pt-1 border-t border-white/[0.07]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white">
+                    Jendela Eksternal di Luar Web (Windows)
+                  </p>
+                  <p className="text-xs text-white/55 mt-0.5">
+                    {windowsExternalSupport.mode === 'desktop-ipc'
+                      ? 'Aktif otomatis di jendela desktop Windows (tanpa bingkai, selalu di atas, area transparan tembus klik).'
+                      : windowsExternalSupport.mode === 'document-pip'
+                        ? externalPipOpen
+                          ? 'Jendela pemutar mini Windows sedang aktif di luar browser.'
+                          : 'Buka pemutar mini mengambang di desktop Windows (Chrome / Edge).'
+                        : windowsExternalSupport.reason === 'windows-only'
+                          ? 'Mode keluar jendela khusus untuk sistem operasi Windows. Di perangkat ini pemutar mini tetap tampil di dalam web.'
+                          : 'Browser Windows ini belum mendukung Document Picture-in-Picture; gunakan Chrome/Edge terbaru atau aplikasi Desktop Windows.'}
+                  </p>
+                </div>
+                {windowsExternalSupport.mode === 'document-pip' ? (
+                  <button
+                    type="button"
+                    disabled={!currentTrack}
+                    onClick={() => {
+                      if (externalPipOpen) {
+                        closeWindowsExternalNotch();
+                      } else {
+                        void openWindowsExternalNotch();
+                      }
+                    }}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 disabled:opacity-40 ${
+                      externalPipOpen
+                        ? 'bg-white/[0.12] text-white hover:bg-white/[0.18]'
+                        : 'bg-[#2EE6A6] text-[#06130E] hover:brightness-105'
+                    }`}
+                  >
+                    {externalPipOpen
+                      ? 'Tutup Jendela Eksternal'
+                      : currentTrack
+                        ? 'Keluarkan dari Web (Windows)'
+                        : 'Putar Lagu Terlebih Dahulu'}
+                  </button>
+                ) : (
+                  <span className="px-3 py-1.5 rounded-xl bg-white/[0.06] text-xs font-medium text-white/60 shrink-0">
+                    {windowsExternalSupport.mode === 'desktop-ipc'
+                      ? 'Mode Desktop Aktif'
+                      : 'Khusus Windows'}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-white/[0.07]">
                 <div className="min-w-0">
                   <p id="lbl-notch-mode" className="text-sm font-medium text-white">
                     Tampilkan notch
@@ -391,10 +464,10 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-white/[0.07]">
                 <div className="min-w-0">
                   <label htmlFor="select-notch-monitor" className="text-sm font-medium text-white block">
-                    Pilihan monitor (Desktop)
+                    Pilihan monitor (Windows Desktop)
                   </label>
                   <p className="text-xs text-white/55 mt-0.5">
-                    Monitor tempat jendela notch melayang saat dibungkus Electron atau Tauri
+                    Monitor target tempat notch melayang saat dijalankan di pembungkus Desktop Windows
                   </p>
                 </div>
                 <select

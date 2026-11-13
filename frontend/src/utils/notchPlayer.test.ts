@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { LyricsResponse, MediaItem } from '../types/music';
 import {
+  isWindowsPlatform,
   normalizeNotchDisplayMode,
   normalizeNotchMonitor,
   resolveNotchDisplayLines,
+  resolveWindowsExternalNotchSupport,
   shouldShowNotchMiniPlayer,
+  supportsDocumentPictureInPicture,
 } from './notchPlayer';
 
 const SAMPLE_TRACK: MediaItem = {
@@ -192,4 +195,85 @@ test('normalizeNotchDisplayMode and normalizeNotchMonitor sanitize invalid value
   assert.equal(normalizeNotchDisplayMode('invalid'), 'always');
   assert.equal(normalizeNotchMonitor('display-2'), 'display-2');
   assert.equal(normalizeNotchMonitor(''), 'primary');
+});
+
+test('shouldShowNotchMiniPlayer hides in-web notch when externalWindowActive is true', () => {
+  assert.equal(
+    shouldShowNotchMiniPlayer({
+      hasTrack: true,
+      isPlaying: true,
+      hasActivePlayback: true,
+      manuallyHidden: false,
+      displayMode: 'always',
+      isAppInBackground: false,
+      forceOpen: true,
+      externalWindowActive: true,
+    }),
+    false,
+  );
+});
+
+test('isWindowsPlatform allows Windows and rejects macOS, Linux, Android, and iOS', () => {
+  assert.equal(isWindowsPlatform({ userAgentData: { platform: 'Windows' } }), true);
+  assert.equal(isWindowsPlatform({ platform: 'Win32' }), true);
+  assert.equal(
+    isWindowsPlatform({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }),
+    true,
+  );
+  assert.equal(isWindowsPlatform({ userAgentData: { platform: 'macOS' }, platform: 'MacIntel' }), false);
+  assert.equal(isWindowsPlatform({ platform: 'Linux x86_64' }), false);
+  assert.equal(
+    isWindowsPlatform({
+      platform: 'Linux armv8l',
+      userAgent: 'Mozilla/5.0 (Linux; Android 14)',
+    }),
+    false,
+  );
+  assert.equal(isWindowsPlatform({ platform: 'iPhone' }), false);
+});
+
+test('resolveWindowsExternalNotchSupport enforces Windows-only external pop-out capability', () => {
+  assert.deepEqual(
+    resolveWindowsExternalNotchSupport({
+      isWindows: false,
+      hasDesktopHost: false,
+      hasDocumentPiP: true,
+    }),
+    { allowed: false, mode: 'none', reason: 'windows-only' },
+  );
+
+  assert.deepEqual(
+    resolveWindowsExternalNotchSupport({
+      isWindows: true,
+      hasDesktopHost: true,
+      hasDocumentPiP: true,
+    }),
+    { allowed: true, mode: 'desktop-ipc', reason: 'ok' },
+  );
+
+  assert.deepEqual(
+    resolveWindowsExternalNotchSupport({
+      isWindows: true,
+      hasDesktopHost: false,
+      hasDocumentPiP: true,
+    }),
+    { allowed: true, mode: 'document-pip', reason: 'ok' },
+  );
+
+  assert.deepEqual(
+    resolveWindowsExternalNotchSupport({
+      isWindows: true,
+      hasDesktopHost: false,
+      hasDocumentPiP: false,
+    }),
+    { allowed: false, mode: 'none', reason: 'unsupported-browser' },
+  );
+
+  assert.equal(
+    supportsDocumentPictureInPicture({
+      documentPictureInPicture: { requestWindow: async () => ({} as Window) },
+    }),
+    true,
+  );
+  assert.equal(supportsDocumentPictureInPicture({}), false);
 });

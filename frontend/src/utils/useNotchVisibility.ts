@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { shouldShowNotchMiniPlayer } from './notchPlayer';
+import { isDesktopNotchHost } from './notchDesktopBridge';
+import { isWindowsPlatform, shouldShowNotchMiniPlayer } from './notchPlayer';
 
 export function useNotchVisibility(): {
   notchVisible: boolean;
+  desktopNotchVisible: boolean;
+  externalNotchActive: boolean;
   isAppInBackground: boolean;
 } {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -12,6 +15,7 @@ export function useNotchVisibility(): {
   const hasActiveSessionPlayback = usePlayerStore((s) => s.hasActiveSessionPlayback);
   const notchManuallyHidden = usePlayerStore((s) => s.notchManuallyHidden);
   const floatingMiniOpen = usePlayerStore((s) => s.floatingMiniOpen);
+  const externalNotchOpen = usePlayerStore((s) => s.externalNotchOpen);
   const notchDisplayMode = useSettingsStore((s) => s.notchDisplayMode);
 
   const [isAppInBackground, setIsAppInBackground] = useState<boolean>(() => {
@@ -41,7 +45,10 @@ export function useNotchVisibility(): {
     };
   }, []);
 
-  const notchVisible = shouldShowNotchMiniPlayer({
+  const windowsDesktopHost = isDesktopNotchHost() && isWindowsPlatform();
+  const externalNotchActive = externalNotchOpen || windowsDesktopHost;
+
+  const desktopNotchVisible = shouldShowNotchMiniPlayer({
     hasTrack: Boolean(currentTrack),
     isPlaying,
     hasActivePlayback: hasActiveSessionPlayback,
@@ -51,5 +58,16 @@ export function useNotchVisibility(): {
     forceOpen: floatingMiniOpen,
   });
 
-  return { notchVisible, isAppInBackground };
+  const notchVisible = shouldShowNotchMiniPlayer({
+    hasTrack: Boolean(currentTrack),
+    isPlaying,
+    hasActivePlayback: hasActiveSessionPlayback,
+    manuallyHidden: notchManuallyHidden,
+    displayMode: notchDisplayMode,
+    isAppInBackground,
+    forceOpen: floatingMiniOpen,
+    externalWindowActive: externalNotchActive,
+  });
+
+  return { notchVisible, desktopNotchVisible, externalNotchActive, isAppInBackground };
 }

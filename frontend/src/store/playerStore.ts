@@ -60,6 +60,7 @@ interface PlayerState {
   karaokeOpen: boolean;
   fullscreenNowPlaying: boolean;
   floatingMiniOpen: boolean;
+  externalNotchOpen: boolean;
   notchManuallyHidden: boolean;
   hasActiveSessionPlayback: boolean;
 
@@ -123,6 +124,7 @@ interface PlayerState {
   setKaraokeOpen: (open: boolean) => void;
   setFullscreenNowPlaying: (open: boolean) => void;
   setFloatingMiniOpen: (open: boolean) => void;
+  setExternalNotchOpen: (open: boolean) => void;
   setPlayerError: (error: string | null) => void;
 
   setActiveStreamMeta: (meta: ActiveStreamMeta | null) => void;
@@ -287,6 +289,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   karaokeOpen: false,
   fullscreenNowPlaying: false,
   floatingMiniOpen: false,
+  externalNotchOpen: false,
   notchManuallyHidden: false,
   hasActiveSessionPlayback: false,
 
@@ -882,6 +885,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       floatingMiniOpen: open,
       notchManuallyHidden: !open,
     }),
+  setExternalNotchOpen: (open) => set({ externalNotchOpen: open }),
   setPlayerError: (error) => set({ playerError: error }),
 
   setActiveStreamMeta: (activeStreamMeta) => set({ activeStreamMeta }),

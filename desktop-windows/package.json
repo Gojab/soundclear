@@ -1,0 +1,22 @@
+{
+  "name": "soundclear-windows-notch",
+  "version": "1.0.0",
+  "description": "Pembungkus desktop khusus Windows untuk SoundClear dengan pemutar mini notch melayang di luar jendela utama.",
+  "main": "main.cjs",
+  "os": ["win32"],
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win nsis portable"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "corp.zhafx.soundclear",
+    "productName": "SoundClear",
+    "win": {
+      "target": ["nsis", "portable"]
+    }
+  }
+}

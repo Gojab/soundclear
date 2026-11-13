@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SoundClear Notch</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        user-select: none;
+      }
+
+      .stage {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        background: transparent;
+        pointer-events: none;
+      }
+
+      .notch-pill {
+        position: relative;
+        width: 320px;
+        min-height: 48px;
+        background: #000000;
+        border-bottom-left-radius: 18px;
+        border-bottom-right-radius: 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 14px;
+        pointer-events: auto;
+        transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1), min-height 240ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .notch-pill.expanded {
+        width: 380px;
+        min-height: 78px;
+        padding: 10px 14px;
+      }
+
+      .corner {
+        position: absolute;
+        top: 0;
+        width: 14px;
+        height: 14px;
+        pointer-events: none;
+        display: block;
+      }
+
+      .corner-left {
+        left: -14px;
+      }
+
+      .corner-right {
+        right: -14px;
+      }
+
+      .text-btn {
+        flex: 1 1 auto;
+        min-width: 0;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        text-align: left;
+        cursor: pointer;
+        color: inherit;
+      }
+
+      .title-wrap {
+        width: 100%;
+        overflow: hidden;
+      }
+
+      .title-text {
+        display: block;
+        white-space: nowrap;
+        font-size: 11px;
+        line-height: 14px;
+        color: #9ca3af;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .title-text.marquee {
+        display: inline-block;
+        text-overflow: clip;
+        animation: notch-marquee var(--marquee-duration, 8s) ease-in-out infinite;
+      }
+
+      @keyframes notch-marquee {
+        0%,
+        16% {
+          transform: translateX(0);
+        }
+        48%,
+        64% {
+          transform: translateX(var(--marquee-shift, 0px));
+        }
+        96%,
+        100% {
+          transform: translateX(0);
+        }
+      }
+
+      .lyric-stack {
+        margin-top: 2px;
+      }
+
+      .notch-pill.expanded .lyric-stack.synced {
+        margin-top: 4px;
+      }
+
+      .lyric-side {
+        margin: 0;
+        font-size: 11px;
+        line-height: 15px;
+        color: rgba(255, 255, 255, 0.45);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .lyric-active {
+        margin: 0;
+        font-size: 13px;
+        line-height: 17px;
+        font-weight: 500;
+        color: #ffffff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: opacity 150ms ease;
+      }
+
+      .controls {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        border: 0;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 0;
+        transition: background-color 140ms ease, color 140ms ease;
+      }
+
+      .icon-btn:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .notch-pill,
+        .lyric-active,
+        .title-text.marquee {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div id="notch-pill" class="notch-pill" role="region" aria-label="Pemutar mini notch">
+        <svg class="corner corner-left" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M14 0 L14 14 A14 14 0 0 0 0 0 Z" fill="#000000" />
+        </svg>
+        <svg class="corner corner-right" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M0 0 L0 14 A14 14 0 0 1 14 0 Z" fill="#000000" />
+        </svg>
+
+        <button
+          id="btn-expand"
+          type="button"
+          class="text-btn"
+          aria-expanded="false"
+          aria-label="Perluas pemutar mini notch untuk melihat lirik"
+        >
+          <div id="title-wrap" class="title-wrap">
+            <span id="title-text" class="title-text"></span>
+          </div>
+          <div id="lyric-stack" class="lyric-stack">
+            <p id="line-prev" class="lyric-side" hidden></p>
+            <p id="line-active" class="lyric-active"></p>
+            <p id="line-next" class="lyric-side" hidden></p>
+          </div>
+        </button>
+
+        <div class="controls">
+          <button
+            id="btn-skip"
+            type="button"
+            class="icon-btn"
+            aria-label="Lompat ke lagu berikutnya"
+            title="Lagu berikutnya"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 4 15 12 5 20 5 4" />
+              <line x1="19" y1="5" x2="19" y2="19" />
+            </svg>
+          </button>
+          <button
+            id="btn-stop"
+            type="button"
+            class="icon-btn"
+            aria-label="Hentikan pemutaran dan sembunyikan notch"
+            title="Hentikan"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const pillEl = document.getElementById('notch-pill');
+      const expandBtn = document.getElementById('btn-expand');
+      const titleWrapEl = document.getElementById('title-wrap');
+      const titleEl = document.getElementById('title-text');
+      const lyricStackEl = document.getElementById('lyric-stack');
+      const prevEl = document.getElementById('line-prev');
+      const activeEl = document.getElementById('line-active');
+      const nextEl = document.getElementById('line-next');
+      const skipBtn = document.getElementById('btn-skip');
+      const stopBtn = document.getElementById('btn-stop');
+
+      let latestState = null;
+      let localExpanded = false;
+
+      function updateMarquee() {
+        titleEl.classList.remove('marquee');
+        const overflow = Math.ceil(titleEl.scrollWidth - titleWrapEl.clientWidth);
+        if (overflow > 3) {
+          const shift = overflow + 8;
+          const duration = Math.max(6, Math.min(18, Math.round(shift / 16) + 4));
+          titleEl.style.setProperty('--marquee-shift', `-${shift}px`);
+          titleEl.style.setProperty('--marquee-duration', `${duration}s`);
+          titleEl.classList.add('marquee');
+        }
+      }
+
+      function renderNotch(state) {
+        if (!state) return;
+        latestState = state;
+        const expanded = Boolean(state.expanded || localExpanded);
+        pillEl.classList.toggle('expanded', expanded);
+        expandBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+        const title = String(state.title || '');
+        if (titleEl.textContent !== title) {
+          titleEl.textContent = title;
+          requestAnimationFrame(updateMarquee);
+        }
+
+        const showThreeLines = expanded && Boolean(state.hasSyncedLyrics);
+        lyricStackEl.classList.toggle('synced', showThreeLines);
+
+        if (showThreeLines && state.prevLine) {
+          prevEl.textContent = String(state.prevLine);
+          prevEl.hidden = false;
+        } else {
+          prevEl.hidden = true;
+        }
+
+        const nextActive = String(state.activeLine || state.artist || '');
+        if (activeEl.textContent !== nextActive) {
+          activeEl.style.opacity = '0.2';
+          activeEl.textContent = nextActive;
+          requestAnimationFrame(() => {
+            activeEl.style.opacity = '1';
+          });
+        }
+
+        if (showThreeLines && state.nextLine) {
+          nextEl.textContent = String(state.nextLine);
+          nextEl.hidden = false;
+        } else {
+          nextEl.hidden = true;
+        }
+      }
+
+      pillEl.addEventListener('mouseenter', () => {
+        window.electronAPI?.notch?.setInteractive?.(true);
+        localExpanded = true;
+        if (latestState) {
+          renderNotch({ ...latestState, expanded: true });
+          window.electronAPI?.notch?.sendNotchState?.({
+            ...latestState,
+            expanded: true,
+            width: 380,
+            height: 86,
+          });
+        }
+      });
+
+      pillEl.addEventListener('mouseleave', () => {
+        window.electronAPI?.notch?.setInteractive?.(false);
+        localExpanded = false;
+        if (latestState) {
+          renderNotch({ ...latestState, expanded: false });
+          window.electronAPI?.notch?.sendNotchState?.({
+            ...latestState,
+            expanded: false,
+            width: 320,
+            height: 48,
+          });
+        }
+      });
+
+      expandBtn.addEventListener('click', () => {
+        localExpanded = !localExpanded;
+        if (latestState) renderNotch({ ...latestState, expanded: localExpanded });
+      });
+
+      skipBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.electronAPI?.notch?.sendCommand?.('skip');
+      });
+
+      stopBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.electronAPI?.notch?.sendCommand?.('stop');
+      });
+
+      window.electronAPI?.notch?.onRender?.(renderNotch);
+    </script>
+  </body>
+</html>

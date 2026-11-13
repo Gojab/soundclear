@@ -30,6 +30,17 @@ import type { MediaItem } from '../types/music';
 import { clampYoutubeVolume, PLAYBACK_RATE_OPTIONS } from '../utils/audioMath';
 import { hasActiveCustomBackground } from '../utils/backgroundTheme';
 import { formatTime, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
+import { isDesktopNotchHost } from '../utils/notchDesktopBridge';
+import {
+  closeWindowsExternalNotch,
+  openWindowsExternalNotch,
+  useExternalPiPWindow,
+} from '../utils/notchExternalPiP';
+import {
+  resolveWindowsExternalNotchSupport,
+  isWindowsPlatform,
+  supportsDocumentPictureInPicture,
+} from '../utils/notchPlayer';
 import { useNotchVisibility } from '../utils/useNotchVisibility';
 import { ArtworkImage } from './ArtworkImage';
 
@@ -55,7 +66,14 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const rightPanelTab = usePlayerStore((s) => s.rightPanelTab);
-  const { notchVisible } = useNotchVisibility();
+  const { notchVisible, desktopNotchVisible } = useNotchVisibility();
+  const pipWindow = useExternalPiPWindow();
+  const externalNotchOpen = Boolean(pipWindow && !pipWindow.closed);
+  const windowsSupport = resolveWindowsExternalNotchSupport({
+    isWindows: isWindowsPlatform(),
+    hasDesktopHost: isDesktopNotchHost(),
+    hasDocumentPiP: supportsDocumentPictureInPicture(),
+  });
   const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
   const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
@@ -431,13 +449,39 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
 
         <button
           type="button"
-          onClick={() => setFloatingMiniOpen(!notchVisible)}
+          onClick={() => {
+            if (windowsSupport.mode === 'document-pip') {
+              if (externalNotchOpen) {
+                closeWindowsExternalNotch();
+              } else {
+                void openWindowsExternalNotch();
+              }
+              return;
+            }
+            setFloatingMiniOpen(!desktopNotchVisible);
+          }}
           disabled={!currentTrack}
-          aria-label={notchVisible ? 'Sembunyikan pemutar mini notch' : 'Tampilkan pemutar mini notch'}
-          aria-pressed={notchVisible}
-          title="Pemutar Mini Notch"
-          className={`hidden xl:flex w-8 h-8 rounded-full items-center justify-center transition-colors disabled:opacity-35 ${
-            notchVisible ? 'text-[#2EE6A6]' : 'text-white/65 hover:text-white'
+          aria-label={
+            windowsSupport.mode === 'document-pip'
+              ? externalNotchOpen
+                ? 'Kembalikan pemutar mini dari jendela Windows'
+                : 'Keluarkan pemutar mini ke luar web (Khusus Windows)'
+              : notchVisible
+                ? 'Sembunyikan pemutar mini notch'
+                : 'Tampilkan pemutar mini notch'
+          }
+          aria-pressed={windowsSupport.mode === 'document-pip' ? externalNotchOpen : notchVisible}
+          title={
+            windowsSupport.mode === 'document-pip'
+              ? 'Keluarkan Pemutar Mini (Khusus Windows)'
+              : windowsSupport.reason === 'windows-only'
+                ? 'Pemutar Mini Notch (Keluar jendela khusus Windows)'
+                : 'Pemutar Mini Notch'
+          }
+          className={`hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors disabled:opacity-35 ${
+            externalNotchOpen || notchVisible
+              ? 'text-[#2EE6A6]'
+              : 'text-white/65 hover:text-white'
           }`}
         >
           <PictureInPicture2 className="w-4 h-4" strokeWidth={1.85} />

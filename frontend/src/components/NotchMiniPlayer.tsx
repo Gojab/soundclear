@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { SkipForward, Square } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -9,6 +10,11 @@ import {
   publishDesktopNotchState,
   subscribeDesktopNotchCommands,
 } from '../utils/notchDesktopBridge';
+import {
+  closeWindowsExternalNotch,
+  resizeWindowsExternalNotch,
+  useExternalPiPWindow,
+} from '../utils/notchExternalPiP';
 import { resolveNotchDisplayLines } from '../utils/notchPlayer';
 import { formatArtists, getPlayableVideoId } from '../utils/playerLogic';
 import { useNotchVisibility } from '../utils/useNotchVisibility';
@@ -28,13 +34,17 @@ export function NotchMiniPlayer() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const lyricsBrowseId = usePlayerStore((s) => s.lyricsBrowseId);
   const currentTime = usePlayerStore((s) => s.currentTime);
+  const notchManuallyHidden = usePlayerStore((s) => s.notchManuallyHidden);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
   const stopPlayback = usePlayerStore((s) => s.stopPlayback);
 
   const notchDisplayMode = useSettingsStore((s) => s.notchDisplayMode);
   const notchMonitor = useSettingsStore((s) => s.notchMonitor);
 
-  const { notchVisible } = useNotchVisibility();
+  const { notchVisible, desktopNotchVisible } = useNotchVisibility();
+  const pipWindow = useExternalPiPWindow();
+  const externalPipOpen = Boolean(pipWindow && !pipWindow.closed && currentTrack);
+  const anyNotchActive = notchVisible || externalPipOpen;
 
   const videoId = getPlayableVideoId(currentTrack);
   const artistName = currentTrack ? formatArtists(currentTrack.artists) : '';
@@ -59,16 +69,32 @@ export function NotchMiniPlayer() {
   const displayLines = resolveNotchDisplayLines(currentTrack, lyricsData, currentTime);
   const trackTitle = currentTrack?.title || '';
 
-  // Reset expanded state when notch hides
+  // Close external Windows PiP automatically if track clears or playback was stopped
   useEffect(() => {
-    if (!notchVisible) {
+    if (pipWindow && (!currentTrack || notchManuallyHidden)) {
+      closeWindowsExternalNotch();
+    }
+  }, [pipWindow, currentTrack, notchManuallyHidden]);
+
+  // Resize external Windows Document PiP window when compact/expanded changes
+  useEffect(() => {
+    if (!externalPipOpen) return;
+    resizeWindowsExternalNotch(
+      expanded ? EXPANDED_WIDTH : COMPACT_WIDTH,
+      expanded ? 92 : 56,
+    );
+  }, [externalPipOpen, expanded]);
+
+  // Reset expanded state when both in-web and external notches are hidden
+  useEffect(() => {
+    if (!anyNotchActive) {
       setExpanded(false);
     }
-  }, [notchVisible]);
+  }, [anyNotchActive]);
 
   // Measure title overflow for smooth marquee only when longer than container
   useLayoutEffect(() => {
-    if (!notchVisible) {
+    if (!anyNotchActive) {
       setMarqueeShiftPx(0);
       return;
     }
@@ -91,11 +117,13 @@ export function NotchMiniPlayer() {
       ro.observe(titleViewportRef.current);
     }
     return () => ro?.disconnect();
-  }, [notchVisible, trackTitle, expanded]);
+  }, [anyNotchActive, trackTitle, expanded, externalPipOpen]);
 
   // Collapse on Escape or outside pointer tap when expanded
   useEffect(() => {
     if (!expanded) return;
+
+    const targetWin = externalPipOpen && pipWindow ? pipWindow : window;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -110,13 +138,17 @@ export function NotchMiniPlayer() {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('pointerdown', handlePointerDown);
+    targetWin.addEventListener('keydown', handleKeyDown);
+    if (!externalPipOpen) {
+      window.addEventListener('pointerdown', handlePointerDown);
+    }
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('pointerdown', handlePointerDown);
+      targetWin.removeEventListener('keydown', handleKeyDown);
+      if (!externalPipOpen) {
+        window.removeEventListener('pointerdown', handlePointerDown);
+      }
     };
-  }, [expanded]);
+  }, [expanded, externalPipOpen, pipWindow]);
 
   // Desktop Electron / Tauri IPC bridge subscription for skip/stop
   useEffect(() => {
@@ -129,12 +161,12 @@ export function NotchMiniPlayer() {
     });
   }, []);
 
-  // Broadcast live notch payload to optional Electron/Tauri secondary notch window
+  // Broadcast live notch payload to optional Windows Electron/Tauri secondary notch window
   useEffect(() => {
     const targetWidth = expanded ? EXPANDED_WIDTH : COMPACT_WIDTH;
     const targetHeight = expanded ? 86 : 48;
     publishDesktopNotchState({
-      visible: notchVisible,
+      visible: desktopNotchVisible,
       expanded,
       width: targetWidth,
       height: targetHeight,
@@ -149,7 +181,7 @@ export function NotchMiniPlayer() {
       clickThroughTransparent: true,
     });
   }, [
-    notchVisible,
+    desktopNotchVisible,
     expanded,
     trackTitle,
     artistName,
@@ -172,6 +204,148 @@ export function NotchMiniPlayer() {
   const targetWidth = expanded ? EXPANDED_WIDTH : COMPACT_WIDTH;
   const marqueeActive = marqueeShiftPx > 0 && !shouldReduceMotion;
   const marqueeDurationSec = Math.max(6, Math.min(18, Math.round(marqueeShiftPx / 16) + 4));
+
+  const renderNotchBody = (isExternal: boolean) => (
+    <div
+      className={`flex items-center gap-2.5 px-3.5 ${
+        expanded ? 'py-2.5 min-h-[78px]' : isExternal ? 'min-h-[48px] h-full' : 'h-[48px]'
+      }`}
+    >
+      {/* Left: Track Title (11px gray, marquee if overflowing) + Synced Lyric / Artist (13px white) */}
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        aria-label={
+          expanded
+            ? 'Perkecil pemutar mini notch'
+            : 'Perluas pemutar mini notch untuk melihat lirik'
+        }
+        className="flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-white/70 rounded-md"
+      >
+        {/* Track Title Line */}
+        <div ref={titleViewportRef} className="w-full overflow-hidden">
+          <span
+            ref={titleMeasureRef}
+            style={
+              marqueeActive
+                ? ({
+                    '--sc-marquee-shift': `-${marqueeShiftPx}px`,
+                    animationDuration: `${marqueeDurationSec}s`,
+                  } as CSSProperties)
+                : undefined
+            }
+            className={`block whitespace-nowrap text-[11px] leading-[14px] text-[#9CA3AF] font-normal ${
+              marqueeActive ? 'sc-notch-marquee inline-block' : 'truncate'
+            }`}
+          >
+            {trackTitle}
+          </span>
+        </div>
+
+        {/* Lyric / Artist Line(s) */}
+        {expanded &&
+        (displayLines.mode === 'synced' || displayLines.mode === 'synced-intro') ? (
+          <div className="mt-1 space-y-0.5">
+            {displayLines.prev && (
+              <p className="text-[11px] leading-[15px] text-white/45 truncate">
+                {displayLines.prev}
+              </p>
+            )}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.p
+                key={displayLines.lineKey}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={lyricFadeTransition}
+                className="text-[13px] leading-[17px] text-[#FFFFFF] font-medium truncate"
+              >
+                {displayLines.active}
+              </motion.p>
+            </AnimatePresence>
+            {displayLines.next && (
+              <p className="text-[11px] leading-[15px] text-white/45 truncate">
+                {displayLines.next}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="mt-0.5 overflow-hidden">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.p
+                key={displayLines.lineKey}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={lyricFadeTransition}
+                className="text-[13px] leading-[17px] text-[#FFFFFF] font-medium truncate"
+              >
+                {displayLines.active}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+        )}
+      </button>
+
+      {/* Right: ONLY two Lucide controls — Skip and Stop (stroke 1.75, 28px tap area) */}
+      <div className="shrink-0 flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            nextTrack();
+          }}
+          aria-label="Lompat ke lagu berikutnya"
+          title="Lagu berikutnya"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white/80 transition-colors"
+        >
+          <SkipForward className="w-3.5 h-3.5" strokeWidth={1.75} />
+        </button>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            stopPlayback();
+            if (isExternal) {
+              closeWindowsExternalNotch();
+            }
+          }}
+          aria-label="Hentikan pemutaran dan sembunyikan notch"
+          title="Hentikan"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white/80 transition-colors"
+        >
+          <Square className="w-3.5 h-3.5" strokeWidth={1.75} />
+        </button>
+      </div>
+    </div>
+  );
+
+  if (externalPipOpen && pipWindow && currentTrack) {
+    return createPortal(
+      <div
+        ref={notchRef}
+        role="region"
+        aria-label="Pemutar mini notch eksternal Windows"
+        data-notch-expanded={expanded ? 'true' : 'false'}
+        onPointerEnter={(e) => {
+          if (e.pointerType !== 'touch') {
+            setExpanded(true);
+          }
+        }}
+        onPointerLeave={(e) => {
+          if (e.pointerType !== 'touch') {
+            setExpanded(false);
+          }
+        }}
+        className="w-full h-full min-h-[48px] bg-[#000000] select-none flex flex-col justify-center"
+      >
+        {renderNotchBody(true)}
+      </div>,
+      pipWindow.document.body,
+    );
+  }
 
   return (
     <div
@@ -228,117 +402,7 @@ export function NotchMiniPlayer() {
               <path d="M0 0 L0 14 A14 14 0 0 1 14 0 Z" fill="#000000" />
             </svg>
 
-            <div
-              className={`flex items-center gap-2.5 px-3.5 ${
-                expanded ? 'py-2.5 min-h-[78px]' : 'h-[48px]'
-              }`}
-            >
-              {/* Left: Track Title (11px gray, marquee if overflowing) + Synced Lyric / Artist (13px white) */}
-              <button
-                type="button"
-                onClick={() => setExpanded((prev) => !prev)}
-                aria-expanded={expanded}
-                aria-label={
-                  expanded
-                    ? 'Perkecil pemutar mini notch'
-                    : 'Perluas pemutar mini notch untuk melihat lirik'
-                }
-                className="flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-white/70 rounded-md"
-              >
-                {/* Track Title Line */}
-                <div ref={titleViewportRef} className="w-full overflow-hidden">
-                  <span
-                    ref={titleMeasureRef}
-                    style={
-                      marqueeActive
-                        ? ({
-                            '--sc-marquee-shift': `-${marqueeShiftPx}px`,
-                            animationDuration: `${marqueeDurationSec}s`,
-                          } as CSSProperties)
-                        : undefined
-                    }
-                    className={`block whitespace-nowrap text-[11px] leading-[14px] text-[#9CA3AF] font-normal ${
-                      marqueeActive ? 'sc-notch-marquee inline-block' : 'truncate'
-                    }`}
-                  >
-                    {trackTitle}
-                  </span>
-                </div>
-
-                {/* Lyric / Artist Line(s) */}
-                {expanded &&
-                (displayLines.mode === 'synced' || displayLines.mode === 'synced-intro') ? (
-                  <div className="mt-1 space-y-0.5">
-                    {displayLines.prev && (
-                      <p className="text-[11px] leading-[15px] text-white/45 truncate">
-                        {displayLines.prev}
-                      </p>
-                    )}
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.p
-                        key={displayLines.lineKey}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={lyricFadeTransition}
-                        className="text-[13px] leading-[17px] text-[#FFFFFF] font-medium truncate"
-                      >
-                        {displayLines.active}
-                      </motion.p>
-                    </AnimatePresence>
-                    {displayLines.next && (
-                      <p className="text-[11px] leading-[15px] text-white/45 truncate">
-                        {displayLines.next}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="mt-0.5 overflow-hidden">
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.p
-                        key={displayLines.lineKey}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={lyricFadeTransition}
-                        className="text-[13px] leading-[17px] text-[#FFFFFF] font-medium truncate"
-                      >
-                        {displayLines.active}
-                      </motion.p>
-                    </AnimatePresence>
-                  </div>
-                )}
-              </button>
-
-              {/* Right: ONLY two Lucide controls — Skip and Stop (stroke 1.75, 28px tap area) */}
-              <div className="shrink-0 flex items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    nextTrack();
-                  }}
-                  aria-label="Lompat ke lagu berikutnya"
-                  title="Lagu berikutnya"
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white/80 transition-colors"
-                >
-                  <SkipForward className="w-3.5 h-3.5" strokeWidth={1.75} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    stopPlayback();
-                  }}
-                  aria-label="Hentikan pemutaran dan sembunyikan notch"
-                  title="Hentikan"
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white/80 transition-colors"
-                >
-                  <Square className="w-3.5 h-3.5" strokeWidth={1.75} />
-                </button>
-              </div>
-            </div>
+            {renderNotchBody(false)}
           </motion.div>
         )}
       </AnimatePresence>
