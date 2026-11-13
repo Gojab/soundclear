@@ -18,7 +18,12 @@ import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import type { HomeSectionId } from '../types/music';
+import type { HomeSectionId, NotchDisplayMode } from '../types/music';
+import { listAvailableNotchMonitors } from '../utils/notchDesktopBridge';
+import {
+  DEFAULT_NOTCH_MONITOR_OPTIONS,
+  type NotchMonitorOption,
+} from '../utils/notchPlayer';
 
 const SECTION_LABELS: Record<HomeSectionId, string> = {
   continue: 'Lanjutkan (Terakhir Diputar)',
@@ -39,9 +44,18 @@ interface SettingsPageProps {
 export function SettingsPage({ initialTab = 'general', focusEq = false }: SettingsPageProps) {
   const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'sound'>(initialTab);
   const [syncing, setSyncing] = useState(false);
+  const [monitorOptions, setMonitorOptions] = useState<NotchMonitorOption[]>(
+    DEFAULT_NOTCH_MONITOR_OPTIONS,
+  );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const eqSectionRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    void listAvailableNotchMonitors().then((opts) => {
+      if (opts.length > 0) setMonitorOptions(opts);
+    });
+  }, []);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -60,6 +74,8 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
   const dataSaver = useSettingsStore((s) => s.dataSaver);
   const showRightPanel = useSettingsStore((s) => s.showRightPanel);
   const homeSectionOrder = useSettingsStore((s) => s.homeSectionOrder);
+  const notchDisplayMode = useSettingsStore((s) => s.notchDisplayMode);
+  const notchMonitor = useSettingsStore((s) => s.notchMonitor);
 
   const updateSetting = useSettingsStore((s) => s.updateSetting);
   const moveHomeSection = useSettingsStore((s) => s.moveHomeSection);
@@ -319,6 +335,80 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     }`}
                   />
                 </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Pemutar Mini Notch */}
+          <section className="rounded-xl bg-[#181818] border border-white/[0.07] p-5 space-y-4">
+            <div>
+              <h2 className="text-base font-bold text-white">Pemutar Mini Notch</h2>
+              <p className="text-xs text-white/55 mt-0.5">
+                Atur kemunculan notch atas dan monitor target untuk pembungkus desktop Electron/Tauri
+              </p>
+            </div>
+
+            <div className="space-y-4 pt-1 border-t border-white/[0.07]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3">
+                <div className="min-w-0">
+                  <p id="lbl-notch-mode" className="text-sm font-medium text-white">
+                    Tampilkan notch
+                  </p>
+                  <p className="text-xs text-white/55 mt-0.5">
+                    Pilih kapan pemutar mini notch tampil saat lagu diputar
+                  </p>
+                </div>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="lbl-notch-mode"
+                  className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/[0.06] border border-white/[0.08] shrink-0 self-start sm:self-auto"
+                >
+                  {(
+                    [
+                      { value: 'always', label: 'Selalu' },
+                      { value: 'background', label: 'Saat di latar' },
+                      { value: 'off', label: 'Mati' },
+                    ] as Array<{ value: NotchDisplayMode; label: string }>
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={notchDisplayMode === opt.value}
+                      onClick={() => updateSetting('notchDisplayMode', opt.value)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                        notchDisplayMode === opt.value
+                          ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'
+                          : 'text-white/70 hover:text-white'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-white/[0.07]">
+                <div className="min-w-0">
+                  <label htmlFor="select-notch-monitor" className="text-sm font-medium text-white block">
+                    Pilihan monitor (Desktop)
+                  </label>
+                  <p className="text-xs text-white/55 mt-0.5">
+                    Monitor tempat jendela notch melayang saat dibungkus Electron atau Tauri
+                  </p>
+                </div>
+                <select
+                  id="select-notch-monitor"
+                  value={notchMonitor}
+                  onChange={(e) => updateSetting('notchMonitor', e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-white/[0.07] border border-white/[0.1] text-xs text-white focus:outline-none focus:ring-2 focus:ring-[#2EE6A6] shrink-0"
+                >
+                  {monitorOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id} className="bg-[#181818] text-white">
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </section>

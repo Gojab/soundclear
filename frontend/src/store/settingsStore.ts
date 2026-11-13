@@ -35,6 +35,10 @@ import {
   isSafeBackgroundImageUrl,
   normalizeCustomBackground,
 } from '../utils/backgroundTheme';
+import {
+  normalizeNotchDisplayMode,
+  normalizeNotchMonitor,
+} from '../utils/notchPlayer';
 
 export type AudioSettingsSection =
   | 'streaming'
@@ -88,6 +92,8 @@ function persistSettings(s: UserSettings): void {
     youtubeSound: s.youtubeSound,
     episodePlaybackRates: s.episodePlaybackRates,
     customBackground: safeBackgroundMeta,
+    notchDisplayMode: normalizeNotchDisplayMode(s.notchDisplayMode),
+    notchMonitor: normalizeNotchMonitor(s.notchMonitor),
   };
   try {
     window.localStorage.setItem('soundclear_user_settings_v1', JSON.stringify(payload));
@@ -209,6 +215,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           youtubeSound: yt,
           episodePlaybackRates: stored.episodePlaybackRates || {},
           customBackground,
+          notchDisplayMode: normalizeNotchDisplayMode(stored.notchDisplayMode),
+          notchMonitor: normalizeNotchMonitor(stored.notchMonitor),
           localProfile: effectiveProfile,
           hydrated: true,
         });

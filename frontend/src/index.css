@@ -161,6 +161,28 @@ input[type="range"].sc-range-visible::-moz-range-thumb {
   border: 2px solid #06130e;
 }
 
+@keyframes sc-notch-marquee {
+  0%,
+  16% {
+    transform: translateX(0);
+  }
+  48%,
+  64% {
+    transform: translateX(var(--sc-marquee-shift, 0px));
+  }
+  96%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.sc-notch-marquee {
+  animation-name: sc-notch-marquee;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

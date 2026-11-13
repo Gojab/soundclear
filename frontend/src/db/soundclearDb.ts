@@ -23,6 +23,12 @@ import {
   isSafeBackgroundImageUrl,
   normalizeCustomBackground,
 } from '../utils/backgroundTheme';
+import {
+  DEFAULT_NOTCH_DISPLAY_MODE,
+  DEFAULT_NOTCH_MONITOR,
+  normalizeNotchDisplayMode,
+  normalizeNotchMonitor,
+} from '../utils/notchPlayer';
 
 export const CUSTOM_BACKGROUND_IMAGE_KV_KEY = 'custom_background_image';
 
@@ -118,6 +124,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   youtubeSound: DEFAULT_YOUTUBE_SOUND,
   episodePlaybackRates: {},
   customBackground: { ...DEFAULT_CUSTOM_BACKGROUND },
+  notchDisplayMode: DEFAULT_NOTCH_DISPLAY_MODE,
+  notchMonitor: DEFAULT_NOTCH_MONITOR,
 };
 
 export class SoundClearDatabase extends Dexie {
@@ -372,6 +380,8 @@ export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload
         ...(rawSettings.youtubeSound || {}),
       },
       customBackground: normalizeCustomBackground(rawSettings.customBackground, null),
+      notchDisplayMode: normalizeNotchDisplayMode(rawSettings.notchDisplayMode),
+      notchMonitor: normalizeNotchMonitor(rawSettings.notchMonitor),
     },
     customBackgroundImage: customBgImage,
     playerSession: (sessionRec?.value as PersistedPlayerSession) || null,
@@ -461,6 +471,8 @@ export async function importAllSoundClearData(payload: unknown): Promise<void> {
               ...(data.settings.youtubeSound || {}),
             },
             customBackground: normalizedBg,
+            notchDisplayMode: normalizeNotchDisplayMode(data.settings.notchDisplayMode),
+            notchMonitor: normalizeNotchMonitor(data.settings.notchMonitor),
           },
         });
       }

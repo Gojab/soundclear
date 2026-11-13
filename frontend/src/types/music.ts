@@ -491,6 +491,8 @@ export interface CustomBackgroundSettings {
   panelGlass: boolean;
 }
 
+export type NotchDisplayMode = 'always' | 'background' | 'off';
+
 export interface UserSettings {
   hideExplicit: boolean;
   autoplay: boolean;
@@ -500,6 +502,8 @@ export interface UserSettings {
   youtubeSound: YouTubeSoundSettings;
   episodePlaybackRates: Record<string, number>;
   customBackground: CustomBackgroundSettings;
+  notchDisplayMode: NotchDisplayMode;
+  notchMonitor: string;
 }
 
 export type HomeSectionId =

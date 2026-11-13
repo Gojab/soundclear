@@ -30,6 +30,7 @@ import type { MediaItem } from '../types/music';
 import { clampYoutubeVolume, PLAYBACK_RATE_OPTIONS } from '../utils/audioMath';
 import { hasActiveCustomBackground } from '../utils/backgroundTheme';
 import { formatTime, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
+import { useNotchVisibility } from '../utils/useNotchVisibility';
 import { ArtworkImage } from './ArtworkImage';
 
 interface PlayerBarProps {
@@ -54,7 +55,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const rightPanelTab = usePlayerStore((s) => s.rightPanelTab);
-  const floatingMiniOpen = usePlayerStore((s) => s.floatingMiniOpen);
+  const { notchVisible } = useNotchVisibility();
   const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
   const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
@@ -430,12 +431,13 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
 
         <button
           type="button"
-          onClick={() => setFloatingMiniOpen(!floatingMiniOpen)}
+          onClick={() => setFloatingMiniOpen(!notchVisible)}
           disabled={!currentTrack}
-          aria-label="Pemutar mini desktop"
-          title="Pemutar Mini / PiP"
+          aria-label={notchVisible ? 'Sembunyikan pemutar mini notch' : 'Tampilkan pemutar mini notch'}
+          aria-pressed={notchVisible}
+          title="Pemutar Mini Notch"
           className={`hidden xl:flex w-8 h-8 rounded-full items-center justify-center transition-colors disabled:opacity-35 ${
-            floatingMiniOpen ? 'text-[#2EE6A6]' : 'text-white/65 hover:text-white'
+            notchVisible ? 'text-[#2EE6A6]' : 'text-white/65 hover:text-white'
           }`}
         >
           <PictureInPicture2 className="w-4 h-4" strokeWidth={1.85} />

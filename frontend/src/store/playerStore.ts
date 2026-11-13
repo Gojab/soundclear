@@ -60,6 +60,8 @@ interface PlayerState {
   karaokeOpen: boolean;
   fullscreenNowPlaying: boolean;
   floatingMiniOpen: boolean;
+  notchManuallyHidden: boolean;
+  hasActiveSessionPlayback: boolean;
 
   seekVersion: number;
   pendingSeekSeconds: number | null;
@@ -97,6 +99,7 @@ interface PlayerState {
 
   setIsPlaying: (playing: boolean) => void;
   togglePlayPause: () => void;
+  stopPlayback: () => void;
   setIsBuffering: (buffering: boolean) => void;
   setProgress: (currentTime: number, duration?: number) => void;
   requestSeek: (seconds: number) => void;
@@ -284,6 +287,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   karaokeOpen: false,
   fullscreenNowPlaying: false,
   floatingMiniOpen: false,
+  notchManuallyHidden: false,
+  hasActiveSessionPlayback: false,
 
   seekVersion: 0,
   pendingSeekSeconds: null,
@@ -335,6 +340,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           pendingSeekSeconds: s.currentTrack && resumedTime > 2 ? resumedTime : null,
           rightPanelOpen: settingsRightPanel,
           isPlaying: Boolean(s.currentTrack && ytSound.autoStartOnOpen),
+          hasActiveSessionPlayback: Boolean(s.currentTrack && ytSound.autoStartOnOpen),
+          notchManuallyHidden: false,
         });
 
         if (s.currentTrack) {
@@ -385,6 +392,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      notchManuallyHidden: false,
+      hasActiveSessionPlayback: true,
       rightPanelOpen: options?.openPanel ? true : state.rightPanelOpen,
     }));
 
@@ -421,6 +430,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      notchManuallyHidden: false,
+      hasActiveSessionPlayback: true,
     }));
 
     persistPlayerSession(get(), true);
@@ -452,6 +463,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      notchManuallyHidden: false,
+      hasActiveSessionPlayback: true,
     }));
     persistPlayerSession(get(), true);
     void hydrateTrackContext(target, false, get, set);
@@ -482,6 +495,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      notchManuallyHidden: false,
+      hasActiveSessionPlayback: true,
     }));
     persistPlayerSession(get(), true);
     void hydrateTrackContext(target, false, get, set);
@@ -574,11 +589,39 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     persistPlayerSession(get(), true);
   },
 
-  setIsPlaying: (playing) => set({ isPlaying: playing }),
+  setIsPlaying: (playing) =>
+    set((state) => ({
+      isPlaying: playing,
+      notchManuallyHidden: playing ? false : state.notchManuallyHidden,
+      hasActiveSessionPlayback: playing ? true : state.hasActiveSessionPlayback,
+    })),
 
   togglePlayPause: () => {
     if (!get().currentTrack) return;
-    set((state) => ({ isPlaying: !state.isPlaying }));
+    set((state) => {
+      const nextPlaying = !state.isPlaying;
+      return {
+        isPlaying: nextPlaying,
+        notchManuallyHidden: nextPlaying ? false : state.notchManuallyHidden,
+        hasActiveSessionPlayback: nextPlaying ? true : state.hasActiveSessionPlayback,
+      };
+    });
+  },
+
+  stopPlayback: () => {
+    const state = get();
+    if (!state.currentTrack) return;
+    set({
+      isPlaying: false,
+      isBuffering: false,
+      currentTime: 0,
+      pendingSeekSeconds: 0,
+      seekVersion: state.seekVersion + 1,
+      floatingMiniOpen: false,
+      notchManuallyHidden: true,
+      hasActiveSessionPlayback: false,
+    });
+    persistPlayerSession(get(), true);
   },
 
   setIsBuffering: (buffering) => set({ isBuffering: buffering }),
@@ -730,6 +773,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         selectedQualityOverride: null,
         webAudioWarning: null,
         bufferingStallCount: 0,
+        notchManuallyHidden: false,
+        hasActiveSessionPlayback: true,
       });
       persistPlayerSession(get(), true);
       void hydrateTrackContext(target, false, get, set);
@@ -782,6 +827,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      notchManuallyHidden: false,
+      hasActiveSessionPlayback: true,
     });
     persistPlayerSession(get(), true);
     void hydrateTrackContext(prev, false, get, set);
@@ -830,7 +877,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setMobileExpanded: (expanded) => set({ mobileExpanded: expanded }),
   setKaraokeOpen: (open) => set({ karaokeOpen: open }),
   setFullscreenNowPlaying: (open) => set({ fullscreenNowPlaying: open }),
-  setFloatingMiniOpen: (open) => set({ floatingMiniOpen: open }),
+  setFloatingMiniOpen: (open) =>
+    set({
+      floatingMiniOpen: open,
+      notchManuallyHidden: !open,
+    }),
   setPlayerError: (error) => set({ playerError: error }),
 
   setActiveStreamMeta: (activeStreamMeta) => set({ activeStreamMeta }),

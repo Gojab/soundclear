@@ -17,13 +17,13 @@ import {
 import { fetchAccountStatus, fetchSuggest } from './api/client';
 import { CustomBackgroundLayer } from './components/CustomBackgroundLayer';
 import {
-  FloatingMiniPlayerController,
   FullscreenKaraokeModal,
   FullscreenNowPlayingModal,
 } from './components/FullscreenViews';
 import { Footer } from './components/Footer';
 import { LocalAudioEngine } from './components/LocalAudioEngine';
 import { MobileShell } from './components/MobileShell';
+import { NotchMiniPlayer } from './components/NotchMiniPlayer';
 import { PlayerBar } from './components/PlayerBar';
 import { PlaylistModal } from './components/PlaylistModal';
 import { RightPanel } from './components/RightPanel';
@@ -50,6 +50,7 @@ import { usePlayerStore } from './store/playerStore';
 import { useSettingsStore } from './store/settingsStore';
 import { hasActiveCustomBackground } from './utils/backgroundTheme';
 import { isExcludedRegionalText } from './utils/playerLogic';
+import { useNotchVisibility } from './utils/useNotchVisibility';
 import type { LocalPlaylist, MediaItem, SearchFilter } from './types/music';
 
 export default function App() {
@@ -79,6 +80,7 @@ export default function App() {
   const customBackground = useSettingsStore((s) => s.customBackground);
   const bgActive = hasActiveCustomBackground(customBackground);
   const glassPanels = bgActive && customBackground.panelGlass;
+  const { notchVisible } = useNotchVisibility();
 
   useEffect(() => {
     const boot = async () => {
@@ -195,14 +197,18 @@ export default function App() {
     >
       <CustomBackgroundLayer />
 
-      {/* Windows Desktop Top Bar */}
+      {/* Windows Desktop Top Bar — reserves clearance when Notch Mini Player is visible */}
       <header
-        className={`relative hidden md:flex items-center justify-between gap-4 h-15 px-3 shrink-0 z-20 transition-colors duration-300 ${
+        className={`relative hidden md:flex items-center justify-between gap-4 px-3 shrink-0 z-20 transition-[background-color,padding,height] duration-300 ${
+          notchVisible ? 'pt-[54px] h-[114px]' : 'h-15'
+        } ${
           glassPanels
             ? 'bg-black/40 backdrop-blur-md border-b border-white/[0.06]'
             : bgActive
               ? 'bg-black/75 backdrop-blur-sm'
-              : 'bg-black'
+              : notchVisible
+                ? 'bg-[#111114]'
+                : 'bg-black'
         }`}
       >
         {/* Left: Brand & History Navigation */}
@@ -485,9 +491,23 @@ export default function App() {
             }}
           />
 
+          {/* Mobile Notch safe-area clearance spacer */}
+          {notchVisible && (
+            <div
+              aria-hidden="true"
+              className="md:hidden shrink-0"
+              style={{ height: 'calc(env(safe-area-inset-top, 0px) + 52px)' }}
+            />
+          )}
+
           {/* Compact Mobile Header (hidden on Windows/desktop) */}
           <header
-            className={`md:hidden sticky top-0 z-20 flex items-center justify-between gap-4 px-4 py-3 backdrop-blur-xl border-b border-white/[0.06] shrink-0 ${
+            style={
+              notchVisible
+                ? { top: 'calc(env(safe-area-inset-top, 0px) + 52px)' }
+                : { top: 'env(safe-area-inset-top, 0px)' }
+            }
+            className={`md:hidden sticky z-20 flex items-center justify-between gap-4 px-4 py-3 backdrop-blur-xl border-b border-white/[0.06] shrink-0 ${
               glassPanels ? 'bg-[#121212]/62' : 'bg-[#121212]/85'
             }`}
           >
@@ -652,10 +672,10 @@ export default function App() {
       {/* Global Context Menu + Song Credits Modal + Action Toast */}
       <GlobalTrackContextMenu onAddToPlaylist={openAddToPlaylistModal} />
 
-      {/* Fullscreen Karaoke, Fullscreen Now Playing, and Desktop PiP / Mini Player */}
+      {/* Fullscreen Karaoke, Fullscreen Now Playing, and Top Notch Mini Player */}
       <FullscreenKaraokeModal />
       <FullscreenNowPlayingModal />
-      <FloatingMiniPlayerController />
+      <NotchMiniPlayer />
 
       {/* Persistent Hidden Streaming Audio Bridge + Web Audio API Local Engine */}
       <YouTubePlayerBridge />
