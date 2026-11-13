@@ -177,9 +177,36 @@ export function supportsDocumentPictureInPicture(winLike?: unknown): boolean {
   return typeof w?.documentPictureInPicture?.requestWindow === 'function';
 }
 
+export function isTopLevelBrowsingContext(winLike?: unknown): boolean {
+  const w =
+    (winLike as { self?: unknown; top?: unknown } | undefined) ??
+    (typeof window !== 'undefined' ? window : undefined);
+  if (!w) return true;
+  try {
+    return w.self === w.top;
+  } catch {
+    return false;
+  }
+}
+
+export interface VideoPiPDocumentLike {
+  pictureInPictureEnabled?: boolean;
+}
+
+export function supportsVideoPictureInPicture(docLike?: unknown): boolean {
+  const d =
+    (docLike as VideoPiPDocumentLike | undefined) ??
+    (typeof document !== 'undefined' ? (document as unknown as VideoPiPDocumentLike) : undefined);
+  if (!d?.pictureInPictureEnabled) return false;
+  if (typeof HTMLVideoElement !== 'undefined') {
+    return typeof HTMLVideoElement.prototype.requestPictureInPicture === 'function';
+  }
+  return true;
+}
+
 export interface WindowsExternalNotchSupport {
   allowed: boolean;
-  mode: 'desktop-ipc' | 'document-pip' | 'none';
+  mode: 'desktop-ipc' | 'document-pip' | 'video-pip' | 'none';
   reason: 'ok' | 'windows-only' | 'unsupported-browser';
 }
 
@@ -187,6 +214,8 @@ export function resolveWindowsExternalNotchSupport(input: {
   isWindows: boolean;
   hasDesktopHost: boolean;
   hasDocumentPiP: boolean;
+  hasVideoPiP?: boolean;
+  isTopLevel?: boolean;
 }): WindowsExternalNotchSupport {
   if (!input.isWindows) {
     return {
@@ -202,10 +231,17 @@ export function resolveWindowsExternalNotchSupport(input: {
       reason: 'ok',
     };
   }
-  if (input.hasDocumentPiP) {
+  if (input.hasDocumentPiP && input.isTopLevel !== false) {
     return {
       allowed: true,
       mode: 'document-pip',
+      reason: 'ok',
+    };
+  }
+  if (input.hasVideoPiP) {
+    return {
+      allowed: true,
+      mode: 'video-pip',
       reason: 'ok',
     };
   }

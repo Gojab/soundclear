@@ -26,13 +26,15 @@ import {
 import {
   closeWindowsExternalNotch,
   openWindowsExternalNotch,
-  useExternalPiPWindow,
+  useExternalPiPState,
 } from '../utils/notchExternalPiP';
 import {
   DEFAULT_NOTCH_MONITOR_OPTIONS,
+  isTopLevelBrowsingContext,
   isWindowsPlatform,
   resolveWindowsExternalNotchSupport,
   supportsDocumentPictureInPicture,
+  supportsVideoPictureInPicture,
   type NotchMonitorOption,
 } from '../utils/notchPlayer';
 
@@ -96,12 +98,14 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const setRightPanelOpen = usePlayerStore((s) => s.setRightPanelOpen);
   const hydratePlayer = usePlayerStore((s) => s.hydrate);
-  const pipWindow = useExternalPiPWindow();
-  const externalPipOpen = Boolean(pipWindow && !pipWindow.closed);
+  const pipState = useExternalPiPState();
+  const externalPipOpen = pipState.open;
   const windowsExternalSupport = resolveWindowsExternalNotchSupport({
     isWindows: isWindowsPlatform(),
     hasDesktopHost: isDesktopNotchHost(),
     hasDocumentPiP: supportsDocumentPictureInPicture(),
+    hasVideoPiP: supportsVideoPictureInPicture(),
+    isTopLevel: isTopLevelBrowsingContext(),
   });
 
   const hiddenTrackIds = useLibraryStore((s) => s.hiddenTrackIds);
@@ -381,16 +385,20 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   <p className="text-xs text-white/55 mt-0.5">
                     {windowsExternalSupport.mode === 'desktop-ipc'
                       ? 'Aktif otomatis di jendela desktop Windows (tanpa bingkai, selalu di atas, area transparan tembus klik).'
-                      : windowsExternalSupport.mode === 'document-pip'
+                      : windowsExternalSupport.mode === 'document-pip' ||
+                          windowsExternalSupport.mode === 'video-pip'
                         ? externalPipOpen
                           ? 'Jendela pemutar mini Windows sedang aktif mengambang di luar browser.'
-                          : 'Keluarkan pemutar mini menjadi jendela melayang di luar browser Windows (Chrome / Edge).'
+                          : windowsExternalSupport.mode === 'video-pip'
+                            ? 'Keluarkan pemutar mini mengambang di luar browser Windows (mode PiP kompatibel pratinjau & tab).'
+                            : 'Keluarkan pemutar mini menjadi jendela melayang di luar browser Windows (Chrome / Edge).'
                         : windowsExternalSupport.reason === 'windows-only'
                           ? 'Fitur pemutar mini keluar jendela hanya tersedia khusus untuk sistem operasi Windows dan tidak ditampilkan di dalam web.'
-                          : 'Browser Windows ini belum mendukung Document Picture-in-Picture; gunakan Chrome/Edge terbaru atau aplikasi SoundClear Desktop Windows.'}
+                          : 'Browser Windows ini belum mendukung Picture-in-Picture; gunakan Chrome/Edge terbaru atau aplikasi SoundClear Desktop Windows.'}
                   </p>
                 </div>
-                {windowsExternalSupport.mode === 'document-pip' ? (
+                {windowsExternalSupport.mode === 'document-pip' ||
+                windowsExternalSupport.mode === 'video-pip' ? (
                   <button
                     type="button"
                     disabled={!currentTrack}
@@ -401,7 +409,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                         void openWindowsExternalNotch().then((res) => {
                           if (!res.ok) {
                             showToast(
-                              'Gagal membuka jendela pemutar mini Windows. Pastikan izin pop-out aktif atau buka di tab langsung.',
+                              'Gagal membuka jendela pemutar mini Windows. Pastikan izin Picture-in-Picture browser aktif.',
                             );
                           }
                         });

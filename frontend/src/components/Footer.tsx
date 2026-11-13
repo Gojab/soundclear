@@ -110,15 +110,6 @@ export function Footer() {
             ),
         },
         {
-          label: 'Iklan',
-          onClick: () =>
-            openInfo(
-              'Informasi Iklan',
-              'Kemitraan zhafx.corp',
-              'Solusi promosi rilisan musik dan kampanye audio yang relevan bagi pendengar.',
-            ),
-        },
-        {
           label: 'Investors',
           onClick: () =>
             openInfo(
@@ -260,11 +251,6 @@ export function Footer() {
       label: 'Cookie',
       title: 'Kebijakan Cookie & Penyimpanan Lokal',
       body: 'SoundClear memanfaatkan IndexedDB, Cache Storage, dan LocalStorage browser untuk menyimpan preferensi DSP, playlist, dan antrean pemutaran terakhir.',
-    },
-    {
-      label: 'Tentang Iklan',
-      title: 'Tentang Iklan',
-      body: 'SoundClear menjaga pengalaman mendengarkan tetap bersih tanpa pop-up mengganggu dan mengutamakan kontrol penuh pengguna atas pemutaran audio.',
     },
     {
       label: 'Aksesibilitas',

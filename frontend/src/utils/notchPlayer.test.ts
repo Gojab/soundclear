@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { LyricsResponse, MediaItem } from '../types/music';
 import {
+  isTopLevelBrowsingContext,
   isWindowsPlatform,
   normalizeNotchDisplayMode,
   normalizeNotchMonitor,
@@ -9,6 +10,7 @@ import {
   resolveWindowsExternalNotchSupport,
   shouldShowNotchMiniPlayer,
   supportsDocumentPictureInPicture,
+  supportsVideoPictureInPicture,
 } from './notchPlayer';
 
 const SAMPLE_TRACK: MediaItem = {
@@ -291,5 +293,38 @@ test('shouldShowNotchMiniPlayer stays hidden on non-Windows platforms even when 
       isWindows: false,
     }),
     false,
+  );
+});
+
+test('resolveWindowsExternalNotchSupport falls back to video-pip inside iframes or when Document PiP is unavailable', () => {
+  const selfObj = {};
+  const otherObj = {};
+  assert.equal(isTopLevelBrowsingContext({ self: selfObj, top: selfObj }), true);
+  assert.equal(isTopLevelBrowsingContext({ self: selfObj, top: otherObj }), false);
+  assert.equal(supportsVideoPictureInPicture({ pictureInPictureEnabled: true }), true);
+  assert.equal(supportsVideoPictureInPicture({ pictureInPictureEnabled: false }), false);
+
+  // Inside an iframe on Windows, Document PiP is blocked by browser spec so video-pip is selected
+  assert.deepEqual(
+    resolveWindowsExternalNotchSupport({
+      isWindows: true,
+      hasDesktopHost: false,
+      hasDocumentPiP: true,
+      hasVideoPiP: true,
+      isTopLevel: false,
+    }),
+    { allowed: true, mode: 'video-pip', reason: 'ok' },
+  );
+
+  // Top-level Windows Chrome/Edge prefers Document PiP
+  assert.deepEqual(
+    resolveWindowsExternalNotchSupport({
+      isWindows: true,
+      hasDesktopHost: false,
+      hasDocumentPiP: true,
+      hasVideoPiP: true,
+      isTopLevel: true,
+    }),
+    { allowed: true, mode: 'document-pip', reason: 'ok' },
   );
 });

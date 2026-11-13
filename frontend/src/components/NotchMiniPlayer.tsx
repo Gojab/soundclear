@@ -22,9 +22,11 @@ import {
 } from '../utils/notchDesktopBridge';
 import {
   closeWindowsExternalNotch,
+  renderVideoPiPFrame,
   resizeWindowsExternalNotch,
+  syncVideoPiPPlayback,
   updateWindowsExternalNotchTitle,
-  useExternalPiPWindow,
+  useExternalPiPState,
 } from '../utils/notchExternalPiP';
 import { isWindowsPlatform, resolveNotchDisplayLines } from '../utils/notchPlayer';
 import { formatArtists, formatTime, getPlayableVideoId } from '../utils/playerLogic';
@@ -60,9 +62,16 @@ export function NotchMiniPlayer() {
   const notchMonitor = useSettingsStore((s) => s.notchMonitor);
 
   const { desktopNotchVisible } = useNotchVisibility();
-  const pipWindow = useExternalPiPWindow();
+  const pipState = useExternalPiPState();
+  const pipWindow = pipState.mode === 'document-pip' ? pipState.window : null;
   const isWindows = isWindowsPlatform();
-  const externalPipOpen = Boolean(isWindows && pipWindow && !pipWindow.closed && currentTrack);
+  const documentPipOpen = Boolean(
+    isWindows && pipState.open && pipWindow && !pipWindow.closed && currentTrack,
+  );
+  const videoPipOpen = Boolean(
+    isWindows && pipState.open && pipState.mode === 'video-pip' && currentTrack,
+  );
+  const externalPipOpen = documentPipOpen || videoPipOpen;
 
   const videoId = getPlayableVideoId(currentTrack);
   const artistName = currentTrack ? formatArtists(currentTrack.artists) : '';
@@ -93,38 +102,73 @@ export function NotchMiniPlayer() {
 
   // Close external Windows PiP automatically if track clears, stopped, or non-Windows
   useEffect(() => {
-    if (pipWindow && (!isWindows || !currentTrack || notchManuallyHidden)) {
+    if (pipState.open && (!isWindows || !currentTrack || notchManuallyHidden)) {
       closeWindowsExternalNotch();
     }
-  }, [pipWindow, isWindows, currentTrack, notchManuallyHidden]);
+  }, [pipState.open, isWindows, currentTrack, notchManuallyHidden]);
 
-  // Sync external Windows PiP window document title
+  // Keep Video PiP canvas card updated in real time (used inside iframes or fallback)
   useEffect(() => {
-    if (!externalPipOpen || !currentTrack) return;
+    if (!videoPipOpen || !currentTrack) return;
+    renderVideoPiPFrame({
+      title: trackTitle,
+      artist: artistName,
+      prevLine: displayLines.prev,
+      activeLine: displayLines.active,
+      nextLine: displayLines.next,
+      hasSyncedLyrics: displayLines.mode === 'synced' || displayLines.mode === 'synced-intro',
+      currentTime,
+      duration: duration > 0 ? duration : currentTrack.durationSeconds || 0,
+      isPlaying,
+      thumbnail: currentTrack.thumbnail ?? null,
+    });
+  }, [
+    videoPipOpen,
+    currentTrack,
+    trackTitle,
+    artistName,
+    displayLines.prev,
+    displayLines.active,
+    displayLines.next,
+    displayLines.mode,
+    currentTime,
+    duration,
+    isPlaying,
+  ]);
+
+  // Keep Video PiP native Play/Pause overlay icon aligned with player state
+  useEffect(() => {
+    if (!videoPipOpen) return;
+    syncVideoPiPPlayback(isPlaying);
+  }, [videoPipOpen, isPlaying]);
+
+  // Sync external Windows Document PiP window document title
+  useEffect(() => {
+    if (!documentPipOpen || !currentTrack) return;
     updateWindowsExternalNotchTitle(
       artistName ? `${trackTitle} — ${artistName} | SoundClear` : `${trackTitle} | SoundClear`,
     );
-  }, [externalPipOpen, currentTrack, trackTitle, artistName]);
+  }, [documentPipOpen, currentTrack, trackTitle, artistName]);
 
   // Resize external Windows Document PiP window when compact/expanded changes
   useEffect(() => {
-    if (!externalPipOpen) return;
+    if (!documentPipOpen) return;
     resizeWindowsExternalNotch(
       expanded ? EXPANDED_WIDTH : COMPACT_WIDTH,
       expanded ? EXPANDED_HEIGHT : COMPACT_HEIGHT,
     );
-  }, [externalPipOpen, expanded]);
+  }, [documentPipOpen, expanded]);
 
   // Reset expanded state when external window closes
   useEffect(() => {
-    if (!externalPipOpen) {
+    if (!documentPipOpen) {
       setExpanded(false);
     }
-  }, [externalPipOpen]);
+  }, [documentPipOpen]);
 
   // Measure title overflow for smooth marquee only when longer than container
   useLayoutEffect(() => {
-    if (!externalPipOpen) {
+    if (!documentPipOpen) {
       setMarqueeShiftPx(0);
       return;
     }
@@ -147,11 +191,11 @@ export function NotchMiniPlayer() {
       ro.observe(titleViewportRef.current);
     }
     return () => ro?.disconnect();
-  }, [externalPipOpen, trackTitle, expanded]);
+  }, [documentPipOpen, trackTitle, expanded]);
 
-  // Collapse on Escape inside external PiP window
+  // Collapse on Escape inside external Document PiP window
   useEffect(() => {
-    if (!expanded || !externalPipOpen || !pipWindow) return;
+    if (!expanded || !documentPipOpen || !pipWindow) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -164,7 +208,7 @@ export function NotchMiniPlayer() {
     return () => {
       pipWindow.removeEventListener('keydown', handleKeyDown);
     };
-  }, [expanded, externalPipOpen, pipWindow]);
+  }, [expanded, documentPipOpen, pipWindow]);
 
   // Desktop Electron / Tauri IPC bridge subscription (Windows only)
   useEffect(() => {
@@ -218,7 +262,7 @@ export function NotchMiniPlayer() {
     notchMonitor,
   ]);
 
-  if (!externalPipOpen || !pipWindow || !currentTrack) {
+  if (!documentPipOpen || !pipWindow || !currentTrack) {
     return null;
   }
 

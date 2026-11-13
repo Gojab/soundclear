@@ -1,5 +1,5 @@
 const path = require('node:path');
-const { app, BrowserWindow, dialog, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, screen, session } = require('electron');
 
 if (process.platform !== 'win32') {
   app.whenReady().then(() => {
@@ -167,6 +167,19 @@ function createWindows() {
 
 app.whenReady().then(() => {
   if (process.platform !== 'win32') return;
+
+  session.defaultSession.webRequest.onBeforeRequest(
+    {
+      urls: [
+        '*://*.doubleclick.net/*',
+        '*://*.googleadservices.com/*',
+        '*://*.googlesyndication.com/*',
+      ],
+    },
+    (_details, callback) => {
+      callback({ cancel: true });
+    },
+  );
 
   createWindows();
 

@@ -35,12 +35,14 @@ import { isDesktopNotchHost } from '../utils/notchDesktopBridge';
 import {
   closeWindowsExternalNotch,
   openWindowsExternalNotch,
-  useExternalPiPWindow,
+  useExternalPiPState,
 } from '../utils/notchExternalPiP';
 import {
-  resolveWindowsExternalNotchSupport,
+  isTopLevelBrowsingContext,
   isWindowsPlatform,
+  resolveWindowsExternalNotchSupport,
   supportsDocumentPictureInPicture,
+  supportsVideoPictureInPicture,
 } from '../utils/notchPlayer';
 import { useNotchVisibility } from '../utils/useNotchVisibility';
 import { ArtworkImage } from './ArtworkImage';
@@ -68,12 +70,14 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const rightPanelTab = usePlayerStore((s) => s.rightPanelTab);
   const { desktopNotchVisible } = useNotchVisibility();
-  const pipWindow = useExternalPiPWindow();
-  const externalNotchOpen = Boolean(pipWindow && !pipWindow.closed);
+  const pipState = useExternalPiPState();
+  const externalNotchOpen = pipState.open;
   const windowsSupport = resolveWindowsExternalNotchSupport({
     isWindows: isWindowsPlatform(),
     hasDesktopHost: isDesktopNotchHost(),
     hasDocumentPiP: supportsDocumentPictureInPicture(),
+    hasVideoPiP: supportsVideoPictureInPicture(),
+    isTopLevel: isTopLevelBrowsingContext(),
   });
   const showToast = useContextMenuStore((s) => s.showToast);
   const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
@@ -452,7 +456,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
         <button
           type="button"
           onClick={() => {
-            if (windowsSupport.mode === 'document-pip') {
+            if (windowsSupport.mode === 'document-pip' || windowsSupport.mode === 'video-pip') {
               if (externalNotchOpen) {
                 closeWindowsExternalNotch();
               } else {
@@ -461,7 +465,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                     showToast(
                       res.reason === 'windows-only'
                         ? 'Pemutar mini eksternal hanya tersedia khusus untuk Windows.'
-                        : 'Gagal membuka jendela pemutar mini Windows. Pastikan izin pop-out browser aktif atau buka di tab langsung.',
+                        : 'Gagal membuka jendela pemutar mini Windows. Pastikan izin Picture-in-Picture browser aktif.',
                     );
                   }
                 });
@@ -475,12 +479,12 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             showToast(
               windowsSupport.reason === 'windows-only'
                 ? 'Pemutar mini eksternal (keluar dari web) hanya tersedia khusus untuk Windows.'
-                : 'Browser Windows ini belum mendukung Picture-in-Picture Dokumen. Gunakan Chrome/Edge terbaru atau SoundClear Desktop Windows.',
+                : 'Browser Windows ini belum mendukung jendela Picture-in-Picture. Gunakan Chrome/Edge terbaru atau SoundClear Desktop Windows.',
             );
           }}
           disabled={!currentTrack}
           aria-label={
-            windowsSupport.mode === 'document-pip'
+            windowsSupport.mode === 'document-pip' || windowsSupport.mode === 'video-pip'
               ? externalNotchOpen
                 ? 'Tutup pemutar mini eksternal Windows'
                 : 'Keluarkan pemutar mini ke luar web (Khusus Windows)'
@@ -491,7 +495,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                 : 'Pemutar mini eksternal (Khusus Windows)'
           }
           aria-pressed={
-            windowsSupport.mode === 'document-pip'
+            windowsSupport.mode === 'document-pip' || windowsSupport.mode === 'video-pip'
               ? externalNotchOpen
               : windowsSupport.mode === 'desktop-ipc'
                 ? desktopNotchVisible
