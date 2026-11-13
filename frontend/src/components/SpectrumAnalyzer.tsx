@@ -89,9 +89,11 @@ export function SpectrumAnalyzer() {
     ? 'Aktif (Tes Nada)'
     : webAudioStreamActive
       ? 'Aktif (Web Audio DSP)'
-      : activeStreamMeta?.sourceMode === 'fallback-no-fx'
-        ? 'Terbatas (Tanpa DSP)'
-        : 'Siaga';
+      : activeStreamMeta?.sourceMode === 'youtube-iframe'
+        ? 'YT Music Player (DSP Bypass)'
+        : activeStreamMeta?.sourceMode === 'fallback-no-fx'
+          ? 'Terbatas (Tanpa DSP)'
+          : 'Siaga';
 
   return (
     <div className="rounded-xl bg-black/40 border border-white/[0.08] p-3 space-y-2">

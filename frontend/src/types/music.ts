@@ -376,6 +376,7 @@ export type AudioSourceMode =
 
 export interface ActiveStreamMeta {
   trackId: string;
+  resolvedVideoId?: string | null;
   requestedTier: StreamQualityTier;
   actualTier: ConcreteQualityTier | 'cloud' | 'youtube' | 'local' | 'offline';
   codec: string;

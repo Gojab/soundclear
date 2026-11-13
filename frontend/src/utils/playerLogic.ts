@@ -43,11 +43,21 @@ export function normalizeRouteId(id: string | null | undefined): string | null {
   if (typeof id !== 'string') return null;
   let raw = id.trim();
   if (!raw || raw === 'undefined' || raw === 'null') return null;
-  if (raw.startsWith('spotify:')) {
-    raw = raw.split(':').pop()?.trim() ?? '';
-  } else if (raw.includes('open.spotify.com/')) {
-    const cleanPath = raw.split('?')[0].replace(/\/+$/, '');
-    raw = cleanPath.split('/').pop()?.trim() ?? '';
+  if (raw.includes('youtube.com/') || raw.includes('youtu.be/')) {
+    try {
+      const parsed = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+      const vParam = parsed.searchParams.get('v')?.trim();
+      const listParam = parsed.searchParams.get('list')?.trim();
+      if (vParam) {
+        raw = vParam;
+      } else if (listParam) {
+        raw = listParam;
+      } else {
+        raw = parsed.pathname.replace(/\/+$/, '').split('/').pop()?.trim() ?? '';
+      }
+    } catch {
+      raw = raw.split('?')[0].replace(/\/+$/, '').split('/').pop()?.trim() ?? '';
+    }
   } else {
     if (raw.includes('?')) raw = raw.split('?')[0];
     if (raw.includes('/')) raw = raw.replace(/\/+$/, '').split('/').pop()?.trim() ?? '';

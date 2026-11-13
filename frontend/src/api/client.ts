@@ -409,6 +409,8 @@ export function resetAccountAudioSettings(
 export interface StreamAudioMetaResponse {
   trackId: string;
   available: boolean;
+  fallbackMode?: 'youtube-iframe' | null;
+  reason?: string | null;
   codec: string;
   bitrateKbps?: number | null;
   sampleRateHz?: number | null;

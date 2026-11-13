@@ -470,6 +470,20 @@ export function AudioSettingsTab() {
                 </span>
               )}
             </div>
+          ) : activeStreamMeta?.sourceMode === 'youtube-iframe' ? (
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div>
+                <p className="font-semibold text-white">
+                  {activeStreamMeta.badgeLabel || 'YouTube Music Player'}
+                </p>
+                <p className="text-white/50 mt-0.5">
+                  Diputar langsung lewat pemutar resmi YouTube Music di browser (Web Audio DSP dilewati).
+                </p>
+              </div>
+              <span className="px-2 py-1 rounded-lg bg-amber-400/15 text-amber-300 font-semibold">
+                YouTube Music Player (DSP Bypass)
+              </span>
+            </div>
           ) : (
             <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
               <div>
@@ -1520,7 +1534,9 @@ export function AudioSettingsTab() {
               <div>
                 <span className="text-white/45 block">Dipakai Aktual</span>
                 <span className="font-medium text-white uppercase">
-                  {activeStreamMeta.actualTier}
+                  {activeStreamMeta.sourceMode === 'youtube-iframe'
+                    ? 'YouTube Music Player'
+                    : activeStreamMeta.actualTier}
                   {activeStreamMeta.proxiedViaBackend ? ' (Proxy CORS)' : ''}
                 </span>
               </div>

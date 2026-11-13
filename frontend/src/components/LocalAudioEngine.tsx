@@ -33,6 +33,11 @@ import {
   isLocalTrack,
   isYouTubeVideoId,
 } from '../utils/playerLogic';
+import {
+  buildYoutubeIframeStreamMeta,
+  decideOnlineStreamAction,
+  isYoutubeIframeActive,
+} from '../utils/streamPlaybackLogic';
 
 function revokeDeckUrl(
   objectUrls: [string | null, string | null],
@@ -60,6 +65,7 @@ export function LocalAudioEngine() {
   const selectedQualityOverride = usePlayerStore((s) => s.selectedQualityOverride);
   const networkEffectiveType = usePlayerStore((s) => s.networkEffectiveType);
   const bufferingStallCount = usePlayerStore((s) => s.bufferingStallCount);
+  const activeStreamSourceMode = usePlayerStore((s) => s.activeStreamMeta?.sourceMode ?? null);
 
   const localProfile = useSettingsStore((s) => s.localProfile);
   const dataSaver = useSettingsStore((s) => s.dataSaver);
@@ -181,6 +187,14 @@ export function LocalAudioEngine() {
       });
     }
   }, [playbackRate]);
+
+  // Pause HTML5 audio decks cleanly whenever youtube-iframe mode takes over
+  useEffect(() => {
+    if (activeStreamSourceMode !== 'youtube-iframe') return;
+    const graph = ensureAudioGraph();
+    if (!graph) return;
+    graph.decks.forEach((d) => d.pause());
+  }, [activeStreamSourceMode]);
 
   // Load local, offline, or audio-only stream source when active track or stream quality changes
   useEffect(() => {
@@ -341,34 +355,57 @@ export function LocalAudioEngine() {
           durationSeconds: currentTrack.durationSeconds,
           quality: targetStreamTier,
         };
-        urlToLoad = buildStreamAudioUrl(streamVideoId, streamQueryMeta);
-        graph.trackIds[nextDeckIdx] = rawVideoId;
-
         const defaultBitrate =
           targetStreamTier === 'low' ? 96 : targetStreamTier === 'normal' ? 128 : 160;
-        metaToReport = {
-          trackId: rawVideoId,
-          requestedTier: targetStreamTier,
-          actualTier: targetStreamTier,
-          codec: 'AAC',
-          bitrateKbps: defaultBitrate,
-          sampleRateHz: 44100,
-          bitDepth: null,
-          lossless: false,
-          hiRes: false,
-          badgeLabel: `${defaultBitrate} kbps`,
-          sourceMode: localProfile.directMode ? 'direct' : 'webaudio',
-          proxiedViaBackend: true,
-          audiodownloadAllowed: true,
-          replayGainDb: null,
-        };
 
+        // Check if backend YT Music stream extraction is available before setting <audio src>
+        try {
+          const probeMeta = await fetchStreamAudioMeta(streamVideoId, streamQueryMeta);
+          if (cancelled) return;
+          if (decideOnlineStreamAction(probeMeta) === 'use-youtube-iframe') {
+            audio.pause();
+            audio.removeAttribute('src');
+            usePlayerStore
+              .getState()
+              .setActiveStreamMeta(
+                buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
+              );
+            return;
+          }
+          const kbps = probeMeta.bitrateKbps ?? defaultBitrate;
+          metaToReport = {
+            trackId: rawVideoId,
+            resolvedVideoId: streamVideoId,
+            requestedTier: targetStreamTier,
+            actualTier: targetStreamTier,
+            codec: probeMeta.codec || 'AAC',
+            bitrateKbps: kbps,
+            sampleRateHz: probeMeta.sampleRateHz ?? 44100,
+            bitDepth: null,
+            lossless: false,
+            hiRes: false,
+            badgeLabel: `${probeMeta.codec || 'AAC'} ${kbps} kbps`,
+            sourceMode: localProfile.directMode ? 'direct' : 'webaudio',
+            proxiedViaBackend: true,
+            audiodownloadAllowed: true,
+            replayGainDb: null,
+          };
+        } catch {
+          if (cancelled) return;
+          audio.pause();
+          audio.removeAttribute('src');
+          usePlayerStore
+            .getState()
+            .setActiveStreamMeta(
+              buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
+            );
+          return;
+        }
+
+        urlToLoad = buildStreamAudioUrl(streamVideoId, streamQueryMeta);
+        graph.trackIds[nextDeckIdx] = rawVideoId;
         usePlayerStore.getState().setActiveStreamMeta(metaToReport);
-        streamMetaFetchTarget = {
-          streamVideoId,
-          queryMeta: streamQueryMeta,
-          defaultBitrate,
-        };
+        streamMetaFetchTarget = null;
       }
 
       if (!urlToLoad || cancelled) return;
@@ -461,37 +498,50 @@ export function LocalAudioEngine() {
         if (!localActive && !useOfflineBlob && rawVideoId && currentTrack && !fallbackAttemptedRef.current) {
           fallbackAttemptedRef.current = true;
           usePlayerStore.getState().setIsBuffering(true);
+          const queryArtist = formatArtists(currentTrack.artists);
           void resolvePlayableYoutube(rawVideoId, {
             title: currentTrack.title,
-            artist: formatArtists(currentTrack.artists),
+            artist: queryArtist,
             type: currentTrack.type,
             durationSeconds: currentTrack.durationSeconds,
             fallback: true,
             exclude: [rawVideoId],
           })
-            .then((resolved) => {
+            .then(async (resolved) => {
               if (cancelled) return;
-              const altId = resolved.youtubeVideoId || resolved.candidates?.[0];
-              if (!altId || altId === rawVideoId) {
-                throw new Error('Tidak ada sumber alternatif');
-              }
-              const altUrl = buildStreamAudioUrl(altId, {
+              const altId = resolved.youtubeVideoId || resolved.candidates?.[0] || rawVideoId;
+              const altQueryMeta = {
                 title: currentTrack.title,
-                artist: formatArtists(currentTrack.artists),
+                artist: queryArtist,
                 durationSeconds: currentTrack.durationSeconds,
                 quality: targetStreamTier,
-              });
+              };
+              const altMeta = await fetchStreamAudioMeta(altId, altQueryMeta).catch(() => null);
+              if (cancelled) return;
+              if (decideOnlineStreamAction(altMeta) === 'use-youtube-iframe') {
+                audio.pause();
+                audio.removeAttribute('src');
+                usePlayerStore
+                  .getState()
+                  .setActiveStreamMeta(
+                    buildYoutubeIframeStreamMeta(rawVideoId, altId, targetStreamTier),
+                  );
+                return;
+              }
+              const altUrl = buildStreamAudioUrl(altId, altQueryMeta);
               audio.crossOrigin = 'anonymous';
               audio.src = altUrl;
               audio.load();
             })
             .catch(() => {
               if (cancelled) return;
-              usePlayerStore.getState().setIsBuffering(false);
-              usePlayerStore.getState().setIsPlaying(false);
+              audio.pause();
+              audio.removeAttribute('src');
               usePlayerStore
                 .getState()
-                .setPlayerError('Gagal memuat aliran audio untuk lagu ini.');
+                .setActiveStreamMeta(
+                  buildYoutubeIframeStreamMeta(rawVideoId, rawVideoId, targetStreamTier),
+                );
             });
           return;
         }
@@ -547,6 +597,7 @@ export function LocalAudioEngine() {
   useEffect(() => {
     const graph = ensureAudioGraph();
     if (!graph || !htmlAudioTrackKey) return;
+    if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) return;
 
     if (pauseTimerRef.current !== null) {
       window.clearTimeout(pauseTimerRef.current);
@@ -590,12 +641,13 @@ export function LocalAudioEngine() {
         activeAudio.pause();
       }
     }
-  }, [isPlaying, htmlAudioTrackKey]);
+  }, [isPlaying, htmlAudioTrackKey, activeStreamSourceMode]);
 
   // Explicit Seek
   useEffect(() => {
     const graph = ensureAudioGraph();
     if (!htmlAudioTrackKey || pendingSeekSeconds === null || !graph) return;
+    if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) return;
 
     const activeAudio = graph.decks[graph.activeDeck];
     if (Number.isFinite(activeAudio.duration) && activeAudio.duration > 0) {
@@ -606,7 +658,7 @@ export function LocalAudioEngine() {
 
   // Progress polling, crossfade (0-12s), gapless preloading, dynamic LUFS, skip silence, sleep timer fade
   useEffect(() => {
-    if (!htmlAudioTrackKey || !isPlaying) return;
+    if (!htmlAudioTrackKey || !isPlaying || activeStreamSourceMode === 'youtube-iframe') return;
     const graph = ensureAudioGraph();
     if (!graph) return;
 
@@ -834,7 +886,7 @@ export function LocalAudioEngine() {
     }, 100);
 
     return () => window.clearInterval(interval);
-  }, [htmlAudioTrackKey, isPlaying, manualQueue, sourceQueue, localActive, targetStreamTier]);
+  }, [htmlAudioTrackKey, isPlaying, manualQueue, sourceQueue, localActive, targetStreamTier, activeStreamSourceMode]);
 
   return null;
 }

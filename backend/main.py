@@ -297,13 +297,31 @@ def stream_audio_meta(
     durationSeconds: Optional[int] = Query(default=None),
     quality: str = Query(default="high"),
 ) -> Dict[str, Any]:
-    return provider.get_audio_stream_info(
-        video_id,
-        title=title,
-        artist=artist,
-        duration_seconds=durationSeconds,
-        quality=quality,
-    )
+    try:
+        return provider.get_audio_stream_info(
+            video_id,
+            title=title,
+            artist=artist,
+            duration_seconds=durationSeconds,
+            quality=quality,
+        )
+    except MusicProviderError as exc:
+        if exc.status_code in (403, 404, 502):
+            return {
+                "trackId": video_id,
+                "available": False,
+                "fallbackMode": "youtube-iframe",
+                "reason": exc.message,
+                "codec": "YT Music",
+                "bitrateKbps": None,
+                "sampleRateHz": None,
+                "ext": "mp4",
+                "mimeType": "audio/mp4",
+                "source": "YouTube Music",
+                "tier": quality,
+                "cacheReady": False,
+            }
+        raise
 
 
 def _parse_http_range_header(range_header: str, file_size: int) -> Tuple[int, int]:

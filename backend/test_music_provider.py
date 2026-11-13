@@ -11,10 +11,10 @@ from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
 
 import backend.main as main_app
 from backend.music_provider import (
+    ALLOWED_ARTWORK_HOSTS,
     MusicProvider,
     MusicProviderError,
     TTLCache,
-    parse_lrc_lyrics,
     pick_largest_thumbnail,
 )
 
@@ -217,6 +217,9 @@ class FakeYTMusicGateway:
                 FakeLyricLine(text="Langkah terasa tenang", start_time=4000, end_time=7500, id=1),
             ],
         }
+
+    def get_song(self, video_id: str):
+        return {"playabilityStatus": {"status": "LOGIN_REQUIRED"}}
 
     def get_song_related(self, browse_id: str):
         return [
@@ -592,58 +595,49 @@ class MusicProviderTests(unittest.TestCase):
         self.assertEqual(provider.search("Arijit Singh Tum Hi Ho", None, 20)["items"], [])
         self.assertEqual(provider.suggest("YOASOBI")["suggestions"], [])
 
-    def test_lrclib_synced_and_search_fallback_lyrics(self) -> None:
-        lrc_sample = "[00:01.50] Baris pertama\n[00:05.25] Baris kedua\n[00:10.00] Baris ketiga"
-        parsed = parse_lrc_lyrics(lrc_sample)
-        self.assertEqual(len(parsed), 3)
-        self.assertEqual(parsed[0], {"text": "Baris pertama", "startTimeMs": 1500, "endTimeMs": 5250})
-        self.assertEqual(parsed[1]["startTimeMs"], 5250)
-
-        def fake_http_get(url: str, params=None, headers=None, timeout=6):
-            class _FakeResp:
-                def __init__(self, status_code: int, payload) -> None:
-                    self.status_code = status_code
-                    self._payload = payload
-
-                def json(self):
-                    return self._payload
-
-            if "lrclib.net/api/get" in url:
-                return _FakeResp(404, {})
-            if "lrclib.net/api/search" in url:
-                return _FakeResp(
-                    200,
-                    [
-                        {
-                            "id": 9901,
-                            "trackName": "Shake It Off",
-                            "artistName": "Taylor Swift",
-                            "duration": 219,
-                            "syncedLyrics": lrc_sample,
-                            "plainLyrics": "Baris pertama\nBaris kedua\nBaris ketiga",
-                        }
-                    ],
-                )
-            return _FakeResp(404, {})
+    def test_ytmusic_only_lyrics_auto_watch_lookup_and_empty_200(self) -> None:
+        class LyricsEdgeGateway(FakeYTMusicGateway):
+            def get_watch_playlist(self, video_id=None, playlist_id=None, radio=True, limit=25):
+                if video_id == "noLyricsVid1":
+                    return {
+                        "playlistId": "RDAMVMnoLyricsVid1",
+                        "lyrics": None,
+                        "related": None,
+                        "tracks": [],
+                    }
+                return super().get_watch_playlist(video_id=video_id, playlist_id=playlist_id, radio=radio, limit=limit)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             orig_provider = main_app.provider
             try:
                 provider = MusicProvider(
-                    gateway=FakeYTMusicGateway(),  # type: ignore[arg-type]
-                    http_get_fn=fake_http_get,
+                    gateway=LyricsEdgeGateway(),  # type: ignore[arg-type]
                     audio_settings_file=os.path.join(tmpdir, "audio_settings.json"),
                 )
                 main_app.provider = provider
                 client = TestClient(main_app.app)
 
-                resp = client.get("/api/lyrics?title=Shake+It+Off&artist=Taylor+Swift&durationSeconds=219")
+                # Auto-lookup by videoId via get_watch_playlist -> get_lyrics(timestamps=True)
+                resp = client.get("/api/lyrics?videoId=5F28ye50-Kc&title=Hati-Hati+di+Jalan&artist=Tulus")
                 self.assertEqual(resp.status_code, 200)
                 body = resp.json()
                 self.assertTrue(body["hasTimestamps"])
-                self.assertEqual(body["source"], "LRCLIB (Tersinkron)")
-                self.assertEqual(len(body["lines"]), 3)
-                self.assertEqual(body["lines"][0]["text"], "Baris pertama")
+                self.assertEqual(body["browseId"], "MPLYt_RVAbNZdUasD-1")
+                self.assertEqual(body["lines"][0]["text"], "Hari-hari berulang")
+
+                # Auto-lookup by title/artist search -> watch -> lyrics
+                resp_title = client.get("/api/lyrics?title=Hati-Hati+di+Jalan&artist=Tulus")
+                self.assertEqual(resp_title.status_code, 200)
+                self.assertTrue(resp_title.json()["hasTimestamps"])
+
+                # Track without lyrics returns 200 empty object (zero 404 console spam)
+                resp_empty = client.get("/api/lyrics?videoId=noLyricsVid1&title=Laut+Kidul&artist=Jeyma+Monica")
+                self.assertEqual(resp_empty.status_code, 200)
+                empty_body = resp_empty.json()
+                self.assertFalse(empty_body["hasTimestamps"])
+                self.assertEqual(empty_body["lines"], [])
+                self.assertIsNone(empty_body["plainText"])
+                self.assertNotIn("i.scdn.co", ALLOWED_ARTWORK_HOSTS)
             finally:
                 main_app.provider = orig_provider
 
@@ -669,7 +663,7 @@ class MusicProviderTests(unittest.TestCase):
                                 "abr": 160,
                                 "asr": 44100,
                             },
-                            "SoundCloud Audio",
+                            "YouTube Music Audio",
                         )
 
                     def fake_remux(_src, out_path, *_args, **_kwargs):
@@ -802,7 +796,7 @@ class MusicProviderTests(unittest.TestCase):
                             "abr": 160,
                             "asr": 44100,
                         },
-                        "SoundCloud Audio",
+                        "YouTube Music Audio",
                     )
 
                     main_app.provider = provider
@@ -844,7 +838,7 @@ class MusicProviderTests(unittest.TestCase):
                             "abr": 128,
                             "asr": 44100,
                         },
-                        "SoundCloud Audio",
+                        "YouTube Music Audio",
                     )
                     prog_resp = client.get("/api/stream/progTest001?title=Lagu&artist=Artis")
                     self.assertEqual(prog_resp.status_code, 206)
@@ -856,12 +850,31 @@ class MusicProviderTests(unittest.TestCase):
             finally:
                 main_app.provider = orig_provider
 
-    def test_soundcloud_fallback_strips_noise_on_empty_primary_query(self) -> None:
-        seen_queries = []
+    def test_ytmusic_audio_extraction_and_bot_block_meta_fallback(self) -> None:
+        seen_urls = []
 
-        class _FakeYDL:
-            def __init__(self, opts):
-                self.opts = opts
+        class DirectSongGateway(FakeYTMusicGateway):
+            def get_song(self, video_id: str):
+                if video_id == "directYtm01":
+                    return {
+                        "playabilityStatus": {"status": "OK"},
+                        "streamingData": {
+                            "adaptiveFormats": [
+                                {
+                                    "itag": 140,
+                                    "url": "https://rr1.googlevideo.com/videoplayback?id=direct",
+                                    "mimeType": 'audio/mp4; codecs="mp4a.40.2"',
+                                    "averageBitrate": 129547,
+                                    "audioSampleRate": "44100",
+                                }
+                            ]
+                        },
+                    }
+                return {"playabilityStatus": {"status": "LOGIN_REQUIRED"}}
+
+        class _BotBlockYDL:
+            def __init__(self, _opts):
+                pass
 
             def __enter__(self):
                 return self
@@ -870,52 +883,34 @@ class MusicProviderTests(unittest.TestCase):
                 return False
 
             def extract_info(self, target: str, download: bool = False):
-                if target.startswith("scsearch8:"):
-                    q = target[len("scsearch8:") :]
-                    seen_queries.append(q)
-                    if "Dimusic" in q or "||" in q:
-                        return {"entries": []}
-                    return {
-                        "entries": [
-                            {
-                                "title": "TULUS - Hati-Hati di Jalan",
-                                "uploader": "Tulus",
-                                "duration": 240,
-                                "url": "https://soundcloud.com/tulus/hati-hati-di-jalan",
-                            }
-                        ]
-                    }
-                if target == "https://soundcloud.com/tulus/hati-hati-di-jalan":
-                    return {
-                        "duration": 240,
-                        "formats": [
-                            {
-                                "url": "https://cdn.example.invalid/tulus/playlist.m3u8",
-                                "ext": "m4a",
-                                "protocol": "m3u8_native",
-                                "acodec": "mp4a.40.2",
-                                "vcodec": "none",
-                                "abr": 160,
-                            }
-                        ],
-                    }
-                return {}
+                seen_urls.append(target)
+                raise RuntimeError("Sign in to confirm you're not a bot")
 
-        with mock.patch.dict(os.environ, {"VERCEL": "1"}), mock.patch(
-            "backend.music_provider.yt_dlp.YoutubeDL", _FakeYDL
-        ):
-            provider = MusicProvider(gateway=FakeYTMusicGateway())  # type: ignore[arg-type]
-            fmt, source = provider._extract_audio_source(
-                "hNymL4gxOZI",
-                "Hati - Hati Di Jalan - Tulus || Smooth Jazz Ballad Cover (Duet Version)",
-                "Dimusic",
-                223,
-                "high",
-            )
-        self.assertEqual(source, "SoundCloud Audio")
-        self.assertEqual(fmt["url"], "https://cdn.example.invalid/tulus/playlist.m3u8")
-        self.assertGreaterEqual(len(seen_queries), 2)
-        self.assertNotIn("Dimusic", seen_queries[-1])
+        provider = MusicProvider(gateway=DirectSongGateway())  # type: ignore[arg-type]
+        fmt, source = provider._extract_audio_source("directYtm01", "Monokrom", "Tulus", 215, "high")
+        self.assertEqual(source, "YouTube Music Audio")
+        self.assertEqual(fmt["url"], "https://rr1.googlevideo.com/videoplayback?id=direct")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig_provider = main_app.provider
+            try:
+                with (
+                    mock.patch("backend.music_provider.STREAM_CACHE_DIR", tmpdir),
+                    mock.patch("backend.music_provider.yt_dlp.YoutubeDL", _BotBlockYDL),
+                ):
+                    main_app.provider = provider
+                    client = TestClient(main_app.app)
+                    meta_resp = client.get("/api/stream/dQw4w9WgXcQ/meta?title=Monokrom&artist=Tulus")
+                    self.assertEqual(meta_resp.status_code, 200)
+                    meta_json = meta_resp.json()
+                    self.assertFalse(meta_json["available"])
+                    self.assertEqual(meta_json["fallbackMode"], "youtube-iframe")
+                    self.assertTrue(all("music.youtube.com/watch?v=" in u for u in seen_urls))
+
+                    stream_resp = client.get("/api/stream/dQw4w9WgXcQ?title=Monokrom&artist=Tulus")
+                    self.assertEqual(stream_resp.status_code, 403)
+            finally:
+                main_app.provider = orig_provider
 
 
 if __name__ == "__main__":

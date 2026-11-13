@@ -41,9 +41,6 @@ ALLOWED_ARTWORK_HOSTS = {
     "s.ytimg.com",
     "yt3.ggpht.com",
     "music.youtube.com",
-    "i.scdn.co",
-    "image-cdn-ak.spotifycdn.com",
-    "mosaic.scdn.co",
 }
 
 CJK_HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
@@ -241,7 +238,6 @@ def _is_excluded_home_item(item: Mapping[str, Any]) -> bool:
 
 
 LRC_TAG_RE = re.compile(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
-LRCLIB_USER_AGENT = "SoundClear/3.0 (https://soundclear.local)"
 STREAM_CACHE_DIR = os.environ.get("SOUNDCLEAR_STREAM_CACHE_DIR", "/tmp/soundclear_stream_cache")
 VERCEL_MAX_STREAM_CHUNK_BYTES = 1_572_864  # 1.5 MiB (stays safely below Vercel 4.5 MB payload limit)
 VERCEL_FULL_RESPONSE_LIMIT_BYTES = 3_145_728  # 3.0 MiB
@@ -1398,111 +1394,15 @@ class MusicProvider:
         self._cache.set(cache_key, result)
         return result
 
-    def fetch_lrclib_lyrics(
-        self,
-        title: str,
-        artist: str = "",
-        album: str = "",
-        duration_seconds: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
-        clean_title = _clean_track_title_for_query(title)
-        if not clean_title:
-            return None
-        clean_artist = _clean_artist_for_query(artist)
-        clean_album = (album or "").strip()
-        headers = {"User-Agent": LRCLIB_USER_AGENT}
-
-        def _build_from_record(rec: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
-            synced = rec.get("syncedLyrics")
-            plain = rec.get("plainLyrics")
-            lines = parse_lrc_lyrics(synced) if isinstance(synced, str) and synced.strip() else []
-            plain_str = plain.strip() if isinstance(plain, str) and plain.strip() else None
-            if not plain_str and lines:
-                plain_str = "\n".join(line["text"] for line in lines)
-            if not lines and not plain_str:
-                return None
-            return {
-                "browseId": f"lrclib:{rec.get('id') or 'track'}",
-                "hasTimestamps": len(lines) > 0,
-                "source": "LRCLIB (Tersinkron)" if lines else "LRCLIB",
-                "lines": lines,
-                "plainText": plain_str,
-            }
-
-        if clean_artist:
-            params: Dict[str, Any] = {
-                "artist_name": clean_artist,
-                "track_name": clean_title,
-            }
-            if clean_album:
-                params["album_name"] = clean_album
-            if duration_seconds and duration_seconds > 0:
-                params["duration"] = int(round(duration_seconds))
-            try:
-                resp = self._http_get(
-                    "https://lrclib.net/api/get",
-                    params=params,
-                    headers=headers,
-                    timeout=6,
-                )
-                if getattr(resp, "status_code", 0) == 200:
-                    data = resp.json()
-                    if isinstance(data, Mapping):
-                        built = _build_from_record(data)
-                        if built:
-                            return built
-            except Exception:
-                pass
-
-        # Fallback: /api/search with combined query & candidate scoring
-        search_q = f"{clean_artist} {clean_title}".strip()
-        try:
-            resp = self._http_get(
-                "https://lrclib.net/api/search",
-                params={"q": search_q},
-                headers=headers,
-                timeout=6,
-            )
-            if getattr(resp, "status_code", 0) == 200:
-                candidates = resp.json()
-                if isinstance(candidates, list) and candidates:
-                    title_tokens = set(re.findall(r"[a-z0-9]+", clean_title.lower()))
-                    artist_tokens = set(re.findall(r"[a-z0-9]+", clean_artist.lower()))
-                    scored: List[Tuple[int, Mapping[str, Any]]] = []
-                    for rec in candidates:
-                        if not isinstance(rec, Mapping):
-                            continue
-                        if not (rec.get("syncedLyrics") or rec.get("plainLyrics")):
-                            continue
-                        rec_title = str(rec.get("trackName") or rec.get("name") or "").lower()
-                        rec_artist = str(rec.get("artistName") or "").lower()
-                        rec_title_tokens = set(re.findall(r"[a-z0-9]+", rec_title))
-                        rec_artist_tokens = set(re.findall(r"[a-z0-9]+", rec_artist))
-                        score = len(title_tokens & rec_title_tokens) * 15
-                        if artist_tokens:
-                            score += len(artist_tokens & rec_artist_tokens) * 12
-                        if rec.get("syncedLyrics"):
-                            score += 8
-                        rec_dur = rec.get("duration")
-                        if duration_seconds and duration_seconds > 0 and isinstance(rec_dur, (int, float)):
-                            diff = abs(float(rec_dur) - float(duration_seconds))
-                            if diff <= 8:
-                                score += 10
-                            elif diff <= 20:
-                                score += 4
-                            else:
-                                score -= 12
-                        if score > 0 or not title_tokens:
-                            scored.append((score, rec))
-                    scored.sort(key=lambda pair: pair[0], reverse=True)
-                    for _, best in scored:
-                        built = _build_from_record(best)
-                        if built:
-                            return built
-        except Exception:
-            pass
-
-        return None
+    @staticmethod
+    def _empty_lyrics_response(browse_id: str = "") -> Dict[str, Any]:
+        return {
+            "browseId": browse_id,
+            "hasTimestamps": False,
+            "source": None,
+            "lines": [],
+            "plainText": None,
+        }
 
     def get_lyrics(
         self,
@@ -1515,84 +1415,109 @@ class MusicProvider:
         video_id: str = "",
     ) -> Dict[str, Any]:
         clean_id = (browse_id or "").strip()
+        if clean_id == "auto":
+            clean_id = ""
         clean_title = (title or "").strip()
         clean_artist = (artist or "").strip()
         clean_vid = (video_id or "").strip()
 
-        if not clean_id and not clean_title:
-            raise MusicProviderError("ID lirik atau judul lagu wajib diisi.", 400)
+        if not clean_id and not clean_vid and not clean_title:
+            raise MusicProviderError("ID lirik, ID lagu, atau judul lagu wajib diisi.", 400)
 
         cache_key = (
             f"lyrics:{clean_id}:{clean_vid}:{clean_title.lower()}:"
-            f"{clean_artist.lower()}:{duration_seconds or 0}"
+            f"{clean_artist.lower()}"
         )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
-        if clean_title:
-            lrc_res = self.fetch_lrclib_lyrics(
-                clean_title,
-                artist=clean_artist,
-                album=album,
-                duration_seconds=duration_seconds,
-            )
-            if lrc_res is not None:
-                if clean_id and clean_id not in ("lrclib", "auto"):
-                    lrc_res["browseId"] = clean_id
-                self._cache.set(cache_key, lrc_res, ttl_seconds=600)
-                return lrc_res
+        target_browse_id = clean_id
+        resolved_vid = clean_vid
 
-        if clean_id and clean_id not in ("lrclib", "auto"):
-            raw = None
+        # Lookup lyrics browseId strictly via YouTube Music (ytmusicapi)
+        if not target_browse_id and not resolved_vid and clean_title:
+            clean_q_title = _clean_track_title_for_query(clean_title)
+            clean_q_artist = _clean_artist_for_query(clean_artist)
+            query = f"{clean_q_artist} {clean_q_title}".strip()
+            if query and not _is_excluded_regional_text(query):
+                try:
+                    hits = self._call_with_retry(
+                        lambda: self._gateway.search(query, filter="songs", limit=3)
+                    )
+                    for hit in hits:
+                        vid_cand = hit.get("videoId") if isinstance(hit, Mapping) else None
+                        if isinstance(vid_cand, str) and VIDEO_ID_RE.fullmatch(vid_cand.strip()):
+                            resolved_vid = vid_cand.strip()
+                            break
+                except MusicProviderError:
+                    resolved_vid = ""
+
+        if not target_browse_id and resolved_vid:
             try:
-                raw = self._call_with_retry(lambda: self._gateway.get_lyrics(clean_id, timestamps=True))
+                watch = self.get_watch_playlist(resolved_vid, radio=False, limit=1)
+                lb = watch.get("lyricsBrowseId")
+                if isinstance(lb, str) and lb.strip():
+                    target_browse_id = lb.strip()
+            except MusicProviderError:
+                target_browse_id = ""
+
+        if not target_browse_id:
+            empty_res = self._empty_lyrics_response("")
+            self._cache.set(cache_key, empty_res, ttl_seconds=600)
+            return empty_res
+
+        raw = None
+        try:
+            raw = self._call_with_retry(lambda: self._gateway.get_lyrics(target_browse_id, timestamps=True))
+        except MusicProviderError:
+            raw = None
+
+        if not raw:
+            try:
+                raw = self._call_with_retry(lambda: self._gateway.get_lyrics(target_browse_id, timestamps=False))
             except MusicProviderError:
                 raw = None
 
-            if not raw:
-                try:
-                    raw = self._call_with_retry(lambda: self._gateway.get_lyrics(clean_id, timestamps=False))
-                except MusicProviderError:
-                    raw = None
+        if not raw:
+            empty_res = self._empty_lyrics_response(target_browse_id)
+            self._cache.set(cache_key, empty_res, ttl_seconds=600)
+            return empty_res
 
-            if raw:
-                has_timestamps = bool(raw.get("hasTimestamps"))
-                raw_lyrics = raw.get("lyrics")
-                source = sanitize_brand_name(raw.get("source")) if isinstance(raw.get("source"), str) else raw.get("source")
-                lines: List[Dict[str, Any]] = []
-                plain_text: Optional[str] = None
+        has_timestamps = bool(raw.get("hasTimestamps"))
+        raw_lyrics = raw.get("lyrics")
+        source = sanitize_brand_name(raw.get("source")) if isinstance(raw.get("source"), str) else raw.get("source")
+        lines: List[Dict[str, Any]] = []
+        plain_text: Optional[str] = None
 
-                if has_timestamps and isinstance(raw_lyrics, list):
-                    text_chunks: List[str] = []
-                    for entry in raw_lyrics:
-                        if isinstance(entry, Mapping):
-                            text = str(entry.get("text") or "").strip()
-                            start_ms = int(entry.get("start_time") or entry.get("startTimeMs") or 0)
-                            end_ms = int(entry.get("end_time") or entry.get("endTimeMs") or start_ms + 3000)
-                        else:
-                            text = str(getattr(entry, "text", "") or "").strip()
-                            start_ms = int(getattr(entry, "start_time", 0) or 0)
-                            end_ms = int(getattr(entry, "end_time", start_ms + 3000) or (start_ms + 3000))
-                        if text:
-                            lines.append({"text": text, "startTimeMs": start_ms, "endTimeMs": end_ms})
-                            text_chunks.append(text)
-                    plain_text = "\n".join(text_chunks) if text_chunks else None
-                elif isinstance(raw_lyrics, str) and raw_lyrics.strip():
-                    has_timestamps = False
-                    plain_text = raw_lyrics.strip()
+        if has_timestamps and isinstance(raw_lyrics, list):
+            text_chunks: List[str] = []
+            for entry in raw_lyrics:
+                if isinstance(entry, Mapping):
+                    text = str(entry.get("text") or "").strip()
+                    start_ms = int(entry.get("start_time") or entry.get("startTimeMs") or 0)
+                    end_ms = int(entry.get("end_time") or entry.get("endTimeMs") or start_ms + 3000)
+                else:
+                    text = str(getattr(entry, "text", "") or "").strip()
+                    start_ms = int(getattr(entry, "start_time", 0) or 0)
+                    end_ms = int(getattr(entry, "end_time", start_ms + 3000) or (start_ms + 3000))
+                if text:
+                    lines.append({"text": text, "startTimeMs": start_ms, "endTimeMs": end_ms})
+                    text_chunks.append(text)
+            plain_text = "\n".join(text_chunks) if text_chunks else None
+        elif isinstance(raw_lyrics, str) and raw_lyrics.strip():
+            has_timestamps = False
+            plain_text = raw_lyrics.strip()
 
-                result = {
-                    "browseId": clean_id,
-                    "hasTimestamps": has_timestamps and len(lines) > 0,
-                    "source": source,
-                    "lines": lines,
-                    "plainText": plain_text,
-                }
-                self._cache.set(cache_key, result, ttl_seconds=600)
-                return result
-
-        raise MusicProviderError("Lirik tidak tersedia untuk lagu ini.", 404)
+        result = {
+            "browseId": target_browse_id,
+            "hasTimestamps": has_timestamps and len(lines) > 0,
+            "source": source,
+            "lines": lines,
+            "plainText": plain_text,
+        }
+        self._cache.set(cache_key, result, ttl_seconds=600)
+        return result
 
     def get_song_credits(
         self,
@@ -1896,6 +1821,10 @@ class MusicProvider:
         scored: List[Tuple[int, int, str]] = []
         seen_vids = set(excluded)
         target_dur = int(duration_seconds) if duration_seconds and duration_seconds > 0 else None
+        clean_target_title = _clean_track_title_for_query(clean_title).lower()
+        clean_target_artist = _clean_artist_for_query(clean_artist).lower()
+        title_tokens = set(re.findall(r"[a-z0-9]+", clean_target_title))
+        artist_tokens = set(re.findall(r"[a-z0-9]+", clean_target_artist))
 
         for idx, entry in enumerate(raw_results):
             if _is_excluded_catalog_item(entry):
@@ -1904,23 +1833,58 @@ class MusicProvider:
             if not isinstance(vid, str) or not VIDEO_ID_RE.fullmatch(vid) or vid in seen_vids:
                 continue
             seen_vids.add(vid)
+
+            cand_title = str(entry.get("title") or "").strip()
+            cand_artists_list: List[str] = []
+            for art in entry.get("artists") or []:
+                if isinstance(art, Mapping) and art.get("name"):
+                    cand_artists_list.append(str(art["name"]))
+                elif isinstance(art, str):
+                    cand_artists_list.append(art)
+            if entry.get("author"):
+                cand_artists_list.append(str(entry["author"]))
+            cand_artists_str = " ".join(cand_artists_list).lower()
+            cand_lower = cand_title.lower()
+
             _, entry_dur = parse_duration_seconds(
                 entry.get("duration") or entry.get("length"),
                 entry.get("duration_seconds"),
             )
+
+            score = idx * 8
+            if title_tokens:
+                cand_title_tokens = set(re.findall(r"[a-z0-9]+", cand_lower))
+                title_overlap = len(title_tokens & cand_title_tokens)
+                if title_overlap == 0:
+                    score += 2000
+                else:
+                    score -= title_overlap * 60
+            if artist_tokens:
+                cand_all_tokens = set(re.findall(r"[a-z0-9]+", f"{cand_lower} {cand_artists_str}"))
+                artist_overlap = len(artist_tokens & cand_all_tokens)
+                score -= artist_overlap * 40
+
+            for variant in VARIANT_WORDS:
+                if variant in cand_lower and variant not in clean_target_title:
+                    score += 180
+
+            if entry_dur and entry_dur > 1200 and (not target_dur or target_dur <= 900):
+                score += 1500
+
             if target_dur and entry_dur:
                 diff = abs(entry_dur - target_dur)
                 penalty = 0 if diff <= 45 else (500 + diff)
-                score = penalty + diff
+                score += penalty + diff
             else:
-                score = 200 + idx * 10
+                score += 200
+
             scored.append((score, idx, vid))
 
         scored.sort(key=lambda t: (t[0], t[1]))
         candidates = [vid for _, _, vid in scored]
 
         if not candidates:
-            raise MusicProviderError("Tidak dapat menemukan media audio yang cocok di katalog.", 404)
+            raise MusicProviderError("Tidak dapat menemukan media audio yang cocok di katalog YouTube Music.", 404)
 
         result = {
             "id": clean_id or candidates[0],
@@ -2325,7 +2289,13 @@ class MusicProvider:
         try:
             with open(meta_path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
-            if isinstance(data, dict) and data.get("filePath") and os.path.isfile(str(data["filePath"])):
+            source_val = str(data.get("source") or "").lower() if isinstance(data, dict) else ""
+            if (
+                isinstance(data, dict)
+                and "youtube music" in source_val
+                and data.get("filePath")
+                and os.path.isfile(str(data["filePath"]))
+            ):
                 if os.path.getsize(str(data["filePath"])) > 1024:
                     return data
         except Exception:
@@ -2336,15 +2306,18 @@ class MusicProvider:
         mem_key = f"vstream:{video_id}:{tier}"
         mem = self._cache.get(mem_key)
         if isinstance(mem, dict) and mem.get("expiresAt", 0) > time.time():
-            return mem
+            if "youtube music" in str(mem.get("source") or "").lower():
+                return mem
         plan_path = self._virtual_plan_cache_path(video_id, tier)
         if not os.path.isfile(plan_path):
             return None
         try:
             with open(plan_path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
+            source_val = str(data.get("source") or "").lower() if isinstance(data, dict) else ""
             if (
                 isinstance(data, dict)
+                and "youtube music" in source_val
                 and data.get("streamMode") == "virtual"
                 and float(data.get("expiresAt") or 0) > time.time()
                 and int(data.get("totalSize") or 0) > 0
@@ -2472,47 +2445,87 @@ class MusicProvider:
 
         os.replace(tmp_path, out_path)
 
-    def _score_soundcloud_entry(
+    @staticmethod
+    def _resolve_ytdlp_cookiefile() -> Optional[str]:
+        cookie_path = (
+            os.environ.get("YTMUSIC_COOKIES_FILE")
+            or os.environ.get("YOUTUBE_COOKIES_FILE")
+            or ""
+        ).strip()
+        if cookie_path and os.path.isfile(cookie_path):
+            return cookie_path
+        cookie_text = (
+            os.environ.get("YTMUSIC_COOKIES")
+            or os.environ.get("YOUTUBE_COOKIES")
+            or ""
+        ).strip()
+        if cookie_text:
+            try:
+                os.makedirs(STREAM_CACHE_DIR, exist_ok=True)
+                target = os.path.join(STREAM_CACHE_DIR, "ytmusic_cookies.txt")
+                with open(target, "w", encoding="utf-8") as fh:
+                    fh.write(cookie_text)
+                return target
+            except Exception:
+                return None
+        return None
+
+    def _extract_from_ytmusic_song_api(
         self,
-        entry: Mapping[str, Any],
-        clean_title: str,
-        clean_artist: str,
-        target_dur: Optional[int],
-    ) -> Optional[int]:
-        cand_title = str(entry.get("title") or "").strip()
-        cand_uploader = str(entry.get("uploader") or entry.get("artist") or "").strip()
-        combined = f"{cand_title} {cand_uploader}"
-        if not cand_title or _is_excluded_regional_text(combined):
+        video_id: str,
+        tier: str,
+        *,
+        allow_ffmpeg_only: bool,
+    ) -> Optional[Mapping[str, Any]]:
+        try:
+            song_raw = self._gateway.get_song(video_id)
+        except Exception:
             return None
-
-        cand_dur = entry.get("duration")
-        if target_dur and target_dur > 45 and isinstance(cand_dur, (int, float)) and cand_dur <= 35:
-            # Skip short 30-second preview snippets
+        if not isinstance(song_raw, Mapping):
             return None
-
-        target_lower = clean_title.lower()
-        cand_lower = cand_title.lower()
-        penalty = 0
-        for variant in VARIANT_WORDS:
-            if variant in cand_lower and variant not in target_lower:
-                penalty += 80
-
-        title_tokens = set(re.findall(r"[a-z0-9]+", target_lower))
-        artist_tokens = set(re.findall(r"[a-z0-9]+", clean_artist.lower()))
-        cand_tokens = set(re.findall(r"[a-z0-9]+", f"{cand_lower} {cand_uploader.lower()}"))
-
-        title_overlap = len(title_tokens & cand_tokens)
-        if title_tokens and title_overlap == 0:
+        playability = song_raw.get("playabilityStatus")
+        if not isinstance(playability, Mapping) or playability.get("status") != "OK":
             return None
-
-        artist_overlap = len(artist_tokens & cand_tokens)
-        score = title_overlap * 25 + artist_overlap * 18 - penalty
-        if isinstance(cand_dur, (int, float)) and cand_dur > 45:
-            score += 12
-        if target_dur and isinstance(cand_dur, (int, float)):
-            diff = abs(float(cand_dur) - float(target_dur))
-            score -= int(min(diff, 60) // 2)
-        return score
+        streaming_data = song_raw.get("streamingData")
+        if not isinstance(streaming_data, Mapping):
+            return None
+        adaptive = list(streaming_data.get("adaptiveFormats") or [])
+        mapped_formats: List[Mapping[str, Any]] = []
+        for raw_fmt in adaptive:
+            if not isinstance(raw_fmt, Mapping):
+                continue
+            direct_url = raw_fmt.get("url")
+            mime_raw = str(raw_fmt.get("mimeType") or "")
+            if not isinstance(direct_url, str) or not direct_url.startswith("http"):
+                continue
+            if not mime_raw.lower().startswith("audio/"):
+                continue
+            acodec = "mp4a.40.2" if "mp4a" in mime_raw else ("opus" if "opus" in mime_raw else mime_raw)
+            ext = "m4a" if "audio/mp4" in mime_raw else ("webm" if "webm" in mime_raw else "m4a")
+            bitrate = raw_fmt.get("averageBitrate") or raw_fmt.get("bitrate") or 0
+            abr_kbps = round(float(bitrate) / 1000.0, 1) if isinstance(bitrate, (int, float)) and bitrate > 0 else 128.0
+            asr_val = raw_fmt.get("audioSampleRate")
+            try:
+                asr = int(asr_val) if asr_val else 44100
+            except (TypeError, ValueError):
+                asr = 44100
+            mapped_formats.append(
+                {
+                    "format_id": str(raw_fmt.get("itag") or "ytm"),
+                    "url": direct_url,
+                    "ext": ext,
+                    "protocol": "https",
+                    "vcodec": "none",
+                    "acodec": acodec,
+                    "abr": abr_kbps,
+                    "asr": asr,
+                }
+            )
+        return self._pick_audio_only_format(
+            mapped_formats,
+            tier,
+            allow_ffmpeg_only=allow_ffmpeg_only,
+        )
 
     def _extract_audio_source(
         self,
@@ -2522,32 +2535,48 @@ class MusicProvider:
         duration_seconds: Optional[int],
         tier: str,
     ) -> Tuple[Mapping[str, Any], str]:
+        clean_vid = (video_id or "").strip()
+        if not VIDEO_ID_RE.fullmatch(clean_vid):
+            raise MusicProviderError("ID lagu YouTube Music tidak valid.", 400)
+
         allow_ffmpeg_only = self._should_use_ffmpeg_remux()
-        ydl_base_opts: Dict[str, Any] = {
+
+        # 1. Try direct ytmusicapi.get_song streamingData URL if unencrypted & available
+        ytm_fmt = self._extract_from_ytmusic_song_api(
+            clean_vid,
+            tier,
+            allow_ffmpeg_only=allow_ffmpeg_only,
+        )
+        if ytm_fmt and ytm_fmt.get("url"):
+            return ytm_fmt, "YouTube Music Audio"
+
+        if time.monotonic() < self._yt_bot_blocked_until:
+            raise MusicProviderError(
+                "Aliran audio langsung sedang dibatasi YouTube; beralih ke pemutar YouTube.",
+                403,
+            )
+
+        ydl_opts: Dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
             "nocheckcertificate": True,
             "socket_timeout": 12,
             "cachedir": False,
+            "skip_download": True,
         }
+        node_bin = shutil.which("node")
+        if node_bin:
+            ydl_opts["js_runtimes"] = {"node": {"path": node_bin}}
+        cookie_file = self._resolve_ytdlp_cookiefile()
+        if cookie_file:
+            ydl_opts["cookiefile"] = cookie_file
 
-        clean_title = _clean_track_title_for_query(title)
-        clean_artist = _clean_artist_for_query(artist)
-        skip_yt_on_vercel = bool(
-            os.environ.get("VERCEL")
-            and os.environ.get("SOUNDCLEAR_TRY_YT_ON_VERCEL") != "1"
-            and clean_title
-        )
-
-        # 1. Try direct YouTube audio-only extraction unless recently bot-blocked or on Vercel serverless
-        if (
-            not skip_yt_on_vercel
-            and time.monotonic() >= self._yt_bot_blocked_until
-            and VIDEO_ID_RE.fullmatch(video_id)
-        ):
+        # 2. Extract audio-only format strictly from YouTube Music
+        last_exc: Optional[Exception] = None
+        for watch_url in (f"https://music.youtube.com/watch?v={clean_vid}",):
             try:
-                with yt_dlp.YoutubeDL({**ydl_base_opts, "skip_download": True}) as ydl:
-                    info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(watch_url, download=False)
                 if isinstance(info, Mapping):
                     fmt = self._pick_audio_only_format(
                         list(info.get("formats") or []),
@@ -2555,106 +2584,23 @@ class MusicProvider:
                         allow_ffmpeg_only=allow_ffmpeg_only,
                     )
                     if fmt and fmt.get("url"):
-                        return fmt, "YouTube Audio"
+                        return fmt, "YouTube Music Audio"
             except Exception as exc:
+                last_exc = exc
                 err_str = str(exc).lower()
                 if "sign in to confirm" in err_str or "bot" in err_str or "login" in err_str:
-                    self._yt_bot_blocked_until = time.monotonic() + 600
+                    self._yt_bot_blocked_until = time.monotonic() + 300
+                    raise MusicProviderError(
+                        "Aliran audio langsung memerlukan verifikasi YouTube; beralih ke pemutar YouTube.",
+                        403,
+                    ) from exc
 
-        # 2. Fallback to SoundCloud full audio-only search (works reliably on serverless)
-        core_title = re.split(r"\s*(?:\|\||\|+|//|•)\s*", clean_title, maxsplit=1)[0].strip()
-        core_title = re.sub(
-            r"\s+[-–—]\s+(?:official|lyric|audio|video|live|cover|remix|jazz|acoustic).*$",
-            "",
-            core_title,
-            flags=re.IGNORECASE,
-        ).strip()
-        core_title_plain = re.sub(r"\s+", " ", re.sub(r"[^\w\s-]", " ", core_title or clean_title)).strip()
-
-        raw_queries: List[str] = []
-        if clean_artist and clean_title:
-            raw_queries.append(f"{clean_artist} {clean_title}")
-        if clean_artist and core_title_plain:
-            raw_queries.append(f"{clean_artist} {core_title_plain}")
-        if core_title_plain:
-            raw_queries.append(core_title_plain)
-        words = core_title_plain.split()
-        if len(words) > 6:
-            raw_queries.append(" ".join(words[:6]))
-
-        queries: List[str] = []
-        seen_q: set[str] = set()
-        for q_cand in raw_queries:
-            norm_q = " ".join(q_cand.split()).strip()
-            if norm_q and norm_q.lower() not in seen_q:
-                seen_q.add(norm_q.lower())
-                queries.append(norm_q)
-
-        if not queries:
-            raise MusicProviderError("Metadata lagu tidak cukup untuk memutar audio.", 404)
-
-        search_opts = {**ydl_base_opts, "extract_flat": True}
-        last_search_exc: Optional[Exception] = None
-        score_target_title = core_title_plain or clean_title
-
-        for sc_query in queries[:3]:
-            entries: List[Mapping[str, Any]] = []
-            try:
-                with yt_dlp.YoutubeDL(search_opts) as ydl:
-                    res = ydl.extract_info(f"scsearch8:{sc_query}", download=False)
-                if isinstance(res, Mapping):
-                    entries = [e for e in (res.get("entries") or []) if isinstance(e, Mapping)]
-            except Exception as exc:
-                last_search_exc = exc
-                continue
-
-            if not entries:
-                continue
-
-            scored: List[Tuple[int, Mapping[str, Any]]] = []
-            for entry in entries:
-                s = self._score_soundcloud_entry(entry, score_target_title, clean_artist, duration_seconds)
-                if s is not None:
-                    scored.append((s, entry))
-            scored.sort(key=lambda pair: pair[0], reverse=True)
-
-            if not scored:
-                for entry in entries:
-                    if _is_excluded_regional_text(f"{entry.get('title') or ''} {entry.get('uploader') or ''}"):
-                        continue
-                    dur = entry.get("duration")
-                    if isinstance(dur, (int, float)) and dur > 35:
-                        scored.append((1, entry))
-                if not scored:
-                    for entry in entries:
-                        if not _is_excluded_regional_text(f"{entry.get('title') or ''} {entry.get('uploader') or ''}"):
-                            scored.append((0, entry))
-
-            for _, candidate in scored[:4]:
-                target_url = candidate.get("url") or candidate.get("webpage_url")
-                if not isinstance(target_url, str) or not target_url:
-                    continue
-                try:
-                    with yt_dlp.YoutubeDL({**ydl_base_opts, "skip_download": True}) as ydl:
-                        full_info = ydl.extract_info(target_url, download=False)
-                    if not isinstance(full_info, Mapping):
-                        continue
-                    dur_val = full_info.get("duration")
-                    if duration_seconds and duration_seconds > 45 and isinstance(dur_val, (int, float)) and dur_val <= 35:
-                        continue
-                    fmt = self._pick_audio_only_format(
-                        list(full_info.get("formats") or []),
-                        tier,
-                        allow_ffmpeg_only=allow_ffmpeg_only,
-                    )
-                    if fmt and fmt.get("url"):
-                        return fmt, "SoundCloud Audio"
-                except Exception:
-                    continue
-
-        if last_search_exc is not None:
-            raise MusicProviderError(f"Gagal mencari sumber audio: {last_search_exc}", 502) from last_search_exc
-        raise MusicProviderError("Sumber aliran audio belum tersedia untuk lagu ini.", 404)
+        if last_exc is not None:
+            raise MusicProviderError(
+                f"Aliran audio YouTube Music belum tersedia: {last_exc}",
+                502,
+            ) from last_exc
+        raise MusicProviderError("Aliran audio YouTube Music tidak tersedia untuk lagu ini.", 404)
 
     def _resolve_track_metadata_for_stream(
         self,

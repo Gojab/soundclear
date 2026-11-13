@@ -97,20 +97,20 @@ test('local audio tracks stay isolated from YouTube videoId resolution', () => {
   assert.equal(isPlayableTrack(localItem), true);
 });
 
-test('isYouTubeVideoId distinguishes 11-char YouTube IDs from Spotify track IDs', () => {
+test('isYouTubeVideoId validates 11-char YouTube Music video IDs', () => {
   assert.equal(isYouTubeVideoId('dQw4w9WgXcQ'), true);
   assert.equal(isYouTubeVideoId('CSKr9seKdgI'), true);
-  assert.equal(isYouTubeVideoId('4xoY4lZNoTjEuHsSmhgF1G'), false);
+  assert.equal(isYouTubeVideoId('MPREb_RVAbNZdUasD'), false);
   assert.equal(isYouTubeVideoId(''), false);
   assert.equal(isYouTubeVideoId(null), false);
 });
 
-test('normalizeRouteId sanitizes Spotify URIs, URLs, and rejects empty or nullish IDs', () => {
-  assert.equal(normalizeRouteId('4xoY4lZNoTjEuHsSmhgF1G'), '4xoY4lZNoTjEuHsSmhgF1G');
-  assert.equal(normalizeRouteId('spotify:artist:4tZwfgrHOc3mvqYlEYSvVi'), '4tZwfgrHOc3mvqYlEYSvVi');
+test('normalizeRouteId extracts YouTube Music IDs from URLs and rejects empty or nullish IDs', () => {
+  assert.equal(normalizeRouteId('MPREb_RVAbNZdUasD'), 'MPREb_RVAbNZdUasD');
+  assert.equal(normalizeRouteId('https://music.youtube.com/watch?v=5F28ye50-Kc'), '5F28ye50-Kc');
   assert.equal(
-    normalizeRouteId('https://open.spotify.com/album/1ATL5GLyefJaxhQzSPVrLX?si=abc'),
-    '1ATL5GLyefJaxhQzSPVrLX',
+    normalizeRouteId('https://music.youtube.com/channel/UC_DHlXllTSMB8pTC38_leFg'),
+    'UC_DHlXllTSMB8pTC38_leFg',
   );
   assert.equal(normalizeRouteId('  '), null);
   assert.equal(normalizeRouteId('undefined'), null);

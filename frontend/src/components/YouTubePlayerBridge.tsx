@@ -1,7 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { resolvePlayableYoutube } from '../api/client';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
-import { formatArtists } from '../utils/playerLogic';
+import { useSettingsStore } from '../store/settingsStore';
+import { clampYoutubeVolume } from '../utils/audioMath';
+import {
+  formatArtists,
+  getPlayableVideoId,
+  getTrackUniqueId,
+  isLocalTrack,
+} from '../utils/playerLogic';
+import {
+  isYoutubeIframeActive,
+  pickNextYoutubeFallbackCandidate,
+} from '../utils/streamPlaybackLogic';
 
 interface NetworkInformationLike {
   effectiveType?: string;
@@ -10,9 +22,142 @@ interface NetworkInformationLike {
   removeEventListener?: (type: string, listener: () => void) => void;
 }
 
+interface YTPlayerInstance {
+  loadVideoById: (opts: { videoId: string; startSeconds?: number } | string) => void;
+  cueVideoById: (opts: { videoId: string; startSeconds?: number } | string) => void;
+  playVideo: () => void;
+  pauseVideo: () => void;
+  stopVideo: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  setVolume: (volume: number) => void;
+  mute: () => void;
+  unMute: () => void;
+  setPlaybackRate: (rate: number) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  getPlayerState: () => number;
+  destroy: () => void;
+}
+
+interface YTNamespace {
+  Player: new (
+    element: HTMLElement | string,
+    options: {
+      width?: string | number;
+      height?: string | number;
+      videoId?: string;
+      host?: string;
+      playerVars?: Record<string, string | number>;
+      events?: {
+        onReady?: (event: { target: YTPlayerInstance }) => void;
+        onStateChange?: (event: { target: YTPlayerInstance; data: number }) => void;
+        onError?: (event: { target: YTPlayerInstance; data: number }) => void;
+      };
+    },
+  ) => YTPlayerInstance;
+  PlayerState?: {
+    UNSTARTED: number;
+    ENDED: number;
+    PLAYING: number;
+    PAUSED: number;
+    BUFFERING: number;
+    CUED: number;
+  };
+}
+
+declare global {
+  interface Window {
+    YT?: YTNamespace;
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+let ytApiPromise: Promise<YTNamespace> | null = null;
+
+function loadYouTubeIframeApi(): Promise<YTNamespace> {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('Window unavailable'));
+  }
+  if (window.YT?.Player) {
+    return Promise.resolve(window.YT);
+  }
+  if (ytApiPromise) {
+    return ytApiPromise;
+  }
+
+  ytApiPromise = new Promise<YTNamespace>((resolve, reject) => {
+    const prevReady = window.onYouTubeIframeAPIReady;
+    const timeout = window.setTimeout(() => {
+      ytApiPromise = null;
+      reject(new Error('YouTube IFrame API load timeout'));
+    }, 15000);
+
+    window.onYouTubeIframeAPIReady = () => {
+      window.clearTimeout(timeout);
+      if (typeof prevReady === 'function') {
+        try {
+          prevReady();
+        } catch {
+          // Ignore prior handler errors
+        }
+      }
+      if (window.YT?.Player) {
+        resolve(window.YT);
+      } else {
+        ytApiPromise = null;
+        reject(new Error('YouTube IFrame API failed to initialize'));
+      }
+    };
+
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      'script[src*="youtube.com/iframe_api"]',
+    );
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.src = 'https://www.youtube.com/iframe_api';
+      script.async = true;
+      script.onerror = () => {
+        window.clearTimeout(timeout);
+        ytApiPromise = null;
+        reject(new Error('Failed to load YouTube IFrame API script'));
+      };
+      document.head.appendChild(script);
+    }
+  });
+
+  return ytApiPromise;
+}
+
 export function YouTubePlayerBridge() {
+  const hydrated = usePlayerStore((s) => s.hydrated);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const volume = usePlayerStore((s) => s.volume);
+  const isMuted = usePlayerStore((s) => s.isMuted);
+  const playbackRate = usePlayerStore((s) => s.playbackRate);
+  const seekVersion = usePlayerStore((s) => s.seekVersion);
+  const pendingSeekSeconds = usePlayerStore((s) => s.pendingSeekSeconds);
+  const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
+  const maxVolumeLimit = useSettingsStore((s) => s.youtubeSound.maxVolumeLimit);
+
+  const iframeHostRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<YTPlayerInstance | null>(null);
+  const playerReadyRef = useRef(false);
+  const loadedVideoIdRef = useRef<string | null>(null);
+  const trackSessionKeyRef = useRef<string | null>(null);
+  const attemptedVideoIdsRef = useRef<Set<string>>(new Set());
+  const fallbackCountRef = useRef(0);
+  const desiredVideoIdRef = useRef<string | null>(null);
+  const handleYtErrorRef = useRef<() => void>(() => {});
+
+  const localActive = isLocalTrack(currentTrack);
+  const iframeActive =
+    hydrated && Boolean(currentTrack) && !localActive && isYoutubeIframeActive(activeStreamMeta);
+  const rawVideoId = currentTrack ? getPlayableVideoId(currentTrack) : null;
+  const targetVideoId = iframeActive
+    ? activeStreamMeta?.resolvedVideoId || rawVideoId
+    : null;
+  const trackSessionKey = getTrackUniqueId(currentTrack);
 
   // Monitor navigator.connection for Auto-Adjust Quality telemetry
   useEffect(() => {
@@ -138,5 +283,356 @@ export function YouTubePlayerBridge() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  return null;
+  // Load / switch video in hidden YouTube IFrame player when youtube-iframe fallback is active
+  useEffect(() => {
+    if (!iframeActive || !targetVideoId) {
+      desiredVideoIdRef.current = null;
+      loadedVideoIdRef.current = null;
+      if (playerRef.current && playerReadyRef.current) {
+        try {
+          playerRef.current.stopVideo();
+        } catch {
+          // Ignore stop errors
+        }
+      }
+      return;
+    }
+
+    let cancelled = false;
+    if (trackSessionKeyRef.current !== trackSessionKey) {
+      trackSessionKeyRef.current = trackSessionKey;
+      attemptedVideoIdsRef.current = new Set([targetVideoId]);
+      fallbackCountRef.current = 0;
+    } else {
+      attemptedVideoIdsRef.current.add(targetVideoId);
+    }
+    desiredVideoIdRef.current = targetVideoId;
+
+    const syncPlayerConfig = (player: YTPlayerInstance) => {
+      const st = usePlayerStore.getState();
+      const cap = useSettingsStore.getState().youtubeSound.maxVolumeLimit;
+      const effVol = clampYoutubeVolume(st.volume, cap, st.isMuted);
+      try {
+        player.setVolume(effVol);
+        if (st.isMuted || effVol === 0) {
+          player.mute();
+        } else {
+          player.unMute();
+        }
+        player.setPlaybackRate(st.playbackRate || 1);
+      } catch {
+        // Ignore transient config errors
+      }
+    };
+
+    const loadTargetInPlayer = (player: YTPlayerInstance, vid: string) => {
+      if (loadedVideoIdRef.current === vid) return;
+      loadedVideoIdRef.current = vid;
+      const st = usePlayerStore.getState();
+      const startSeconds = Math.max(0, st.pendingSeekSeconds ?? st.currentTime ?? 0);
+      syncPlayerConfig(player);
+      try {
+        if (st.isPlaying) {
+          player.loadVideoById({ videoId: vid, startSeconds });
+        } else {
+          player.cueVideoById({ videoId: vid, startSeconds });
+        }
+      } catch {
+        // Ignore transient load error
+      }
+    };
+
+    const handleYtPlayerError = async () => {
+      if (cancelled) return;
+      const st = usePlayerStore.getState();
+      const activeTrack = st.currentTrack;
+      const activeMeta = st.activeStreamMeta;
+      const origVid = getPlayableVideoId(activeTrack);
+      if (!activeTrack || !origVid || !isYoutubeIframeActive(activeMeta)) {
+        return;
+      }
+
+      if (fallbackCountRef.current >= 3) {
+        st.setIsBuffering(false);
+        st.setIsPlaying(false);
+        st.setPlayerError(
+          'Pemutar YouTube Music tidak mengizinkan embed untuk lagu ini di sesi saat ini.',
+        );
+        return;
+      }
+
+      fallbackCountRef.current += 1;
+      st.setIsBuffering(true);
+      try {
+        const excludeList = Array.from(attemptedVideoIdsRef.current);
+        const resolved = await resolvePlayableYoutube(origVid, {
+          title: activeTrack.title,
+          artist: formatArtists(activeTrack.artists),
+          type: activeTrack.type,
+          durationSeconds: activeTrack.durationSeconds,
+          fallback: true,
+          exclude: excludeList,
+        });
+        if (cancelled) return;
+        const nextCand = pickNextYoutubeFallbackCandidate(
+          attemptedVideoIdsRef.current,
+          resolved.candidates,
+        );
+        if (!nextCand) {
+          throw new Error('Tidak ada kandidat alternatif');
+        }
+        attemptedVideoIdsRef.current.add(nextCand);
+        desiredVideoIdRef.current = nextCand;
+        const latestMeta = usePlayerStore.getState().activeStreamMeta;
+        if (latestMeta && isYoutubeIframeActive(latestMeta)) {
+          usePlayerStore.getState().setActiveStreamMeta({
+            ...latestMeta,
+            resolvedVideoId: nextCand,
+          });
+        }
+        if (playerRef.current && playerReadyRef.current) {
+          loadTargetInPlayer(playerRef.current, nextCand);
+        }
+      } catch {
+        if (cancelled) return;
+        const latest = usePlayerStore.getState();
+        latest.setIsBuffering(false);
+        latest.setIsPlaying(false);
+        latest.setPlayerError(
+          'Pemutar YouTube Music tidak mengizinkan embed untuk lagu ini di sesi saat ini.',
+        );
+      }
+    };
+
+    handleYtErrorRef.current = () => {
+      void handleYtPlayerError();
+    };
+
+    const ensurePlayer = async () => {
+      if (playerRef.current) {
+        if (playerReadyRef.current) {
+          loadTargetInPlayer(playerRef.current, targetVideoId);
+        }
+        return;
+      }
+
+      try {
+        const YT = await loadYouTubeIframeApi();
+        if (cancelled || !iframeHostRef.current) return;
+
+        iframeHostRef.current.innerHTML = '';
+        const mountNode = document.createElement('div');
+        iframeHostRef.current.appendChild(mountNode);
+
+        const initialState = usePlayerStore.getState();
+        const startAt = Math.max(
+          0,
+          Math.floor(initialState.pendingSeekSeconds ?? initialState.currentTime ?? 0),
+        );
+
+        const instance = new YT.Player(mountNode, {
+          width: 200,
+          height: 112,
+          videoId: targetVideoId,
+          host: 'https://www.youtube.com',
+          playerVars: {
+            autoplay: initialState.isPlaying ? 1 : 0,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            modestbranding: 1,
+            rel: 0,
+            playsinline: 1,
+            start: startAt,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: (event) => {
+              playerReadyRef.current = true;
+              const p = event.target;
+              syncPlayerConfig(p);
+              if (!isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) {
+                try {
+                  p.stopVideo();
+                } catch {
+                  // Ignore
+                }
+                return;
+              }
+              loadedVideoIdRef.current = targetVideoId;
+              const latestVid = desiredVideoIdRef.current;
+              if (latestVid && latestVid !== targetVideoId) {
+                loadTargetInPlayer(p, latestVid);
+                return;
+              }
+              if (usePlayerStore.getState().isPlaying) {
+                try {
+                  p.playVideo();
+                } catch {
+                  // Ignore autoplay errors
+                }
+              }
+            },
+            onStateChange: (event) => {
+              const st = usePlayerStore.getState();
+              if (!isYoutubeIframeActive(st.activeStreamMeta)) return;
+
+              const stateCode = event.data;
+              if (stateCode === 1) {
+                // PLAYING
+                st.setIsBuffering(false);
+                st.setPlayerError(null);
+                st.clearPendingSeek();
+                const dur = event.target.getDuration?.() ?? 0;
+                const cur = event.target.getCurrentTime?.() ?? st.currentTime;
+                if (Number.isFinite(cur)) {
+                  st.setProgress(cur, dur > 0 ? dur : undefined);
+                }
+                if (!st.isPlaying) {
+                  try {
+                    event.target.pauseVideo();
+                  } catch {
+                    // Ignore
+                  }
+                }
+              } else if (stateCode === 3) {
+                // BUFFERING
+                st.setIsBuffering(true);
+              } else if (stateCode === 2) {
+                // PAUSED
+                st.setIsBuffering(false);
+              } else if (stateCode === 0) {
+                // ENDED
+                st.handleTrackEnded();
+              }
+            },
+            onError: () => {
+              handleYtErrorRef.current();
+            },
+          },
+        });
+
+        loadedVideoIdRef.current = targetVideoId;
+        playerRef.current = instance;
+      } catch {
+        if (!cancelled) {
+          const st = usePlayerStore.getState();
+          st.setIsBuffering(false);
+          st.setIsPlaying(false);
+          st.setPlayerError('Gagal memuat pemutar YouTube Music.');
+        }
+      }
+    };
+
+    void ensurePlayer();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [iframeActive, targetVideoId, trackSessionKey]);
+
+  // Sync play / pause / stop state
+  useEffect(() => {
+    if (!iframeActive || !playerRef.current || !playerReadyRef.current) return;
+    const p = playerRef.current;
+    const st = usePlayerStore.getState();
+    try {
+      if (isPlaying) {
+        p.playVideo();
+      } else if (!st.hasActiveSessionPlayback && st.currentTime === 0) {
+        p.stopVideo();
+      } else {
+        p.pauseVideo();
+      }
+    } catch {
+      // Ignore transient YT state errors
+    }
+  }, [iframeActive, isPlaying]);
+
+  // Sync volume & mute
+  useEffect(() => {
+    if (!iframeActive || !playerRef.current || !playerReadyRef.current) return;
+    const p = playerRef.current;
+    const effVol = clampYoutubeVolume(volume, maxVolumeLimit, isMuted);
+    try {
+      p.setVolume(effVol);
+      if (isMuted || effVol === 0) {
+        p.mute();
+      } else {
+        p.unMute();
+      }
+    } catch {
+      // Ignore
+    }
+  }, [iframeActive, volume, isMuted, maxVolumeLimit]);
+
+  // Sync playbackRate
+  useEffect(() => {
+    if (!iframeActive || !playerRef.current || !playerReadyRef.current) return;
+    try {
+      playerRef.current.setPlaybackRate(playbackRate || 1);
+    } catch {
+      // Ignore
+    }
+  }, [iframeActive, playbackRate]);
+
+  // Explicit seek
+  useEffect(() => {
+    if (!iframeActive || pendingSeekSeconds === null || !playerRef.current || !playerReadyRef.current) {
+      return;
+    }
+    try {
+      playerRef.current.seekTo(Math.max(0, pendingSeekSeconds), true);
+      usePlayerStore.getState().clearPendingSeek();
+    } catch {
+      // Ignore
+    }
+  }, [iframeActive, seekVersion, pendingSeekSeconds]);
+
+  // Progress & MediaSession polling while playing in YT IFrame mode
+  useEffect(() => {
+    if (!iframeActive || !isPlaying) return;
+
+    const timer = window.setInterval(() => {
+      const p = playerRef.current;
+      if (!p || !playerReadyRef.current) return;
+      try {
+        const cur = p.getCurrentTime?.() ?? 0;
+        const dur = p.getDuration?.() ?? 0;
+        const store = usePlayerStore.getState();
+        if (Number.isFinite(cur) && cur >= 0) {
+          store.setProgress(cur, dur > 0 ? dur : undefined);
+        }
+        if (
+          'mediaSession' in navigator &&
+          'setPositionState' in navigator.mediaSession &&
+          dur > 0 &&
+          Number.isFinite(cur)
+        ) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: dur,
+              playbackRate: store.playbackRate || 1,
+              position: Math.min(cur, dur),
+            });
+          } catch {
+            // Ignore
+          }
+        }
+      } catch {
+        // Ignore polling errors
+      }
+    }, 200);
+
+    return () => window.clearInterval(timer);
+  }, [iframeActive, isPlaying]);
+
+  return (
+    <div
+      ref={iframeHostRef}
+      aria-hidden="true"
+      className="fixed bottom-0 right-0 w-[200px] h-[112px] opacity-[0.001] pointer-events-none -z-10 overflow-hidden"
+    />
+  );
 }
+
