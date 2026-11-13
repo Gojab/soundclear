@@ -618,7 +618,7 @@ export function getAudioDiagnosticsSnapshot(
       label: testToneMode
         ? `Sumber: Tes Nada (${testToneMode === 'sweep' ? 'Sweep' : 'Pink Noise'})`
         : bypassedAll
-          ? 'Sumber: Streaming Cloud (Tanpa DSP)'
+          ? 'Sumber: Audio Tanpa DSP (Direct)'
           : 'Sumber: MediaElementAudioSource',
       status: bypassedAll && !testToneMode ? 'bypassed' : 'active',
     },

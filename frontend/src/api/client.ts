@@ -172,8 +172,32 @@ export function fetchWatchPlaylist(
   );
 }
 
-export function fetchLyrics(browseId: string, signal?: AbortSignal): Promise<LyricsResponse> {
-  return requestJson<LyricsResponse>(`/lyrics/${encodeURIComponent(browseId)}`, { signal });
+export interface FetchLyricsInput {
+  browseId?: string | null;
+  videoId?: string | null;
+  title?: string;
+  artist?: string;
+  album?: string | null;
+  durationSeconds?: number | null;
+}
+
+export function fetchLyrics(
+  input: string | FetchLyricsInput,
+  signal?: AbortSignal,
+): Promise<LyricsResponse> {
+  if (typeof input === 'string') {
+    return requestJson<LyricsResponse>(`/lyrics/${encodeURIComponent(input)}`, { signal });
+  }
+  const params = new URLSearchParams();
+  if (input.browseId) params.set('browseId', input.browseId);
+  if (input.videoId) params.set('videoId', input.videoId);
+  if (input.title) params.set('title', input.title);
+  if (input.artist) params.set('artist', input.artist);
+  if (input.album) params.set('album', input.album);
+  if (input.durationSeconds && input.durationSeconds > 0) {
+    params.set('durationSeconds', String(Math.round(input.durationSeconds)));
+  }
+  return requestJson<LyricsResponse>(`/lyrics?${params.toString()}`, { signal });
 }
 
 export function fetchSongCredits(
@@ -381,6 +405,65 @@ export function resetAccountAudioSettings(
     { method: 'POST' },
   );
 }
+
+export interface StreamAudioMetaResponse {
+  trackId: string;
+  available: boolean;
+  codec: string;
+  bitrateKbps?: number | null;
+  sampleRateHz?: number | null;
+  ext: string;
+  mimeType: string;
+  source: string;
+  tier: string;
+  cacheReady: boolean;
+}
+
+function buildStreamQueryParams(meta?: {
+  title?: string;
+  artist?: string;
+  durationSeconds?: number | null;
+  quality?: string;
+}): string {
+  const params = new URLSearchParams();
+  if (meta?.title) params.set('title', meta.title);
+  if (meta?.artist) params.set('artist', meta.artist);
+  if (meta?.durationSeconds && meta.durationSeconds > 0) {
+    params.set('durationSeconds', String(Math.round(meta.durationSeconds)));
+  }
+  if (meta?.quality) params.set('quality', meta.quality);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export function buildStreamAudioUrl(
+  videoId: string,
+  meta?: {
+    title?: string;
+    artist?: string;
+    durationSeconds?: number | null;
+    quality?: string;
+  },
+): string {
+  return `/api/stream/${encodeURIComponent(videoId)}${buildStreamQueryParams(meta)}`;
+}
+
+export function fetchStreamAudioMeta(
+  videoId: string,
+  meta?: {
+    title?: string;
+    artist?: string;
+    durationSeconds?: number | null;
+    quality?: string;
+  },
+  signal?: AbortSignal,
+): Promise<StreamAudioMetaResponse> {
+  return requestJson<StreamAudioMetaResponse>(
+    `/stream/${encodeURIComponent(videoId)}/meta${buildStreamQueryParams(meta)}`,
+    { signal },
+  );
+}
+
 
 
 

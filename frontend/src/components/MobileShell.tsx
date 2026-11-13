@@ -24,7 +24,9 @@ import {
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
+import { hasActiveCustomBackground } from '../utils/backgroundTheme';
 import {
   formatArtists,
   formatTime,
@@ -73,6 +75,9 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
   const trackKey = getTrackUniqueId(currentTrack);
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
   const toggleLike = useLibraryStore((s) => s.toggleLike);
+  const customBackground = useSettingsStore((s) => s.customBackground);
+  const bgActive = hasActiveCustomBackground(customBackground);
+  const glassPanels = bgActive && customBackground.panelGlass;
 
   const safeDuration = duration > 0 ? duration : currentTrack?.durationSeconds || 0;
   const progressPct =
@@ -109,7 +114,9 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               setMobileExpanded(true);
             }
           }}
-          className="md:hidden fixed left-2 right-2 bottom-[64px] z-30 glass-panel rounded-xl overflow-hidden bg-[#141418]/90"
+          className={`md:hidden fixed left-2 right-2 bottom-[64px] z-30 glass-panel rounded-xl overflow-hidden ${
+            glassPanels ? 'bg-[#141418]/72 backdrop-blur-xl' : 'bg-[#141418]/90'
+          }`}
         >
           <div className="flex items-center gap-3 px-3 py-2">
             <button
@@ -439,7 +446,9 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
       {/* Mobile Bottom Tab Bar */}
       <nav
         aria-label="Navigasi seluler"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[58px] bg-[#0E0E11]/90 backdrop-blur-xl border-t border-white/[0.08] grid grid-cols-5"
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[58px] backdrop-blur-xl border-t border-white/[0.08] grid grid-cols-5 ${
+          glassPanels ? 'bg-[#0E0E11]/72' : 'bg-[#0E0E11]/90'
+        }`}
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;

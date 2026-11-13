@@ -15,6 +15,7 @@ import {
   estimateLoudnessFromRms,
   NORMALIZATION_TARGETS_LUFS,
   preampDbToLinear,
+  resolveTargetStreamQuality,
   selectEffectiveStreamOption,
   stereoWidenerLevelToSideGain,
 } from './audioMath.ts';
@@ -245,5 +246,18 @@ test('selectEffectiveStreamOption downgrades gracefully on slow networks and Dat
     autoAdjustQuality: false,
   });
   assert.equal(unavailablePick.selectedOption?.tier, 'high');
+});
+
+test('resolveTargetStreamQuality adapts to Data Saver and slow network stalls', () => {
+  const baseProfile = {
+    wifiQuality: 'very_high' as const,
+    cellularQuality: 'high' as const,
+    autoAdjustQuality: true,
+  };
+  assert.equal(resolveTargetStreamQuality(baseProfile, true, false, '4g', 0), 'very_high');
+  assert.equal(resolveTargetStreamQuality(baseProfile, true, true, '4g', 0), 'low');
+  assert.equal(resolveTargetStreamQuality(baseProfile, true, false, '2g', 0), 'low');
+  assert.equal(resolveTargetStreamQuality(baseProfile, true, false, '3g', 0), 'normal');
+  assert.equal(resolveTargetStreamQuality(baseProfile, true, false, '4g', 1), 'high');
 });
 

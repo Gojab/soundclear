@@ -1,6 +1,7 @@
 import type {
   ConcreteQualityTier,
   EqPreset,
+  LocalAudioProfile,
   NormalizationTarget,
   StreamQualityOption,
   StreamQualityTier,
@@ -468,3 +469,33 @@ export function selectEffectiveStreamOption(
     downgradedByNetwork,
   };
 }
+
+export function resolveTargetStreamQuality(
+  profile: Pick<LocalAudioProfile, 'wifiQuality' | 'cellularQuality' | 'autoAdjustQuality'>,
+  _isOnline: boolean,
+  dataSaver: boolean,
+  effectiveType?: string | null,
+  bufferingStalls = 0,
+): ConcreteQualityTier {
+  if (dataSaver) return 'low';
+  const et = (effectiveType || '').toLowerCase();
+  const isCellularLike = et === 'slow-2g' || et === '2g' || et === '3g';
+  const requested = isCellularLike ? profile.cellularQuality : profile.wifiQuality;
+
+  let target: ConcreteQualityTier = requested === 'auto' ? 'high' : requested;
+  if (requested === 'auto' || profile.autoAdjustQuality) {
+    let maxAllowed: ConcreteQualityTier = target;
+    if (et === 'slow-2g' || et === '2g' || bufferingStalls >= 3) {
+      maxAllowed = 'low';
+    } else if (et === '3g' || bufferingStalls >= 2) {
+      maxAllowed = 'normal';
+    } else if (bufferingStalls >= 1) {
+      maxAllowed = 'high';
+    }
+    if (CONCRETE_QUALITY_ORDER.indexOf(maxAllowed) < CONCRETE_QUALITY_ORDER.indexOf(target)) {
+      target = maxAllowed;
+    }
+  }
+  return target;
+}
+

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { hasActiveCustomBackground } from '../utils/backgroundTheme';
 import { ArtworkImage } from './ArtworkImage';
 
 interface SidebarProps {
@@ -35,6 +37,9 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
   const savedAlbums = useLibraryStore((s) => s.savedAlbums);
   const followedArtists = useLibraryStore((s) => s.followedArtists);
   const savedPodcasts = useLibraryStore((s) => s.savedPodcasts);
+  const customBackground = useSettingsStore((s) => s.customBackground);
+  const bgActive = hasActiveCustomBackground(customBackground);
+  const glassPanels = bgActive && customBackground.panelGlass;
 
   const q = searchTerm.trim().toLowerCase();
 
@@ -91,7 +96,13 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
   return (
     <aside
       aria-label="Koleksi Kamu"
-      className="hidden md:flex flex-col w-[272px] lg:w-[296px] shrink-0 bg-[#121212] rounded-lg overflow-hidden"
+      className={`hidden md:flex flex-col w-[272px] lg:w-[296px] shrink-0 rounded-lg overflow-hidden transition-colors duration-300 ${
+        glassPanels
+          ? 'bg-[#121212]/62 backdrop-blur-xl border border-white/[0.07]'
+          : bgActive
+            ? 'bg-[#121212]/88 backdrop-blur-md border border-white/[0.05]'
+            : 'bg-[#121212]'
+      }`}
     >
       {/* Top Koleksi Kamu Header */}
       <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between gap-2">

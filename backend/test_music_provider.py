@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from dataclasses import dataclass
+from unittest import mock
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -13,6 +14,7 @@ from backend.music_provider import (
     MusicProvider,
     MusicProviderError,
     TTLCache,
+    parse_lrc_lyrics,
     pick_largest_thumbnail,
 )
 
@@ -571,6 +573,142 @@ class MusicProviderTests(unittest.TestCase):
         charts_res = provider.get_charts("ID")
         self.assertEqual([s["title"] for s in charts_res["songs"]], ["Sial"])
         self.assertEqual([a["title"] for a in charts_res["artists"]], ["Mahalini"])
+
+    def test_nfkc_stylized_unicode_taiwan_xg_and_non_false_positive(self) -> None:
+        class EdgeRegionalGateway(FakeYTMusicGateway):
+            def search(self, query: str, filter=None, limit: int = 20):
+                return [
+                    {"resultType": "song", "title": "𝐁𝐨𝐥𝐥𝐲𝐰𝐨𝐨𝐝 Medley", "videoId": "inStyl00001"},
+                    {"resultType": "song", "title": "Taiwan Mandopop Mix", "videoId": "twSong00001"},
+                    {"resultType": "song", "title": "WOKE UP", "videoId": "xgSong00001", "artists": [{"name": "XG"}]},
+                    {"resultType": "song", "title": "Anime Opening Best", "videoId": "jpAni00001"},
+                    {"resultType": "song", "title": "Terbelah Jadi Dua", "videoId": "idSafe00001", "artists": [{"name": "Cakra Khan"}]},
+                ]
+
+        provider = MusicProvider(gateway=EdgeRegionalGateway(), sleep_fn=lambda _d: None)  # type: ignore[arg-type]
+        res = provider.search("campuran", None, 20)
+        self.assertEqual([i["title"] for i in res["items"]], ["Terbelah Jadi Dua"])
+        self.assertEqual(provider.search("YOASOBI Idol", None, 20)["items"], [])
+        self.assertEqual(provider.search("Arijit Singh Tum Hi Ho", None, 20)["items"], [])
+        self.assertEqual(provider.suggest("YOASOBI")["suggestions"], [])
+
+    def test_lrclib_synced_and_search_fallback_lyrics(self) -> None:
+        lrc_sample = "[00:01.50] Baris pertama\n[00:05.25] Baris kedua\n[00:10.00] Baris ketiga"
+        parsed = parse_lrc_lyrics(lrc_sample)
+        self.assertEqual(len(parsed), 3)
+        self.assertEqual(parsed[0], {"text": "Baris pertama", "startTimeMs": 1500, "endTimeMs": 5250})
+        self.assertEqual(parsed[1]["startTimeMs"], 5250)
+
+        def fake_http_get(url: str, params=None, headers=None, timeout=6):
+            class _FakeResp:
+                def __init__(self, status_code: int, payload) -> None:
+                    self.status_code = status_code
+                    self._payload = payload
+
+                def json(self):
+                    return self._payload
+
+            if "lrclib.net/api/get" in url:
+                return _FakeResp(404, {})
+            if "lrclib.net/api/search" in url:
+                return _FakeResp(
+                    200,
+                    [
+                        {
+                            "id": 9901,
+                            "trackName": "Shake It Off",
+                            "artistName": "Taylor Swift",
+                            "duration": 219,
+                            "syncedLyrics": lrc_sample,
+                            "plainLyrics": "Baris pertama\nBaris kedua\nBaris ketiga",
+                        }
+                    ],
+                )
+            return _FakeResp(404, {})
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig_provider = main_app.provider
+            try:
+                provider = MusicProvider(
+                    gateway=FakeYTMusicGateway(),  # type: ignore[arg-type]
+                    http_get_fn=fake_http_get,
+                    audio_settings_file=os.path.join(tmpdir, "audio_settings.json"),
+                )
+                main_app.provider = provider
+                client = TestClient(main_app.app)
+
+                resp = client.get("/api/lyrics?title=Shake+It+Off&artist=Taylor+Swift&durationSeconds=219")
+                self.assertEqual(resp.status_code, 200)
+                body = resp.json()
+                self.assertTrue(body["hasTimestamps"])
+                self.assertEqual(body["source"], "LRCLIB (Tersinkron)")
+                self.assertEqual(len(body["lines"]), 3)
+                self.assertEqual(body["lines"][0]["text"], "Baris pertama")
+            finally:
+                main_app.provider = orig_provider
+
+    def test_audio_stream_range_and_meta_endpoints(self) -> None:
+        payload = b"AUDIO_ONLY_TEST_PAYLOAD_" * 120  # > 1024 bytes
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig_provider = main_app.provider
+            try:
+                with mock.patch("backend.music_provider.STREAM_CACHE_DIR", tmpdir):
+                    provider = MusicProvider(
+                        gateway=FakeYTMusicGateway(),  # type: ignore[arg-type]
+                        audio_settings_file=os.path.join(tmpdir, "audio_settings.json"),
+                    )
+
+                    def fake_extract(*_args, **_kwargs):
+                        return (
+                            {
+                                "url": "https://cdn.example.invalid/audio.m4a",
+                                "ext": "m4a",
+                                "acodec": "mp4a.40.2",
+                                "vcodec": "none",
+                                "abr": 160,
+                                "asr": 44100,
+                            },
+                            "SoundCloud Audio",
+                        )
+
+                    def fake_remux(_src, out_path, *_args, **_kwargs):
+                        with open(out_path, "wb") as fh:
+                            fh.write(payload)
+
+                    provider._extract_audio_source = fake_extract  # type: ignore[method-assign]
+                    provider._remux_audio_only = fake_remux  # type: ignore[method-assign]
+
+                    main_app.provider = provider
+                    client = TestClient(main_app.app)
+
+                    meta_resp = client.get("/api/stream/dQw4w9WgXcQ/meta?title=Monokrom&artist=Tulus")
+                    self.assertEqual(meta_resp.status_code, 200)
+                    meta_json = meta_resp.json()
+                    self.assertEqual(meta_json["codec"], "AAC")
+                    self.assertEqual(meta_json["bitrateKbps"], 160)
+                    self.assertEqual(meta_json["mimeType"], "audio/mp4")
+                    self.assertNotIn("filePath", meta_json)
+
+                    # Full audio response supports Accept-Ranges
+                    full_resp = client.get("/api/stream/dQw4w9WgXcQ?title=Monokrom&artist=Tulus")
+                    self.assertEqual(full_resp.status_code, 200)
+                    self.assertEqual(full_resp.headers.get("accept-ranges"), "bytes")
+                    self.assertEqual(full_resp.content, payload)
+
+                    # Range request returns 206 Partial Content
+                    range_resp = client.get(
+                        "/api/stream/dQw4w9WgXcQ?title=Monokrom&artist=Tulus",
+                        headers={"Range": "bytes=0-15"},
+                    )
+                    self.assertEqual(range_resp.status_code, 206)
+                    self.assertEqual(range_resp.headers.get("content-range"), f"bytes 0-15/{len(payload)}")
+                    self.assertEqual(range_resp.content, payload[:16])
+
+                    # Removed endpoint remains 404
+                    self.assertEqual(client.get("/api/stream/options/dQw4w9WgXcQ").status_code, 404)
+            finally:
+                main_app.provider = orig_provider
 
 
 if __name__ == "__main__":

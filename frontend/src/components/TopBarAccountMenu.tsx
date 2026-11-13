@@ -6,6 +6,7 @@ import {
   Heart,
   Keyboard,
   Library,
+  Palette,
   Settings,
   Sliders,
   User,
@@ -89,7 +90,7 @@ export function TopBarAccountMenu() {
             >
               <span className="flex items-center gap-2.5">
                 <User className="w-4 h-4 text-white/70" strokeWidth={1.9} />
-                <span>Profil ({accountKey === 'cloud' ? 'Streaming Cloud' : 'Mode Lokal'})</span>
+                <span>Profil ({accountKey === 'cloud' ? 'Streaming Audio' : 'Mode Lokal'})</span>
               </span>
               <ExternalLink className="w-3.5 h-3.5 text-white/50" strokeWidth={1.8} />
             </button>
@@ -129,6 +130,18 @@ export function TopBarAccountMenu() {
               <span className="flex items-center gap-2.5">
                 <BarChart3 className="w-4 h-4 text-white/70" strokeWidth={1.9} />
                 <span>Rekap Dengar</span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => go({ name: 'settings', tab: 'appearance' })}
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-white/90 hover:bg-white/[0.08] hover:text-white transition-colors"
+            >
+              <span className="flex items-center gap-2.5">
+                <Palette className="w-4 h-4 text-[#2EE6A6]" strokeWidth={1.9} />
+                <span>Latar Belakang &amp; Tampilan</span>
               </span>
             </button>
 

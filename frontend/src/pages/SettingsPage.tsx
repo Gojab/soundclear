@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { fetchAccountLibrary, fetchAccountStatus } from '../api/client';
 import { AudioSettingsTab } from '../components/AudioSettingsTab';
+import { BackgroundSettingsSection } from '../components/BackgroundSettingsSection';
 import { exportAllSoundClearData, importAllSoundClearData } from '../db/soundclearDb';
 import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
@@ -31,12 +32,12 @@ const SECTION_LABELS: Record<HomeSectionId, string> = {
 };
 
 interface SettingsPageProps {
-  initialTab?: 'general' | 'sound';
+  initialTab?: 'general' | 'appearance' | 'sound';
   focusEq?: boolean;
 }
 
 export function SettingsPage({ initialTab = 'general', focusEq = false }: SettingsPageProps) {
-  const [activeTab, setActiveTab] = useState<'general' | 'sound'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'sound'>(initialTab);
   const [syncing, setSyncing] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -154,21 +155,21 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">
             Pengaturan
           </h1>
           <p className="text-xs text-white/55 mt-0.5">
-            Preferensi umum, kualitas streaming, equalizer 10-band, dan diagnostik audio
+            Preferensi umum, latar belakang kustom, kualitas streaming, dan equalizer 10-band
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/[0.06] border border-white/[0.08] self-start">
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/[0.06] border border-white/[0.08] self-start shrink-0 overflow-x-auto max-w-full">
           <button
             type="button"
             onClick={() => setActiveTab('general')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
               activeTab === 'general' ? 'bg-[#2EE6A6] text-[#06130E] font-semibold' : 'text-white/70 hover:text-white'
             }`}
           >
@@ -176,8 +177,17 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('appearance')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'appearance' ? 'bg-[#2EE6A6] text-[#06130E] font-semibold' : 'text-white/70 hover:text-white'
+            }`}
+          >
+            Latar &amp; Tampilan
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('sound')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
               activeTab === 'sound' ? 'bg-[#2EE6A6] text-[#06130E] font-semibold' : 'text-white/70 hover:text-white'
             }`}
           >
@@ -190,6 +200,8 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
         <div ref={eqSectionRef}>
           <AudioSettingsTab />
         </div>
+      ) : activeTab === 'appearance' ? (
+        <BackgroundSettingsSection />
       ) : (
         <div className="space-y-5">
           {/* Preferensi Umum */}

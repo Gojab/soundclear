@@ -474,14 +474,14 @@ export function AudioSettingsTab() {
             <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
               <div>
                 <p className="font-semibold text-white">
-                  {activeStreamMeta?.badgeLabel || 'Streaming Cloud'}
+                  {activeStreamMeta?.badgeLabel || 'Streaming Audio'}
                 </p>
                 <p className="text-white/50 mt-0.5">
-                  Katalog online diputar langsung melalui pemutar streaming cloud adaptif tanpa mengunduh berkas audio.
+                  Streaming audio-only (tanpa video) diproses langsung melalui Web Audio DSP &amp; Equalizer.
                 </p>
               </div>
               <span className="px-2 py-1 rounded-lg bg-[#2EE6A6]/15 text-[#2EE6A6] font-semibold">
-                Adaptif
+                {localProfile.directMode ? 'Direct Bypass DSP' : 'Web Audio DSP Aktif'}
               </span>
             </div>
           )}
@@ -548,7 +548,7 @@ export function AudioSettingsTab() {
         </div>
 
         <p className="text-xs text-white/50">
-          Unduhan offline tersedia untuk semua lagu: file audio lokal tersimpan utuh di penyimpanan browser, sedangkan lagu katalog online menyimpan data trek serta sampul album di Cache Storage.
+          Unduhan offline menyimpan berkas audio utuh (lokal maupun katalog online) beserta metadata dan sampul album ke IndexedDB &amp; Cache Storage browser.
         </p>
 
         {offlineDownloads.length > 0 && (

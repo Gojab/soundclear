@@ -18,6 +18,13 @@ import type {
   YouTubeSoundSettings,
 } from '../types/music';
 import { BUILTIN_EQ_PRESETS } from '../utils/audioMath';
+import {
+  DEFAULT_CUSTOM_BACKGROUND,
+  isSafeBackgroundImageUrl,
+  normalizeCustomBackground,
+} from '../utils/backgroundTheme';
+
+export const CUSTOM_BACKGROUND_IMAGE_KV_KEY = 'custom_background_image';
 
 export interface LikedTrackRecord {
   id: string;
@@ -110,6 +117,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   homeSectionOrder: DEFAULT_HOME_SECTION_ORDER,
   youtubeSound: DEFAULT_YOUTUBE_SOUND,
   episodePlaybackRates: {},
+  customBackground: { ...DEFAULT_CUSTOM_BACKGROUND },
 };
 
 export class SoundClearDatabase extends Dexie {
@@ -293,6 +301,7 @@ export interface SoundClearBackupPayload {
   recentSearches: RecentSearchEntry[];
   hiddenTracks: HiddenTrackRecord[];
   settings: UserSettings;
+  customBackgroundImage?: string | null;
   playerSession?: PersistedPlayerSession | null;
   localAudioProfiles?: Record<string, LocalAudioProfile>;
 }
@@ -310,6 +319,7 @@ export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload
     recentSearches,
     hiddenTracks,
     settingsRec,
+    customBgImageRec,
     sessionRec,
     allKv,
   ] = await Promise.all([
@@ -324,6 +334,7 @@ export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload
     db.recentSearches.toArray(),
     db.hiddenTracks.toArray(),
     db.kvState.get('settings'),
+    db.kvState.get(CUSTOM_BACKGROUND_IMAGE_KV_KEY),
     db.kvState.get('player_session'),
     db.kvState.toArray(),
   ]);
@@ -335,8 +346,13 @@ export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload
     }
   }
 
+  const rawSettings = (settingsRec?.value as Partial<UserSettings> | undefined) || {};
+  const customBgImage = isSafeBackgroundImageUrl(customBgImageRec?.value)
+    ? customBgImageRec.value
+    : null;
+
   return {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     likedTracks,
     playlists,
@@ -348,7 +364,16 @@ export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload
     playHistory,
     recentSearches,
     hiddenTracks,
-    settings: (settingsRec?.value as UserSettings) || DEFAULT_SETTINGS,
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...rawSettings,
+      youtubeSound: {
+        ...DEFAULT_YOUTUBE_SOUND,
+        ...(rawSettings.youtubeSound || {}),
+      },
+      customBackground: normalizeCustomBackground(rawSettings.customBackground, null),
+    },
+    customBackgroundImage: customBgImage,
     playerSession: (sessionRec?.value as PersistedPlayerSession) || null,
     localAudioProfiles,
   };
@@ -425,6 +450,7 @@ export async function importAllSoundClearData(payload: unknown): Promise<void> {
         await db.hiddenTracks.bulkPut(data.hiddenTracks);
       }
       if (data.settings) {
+        const normalizedBg = normalizeCustomBackground(data.settings.customBackground, null);
         await db.kvState.put({
           key: 'settings',
           value: {
@@ -434,8 +460,22 @@ export async function importAllSoundClearData(payload: unknown): Promise<void> {
               ...DEFAULT_YOUTUBE_SOUND,
               ...(data.settings.youtubeSound || {}),
             },
+            customBackground: normalizedBg,
           },
         });
+      }
+      const importedBgImage = isSafeBackgroundImageUrl(data.customBackgroundImage)
+        ? data.customBackgroundImage
+        : isSafeBackgroundImageUrl(data.settings?.customBackground?.customImageDataUrl)
+          ? data.settings?.customBackground?.customImageDataUrl
+          : null;
+      if (importedBgImage) {
+        await db.kvState.put({
+          key: CUSTOM_BACKGROUND_IMAGE_KV_KEY,
+          value: importedBgImage,
+        });
+      } else {
+        await db.kvState.delete(CUSTOM_BACKGROUND_IMAGE_KV_KEY);
       }
       if (data.playerSession) {
         await db.kvState.put({

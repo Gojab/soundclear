@@ -5,7 +5,9 @@ import {
   Clock,
   CornerDownRight,
   Loader2,
+  Mic2,
   Play,
+  Radio,
   Search,
   Trash2,
   X,
@@ -66,6 +68,8 @@ export function SearchPage({
 
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const setRightPanelTab = usePlayerStore((s) => s.setRightPanelTab);
+  const setRightPanelOpen = usePlayerStore((s) => s.setRightPanelOpen);
   const navigate = useNavigationStore((s) => s.navigate);
   const navigateToItem = useNavigationStore((s) => s.navigateToItem);
 
@@ -156,7 +160,8 @@ export function SearchPage({
     return true;
   };
 
-  const items = (searchQuery.data?.items ?? []).filter(filterSafeItem);
+  const queryBlockedRegional = isExcludedRegionalText(submittedQuery);
+  const items = queryBlockedRegional ? [] : (searchQuery.data?.items ?? []).filter(filterSafeItem);
   const filteredSuggestions = useMemo(
     () => (suggestQuery.data?.suggestions ?? []).filter((s) => !isExcludedRegionalText(s)),
     [suggestQuery.data],
@@ -260,7 +265,8 @@ export function SearchPage({
               strokeWidth={1.75}
             />
             <input
-              type="search"
+              type="text"
+              enterKeyHint="search"
               value={inputValue}
               onChange={(e) => {
                 setInputValue(e.target.value);
@@ -478,10 +484,12 @@ export function SearchPage({
         <div className="glass-card rounded-2xl p-8 text-center space-y-4">
           <div>
             <p className="text-sm font-medium text-white/80">
-              Tidak ada hasil untuk &ldquo;{submittedQuery}&rdquo;
+              {queryBlockedRegional
+                ? 'Hasil untuk pencarian ini disembunyikan'
+                : <>Tidak ada hasil untuk &ldquo;{submittedQuery}&rdquo;</>}
             </p>
             <p className="text-xs text-white/45 mt-1">
-              Lagu Jepang &amp; India disembunyikan dari pencarian. Coba kata kunci atau follow-up berikut:
+              Lagu Jepang, India &amp; Mandarin disembunyikan dari pencarian. Coba kata kunci atau follow-up berikut:
             </p>
           </div>
           {followUpChips.length > 0 && (
@@ -576,6 +584,120 @@ export function SearchPage({
                   )}
                 </div>
               </div>
+            </section>
+          )}
+
+          {/* Immediate Follow-up Lagu bar when a song is found */}
+          {topSongItem && (
+            <section
+              aria-label="Follow-up lagu"
+              className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-3.5 sm:p-4 space-y-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#2EE6A6]">
+                    Follow-up Lagu
+                  </p>
+                  <p className="text-xs text-white/75 truncate mt-0.5">
+                    Lanjutkan dari <span className="font-semibold text-white">{topSongItem.title}</span>
+                    {topSongItem.artists[0]?.name ? ` — ${topSongItem.artists[0].name}` : ''}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (relatedFollowUpTracks.length > 0) {
+                        playTrackList(
+                          [topSongItem, ...relatedFollowUpTracks],
+                          0,
+                          `Radio: ${topSongItem.title}`,
+                        );
+                      } else {
+                        playTrack(topSongItem, {
+                          autoRadio: true,
+                          sourceLabel: `Radio: ${topSongItem.title}`,
+                        });
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all"
+                  >
+                    <Radio className="w-3.5 h-3.5" strokeWidth={2} />
+                    Putar Radio
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playTrack(topSongItem, { openPanel: true });
+                      setRightPanelTab('lyrics');
+                      setRightPanelOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white transition-colors"
+                  >
+                    <Mic2 className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={1.9} />
+                    Putar &amp; Lirik
+                  </button>
+
+                  {topSongItem.artists[0]?.id && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate({
+                          name: 'artist',
+                          id: topSongItem.artists[0].id!,
+                          fallbackQuery: topSongItem.artists[0].name,
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-xs text-white/85 transition-colors"
+                    >
+                      <span>Artis: {topSongItem.artists[0].name}</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => runSearch(`${topSongItem.title} akustik`, 'songs')}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-xs text-white/80 hover:text-white transition-colors"
+                  >
+                    <CornerDownRight className="w-3 h-3 text-[#2EE6A6]" strokeWidth={2} />
+                    Akustik
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => runSearch(`${topSongItem.title} live`, 'songs')}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-xs text-white/80 hover:text-white transition-colors"
+                  >
+                    <CornerDownRight className="w-3 h-3 text-[#2EE6A6]" strokeWidth={2} />
+                    Live
+                  </button>
+                </div>
+              </div>
+
+              {relatedFollowUpTracks.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+                  <span className="text-[11px] text-white/45 shrink-0">Lagu serupa:</span>
+                  {relatedFollowUpTracks.slice(0, 4).map((rel, idx) => (
+                    <button
+                      key={`topfu-${rel.id}-${idx}`}
+                      type="button"
+                      onClick={() =>
+                        playTrackList(
+                          relatedFollowUpTracks,
+                          idx,
+                          `Follow-up: ${topSongItem.title}`,
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.07] text-xs text-white/85 hover:text-white shrink-0 max-w-[220px] transition-colors"
+                    >
+                      <Play className="w-3 h-3 text-[#2EE6A6] fill-current shrink-0" strokeWidth={2} />
+                      <span className="truncate">{rel.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 

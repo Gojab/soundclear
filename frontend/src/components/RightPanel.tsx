@@ -21,6 +21,7 @@ import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
+import { hasActiveCustomBackground } from '../utils/backgroundTheme';
 import { formatArtists, getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 import { LyricsView } from './LyricsView';
@@ -255,13 +256,22 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
   const downloadTrackOffline = useLibraryStore((s) => s.downloadTrackOffline);
   const deleteOfflineDownload = useLibraryStore((s) => s.deleteOfflineDownload);
   const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
+  const customBackground = useSettingsStore((s) => s.customBackground);
+  const bgActive = hasActiveCustomBackground(customBackground);
+  const glassPanels = bgActive && customBackground.panelGlass;
 
   if (!rightPanelOpen) return null;
 
   return (
     <aside
       aria-label="Panel sedang diputar"
-      className="hidden lg:flex flex-col w-[312px] xl:w-[348px] shrink-0 bg-[#121212] rounded-lg overflow-hidden transition-all duration-200"
+      className={`hidden lg:flex flex-col w-[312px] xl:w-[348px] shrink-0 rounded-lg overflow-hidden transition-all duration-200 ${
+        glassPanels
+          ? 'bg-[#121212]/62 backdrop-blur-xl border border-white/[0.07]'
+          : bgActive
+            ? 'bg-[#121212]/88 backdrop-blur-md border border-white/[0.05]'
+            : 'bg-[#121212]'
+      }`}
     >
       {/* Header matching Windows Now Playing Sidebar */}
       <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between gap-2">

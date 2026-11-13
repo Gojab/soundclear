@@ -469,6 +469,28 @@ export interface OfflineDownloadRecord {
   blob: Blob;
 }
 
+export type BackgroundMode =
+  | 'default'
+  | 'ambient'
+  | 'preset'
+  | 'color'
+  | 'gradient'
+  | 'image';
+
+export interface CustomBackgroundSettings {
+  mode: BackgroundMode;
+  presetId: string;
+  solidColor: string;
+  gradientFrom: string;
+  gradientTo: string;
+  gradientAngle: number;
+  customImageDataUrl: string | null;
+  customImageName?: string | null;
+  blurPx: number;
+  dimOpacity: number;
+  panelGlass: boolean;
+}
+
 export interface UserSettings {
   hideExplicit: boolean;
   autoplay: boolean;
@@ -477,6 +499,7 @@ export interface UserSettings {
   homeSectionOrder: string[];
   youtubeSound: YouTubeSoundSettings;
   episodePlaybackRates: Record<string, number>;
+  customBackground: CustomBackgroundSettings;
 }
 
 export type HomeSectionId =
@@ -503,5 +526,5 @@ export type RouteView =
   | { name: 'liked' }
   | { name: 'local-playlist'; id: string }
   | { name: 'recap' }
-  | { name: 'settings'; tab?: 'general' | 'sound'; focusEq?: boolean }
+  | { name: 'settings'; tab?: 'general' | 'appearance' | 'sound'; focusEq?: boolean }
   | { name: 'shortcuts' };

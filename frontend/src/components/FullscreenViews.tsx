@@ -16,7 +16,12 @@ import {
 } from 'lucide-react';
 import { fetchLyrics } from '../api/client';
 import { usePlayerStore } from '../store/playerStore';
-import { findActiveLyricIndex, formatArtists, formatTime } from '../utils/playerLogic';
+import {
+  findActiveLyricIndex,
+  formatArtists,
+  formatTime,
+  getPlayableVideoId,
+} from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 
 declare global {
@@ -43,11 +48,24 @@ export function FullscreenKaraokeModal() {
   const requestSeek = usePlayerStore((s) => s.requestSeek);
 
   const activeLineRef = useRef<HTMLButtonElement | null>(null);
+  const videoId = getPlayableVideoId(currentTrack);
+  const artistName = currentTrack ? formatArtists(currentTrack.artists) : '';
 
   const { data, isLoading } = useQuery({
-    queryKey: ['lyrics', lyricsBrowseId],
-    queryFn: ({ signal }) => fetchLyrics(lyricsBrowseId!, signal),
-    enabled: karaokeOpen && Boolean(lyricsBrowseId),
+    queryKey: ['lyrics', currentTrack?.id, lyricsBrowseId, currentTrack?.title, artistName],
+    queryFn: ({ signal }) =>
+      fetchLyrics(
+        {
+          browseId: lyricsBrowseId,
+          videoId,
+          title: currentTrack!.title,
+          artist: artistName,
+          album: currentTrack!.album?.name,
+          durationSeconds: currentTrack!.durationSeconds,
+        },
+        signal,
+      ),
+    enabled: karaokeOpen && Boolean(currentTrack?.title || lyricsBrowseId),
   });
 
   const activeIndex = data?.hasTimestamps
@@ -110,12 +128,7 @@ export function FullscreenKaraokeModal() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-6 sm:px-12 py-12 flex flex-col items-center">
-        {!lyricsBrowseId ? (
-          <div className="my-auto text-center space-y-2">
-            <Mic2 className="w-10 h-10 text-white/30 mx-auto" strokeWidth={1.75} />
-            <p className="text-base text-white/65">Lirik tidak tersedia untuk lagu ini.</p>
-          </div>
-        ) : isLoading ? (
+        {isLoading ? (
           <div className="my-auto space-y-4 w-full max-w-2xl animate-pulse">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-8 rounded-lg bg-white/[0.08] mx-auto w-3/4" />

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import os
+import re
 import threading
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -134,9 +135,42 @@ def watch_playlist(
     return provider.get_watch_playlist(video_id, playlistId, radio, limit)
 
 
+@app.get("/api/lyrics")
+def lyrics_by_query(
+    browseId: Optional[str] = Query(default=""),
+    videoId: Optional[str] = Query(default=""),
+    title: Optional[str] = Query(default=""),
+    artist: Optional[str] = Query(default=""),
+    album: Optional[str] = Query(default=""),
+    durationSeconds: Optional[int] = Query(default=None),
+) -> Dict[str, Any]:
+    return provider.get_lyrics(
+        browseId or "",
+        title=title or "",
+        artist=artist or "",
+        album=album or "",
+        duration_seconds=durationSeconds,
+        video_id=videoId or "",
+    )
+
+
 @app.get("/api/lyrics/{browse_id}")
-def lyrics(browse_id: str) -> Dict[str, Any]:
-    return provider.get_lyrics(browse_id)
+def lyrics(
+    browse_id: str,
+    videoId: Optional[str] = Query(default=""),
+    title: Optional[str] = Query(default=""),
+    artist: Optional[str] = Query(default=""),
+    album: Optional[str] = Query(default=""),
+    durationSeconds: Optional[int] = Query(default=None),
+) -> Dict[str, Any]:
+    return provider.get_lyrics(
+        browse_id,
+        title=title or "",
+        artist=artist or "",
+        album=album or "",
+        duration_seconds=durationSeconds,
+        video_id=videoId or "",
+    )
 
 
 @app.get("/api/song/{video_id}/credits")
@@ -248,6 +282,106 @@ def put_account_audio_settings(body: AudioSettingsBody) -> Dict[str, Any]:
 @app.post("/api/account/audio-settings/reset")
 def reset_account_audio_settings(accountKey: Optional[str] = Query(default=None)) -> Dict[str, Any]:
     return provider.reset_audio_settings(account_key=accountKey)
+
+
+@app.get("/api/stream/{video_id}/meta")
+def stream_audio_meta(
+    video_id: str,
+    title: str = Query(default=""),
+    artist: str = Query(default=""),
+    durationSeconds: Optional[int] = Query(default=None),
+    quality: str = Query(default="high"),
+) -> Dict[str, Any]:
+    return provider.get_audio_stream_info(
+        video_id,
+        title=title,
+        artist=artist,
+        duration_seconds=durationSeconds,
+        quality=quality,
+    )
+
+
+@app.api_route("/api/stream/{video_id}", methods=["GET", "HEAD"])
+def stream_audio(
+    video_id: str,
+    request: Request,
+    title: str = Query(default=""),
+    artist: str = Query(default=""),
+    durationSeconds: Optional[int] = Query(default=None),
+    quality: str = Query(default="high"),
+) -> Response:
+    meta = provider.resolve_or_build_audio_stream(
+        video_id,
+        title=title,
+        artist=artist,
+        duration_seconds=durationSeconds,
+        quality=quality,
+    )
+    file_path = str(meta["filePath"])
+    file_size = os.path.getsize(file_path)
+    mime_type = str(meta.get("mimeType") or "audio/mp4")
+    range_header = request.headers.get("range")
+
+    base_headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
+    }
+
+    start = 0
+    end = file_size - 1
+    status_code = 200
+
+    if range_header:
+        match = re.match(r"bytes=(\d*)-(\d*)", range_header.strip(), re.IGNORECASE)
+        if not match or (not match.group(1) and not match.group(2)):
+            raise HTTPException(
+                status_code=416,
+                detail="Header Range tidak valid.",
+                headers={"Content-Range": f"bytes */{file_size}"},
+            )
+        if match.group(1):
+            start = int(match.group(1))
+            end = int(match.group(2)) if match.group(2) else file_size - 1
+        else:
+            suffix_len = int(match.group(2))
+            start = max(0, file_size - suffix_len)
+            end = file_size - 1
+
+        if start >= file_size or end < start:
+            raise HTTPException(
+                status_code=416,
+                detail="Rentang byte di luar ukuran berkas audio.",
+                headers={"Content-Range": f"bytes */{file_size}"},
+            )
+        end = min(end, file_size - 1)
+        status_code = 206
+        base_headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+
+    content_length = end - start + 1
+    base_headers["Content-Length"] = str(content_length)
+
+    if request.method == "HEAD":
+        return Response(status_code=status_code, media_type=mime_type, headers=base_headers)
+
+    def _iter_file(path: str, offset: int, length: int, chunk_size: int = 65536):
+        remaining = length
+        with open(path, "rb") as fh:
+            fh.seek(offset)
+            while remaining > 0:
+                to_read = min(chunk_size, remaining)
+                chunk = fh.read(to_read)
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    return StreamingResponse(
+        _iter_file(file_path, start, content_length),
+        status_code=status_code,
+        media_type=mime_type,
+        headers=base_headers,
+    )
 
 
 _dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))

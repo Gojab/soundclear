@@ -88,10 +88,9 @@ export function SpectrumAnalyzer() {
   const statusText = testToneActive
     ? 'Aktif (Tes Nada)'
     : webAudioStreamActive
-      ? 'Aktif (Web Audio)'
-      : activeStreamMeta?.sourceMode === 'youtube-iframe' ||
-          activeStreamMeta?.sourceMode === 'fallback-no-fx'
-        ? 'Tidak tersedia (Streaming Cloud)'
+      ? 'Aktif (Web Audio DSP)'
+      : activeStreamMeta?.sourceMode === 'fallback-no-fx'
+        ? 'Terbatas (Tanpa DSP)'
         : 'Siaga';
 
   return (

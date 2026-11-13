@@ -217,10 +217,16 @@ test('isExcludedRegionalText and isExcludedRegionalItem block Japanese and India
   assert.equal(isExcludedRegionalText('A R J I T S I N G H..'), true);
   assert.equal(isExcludedRegionalText('Y O A S O B I'), true);
   assert.equal(isExcludedRegionalText('Kis-My-Ft2'), true);
+  assert.equal(isExcludedRegionalText('𝐁𝐨𝐥𝐥𝐲𝐰𝐨𝐨𝐝 Hits'), true);
+  assert.equal(isExcludedRegionalText('Taiwan Top Pop'), true);
+  assert.equal(isExcludedRegionalText('XG - WOKE UP'), true);
+  assert.equal(isExcludedRegionalText('Hikaru Utada - First Love'), true);
+  assert.equal(isExcludedRegionalText('Jyoti Magar'), true);
 
   assert.equal(isExcludedRegionalText('Tulus - Hati-Hati di Jalan'), false);
   assert.equal(isExcludedRegionalText('NewJeans - Ditto'), false);
   assert.equal(isExcludedRegionalText('Kira-kira kapan ya'), false);
+  assert.equal(isExcludedRegionalText('Terbelah Jadi Dua'), false);
 
   assert.equal(
     isExcludedRegionalItem({

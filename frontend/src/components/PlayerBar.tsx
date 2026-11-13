@@ -28,6 +28,7 @@ import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
 import { clampYoutubeVolume, PLAYBACK_RATE_OPTIONS } from '../utils/audioMath';
+import { hasActiveCustomBackground } from '../utils/backgroundTheme';
 import { formatTime, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 
@@ -58,6 +59,9 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
   const youtubeSound = useSettingsStore((s) => s.youtubeSound);
+  const customBackground = useSettingsStore((s) => s.customBackground);
+  const bgActive = hasActiveCustomBackground(customBackground);
+  const glassPanels = bgActive && customBackground.panelGlass;
 
   const togglePlayPause = usePlayerStore((s) => s.togglePlayPause);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
@@ -114,7 +118,13 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   return (
     <footer
       aria-label="Pemutar musik"
-      className="hidden md:grid grid-cols-[minmax(0,1fr)_minmax(360px,1.45fr)_minmax(0,1fr)] items-center gap-4 h-[84px] shrink-0 bg-black px-4 relative z-30"
+      className={`hidden md:grid grid-cols-[minmax(0,1fr)_minmax(360px,1.45fr)_minmax(0,1fr)] items-center gap-4 h-[84px] shrink-0 px-4 relative z-30 transition-colors duration-300 ${
+        glassPanels
+          ? 'bg-black/50 backdrop-blur-xl border-t border-white/[0.06]'
+          : bgActive
+            ? 'bg-black/78 backdrop-blur-md'
+            : 'bg-black'
+      }`}
     >
       {/* Left: Track info */}
       <div className="flex items-center gap-3 min-w-0">

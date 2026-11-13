@@ -6,6 +6,7 @@ import {
   type ServerAudioSettingsBundle,
 } from '../api/client';
 import {
+  CUSTOM_BACKGROUND_IMAGE_KV_KEY,
   db,
   DEFAULT_HOME_SECTION_ORDER,
   DEFAULT_LOCAL_AUDIO_PROFILE,
@@ -16,6 +17,7 @@ import {
   saveLocalAudioProfile,
 } from '../db/soundclearDb';
 import type {
+  CustomBackgroundSettings,
   EqPreset,
   HomeSectionId,
   LocalAudioProfile,
@@ -28,6 +30,11 @@ import {
   clampNumber,
   clampPlaybackRate,
 } from '../utils/audioMath';
+import {
+  DEFAULT_CUSTOM_BACKGROUND,
+  isSafeBackgroundImageUrl,
+  normalizeCustomBackground,
+} from '../utils/backgroundTheme';
 
 export type AudioSettingsSection =
   | 'streaming'
@@ -62,9 +69,16 @@ interface SettingsState extends UserSettings {
   enableAllDsp: () => void;
   moveHomeSection: (id: HomeSectionId, direction: 'up' | 'down') => void;
   resetHomeSectionOrder: () => void;
+  updateCustomBackground: (patch: Partial<CustomBackgroundSettings>) => void;
+  setCustomBackgroundImage: (dataUrl: string | null, fileName?: string | null) => Promise<void>;
+  resetCustomBackground: () => Promise<void>;
 }
 
 function persistSettings(s: UserSettings): void {
+  const safeBackgroundMeta: CustomBackgroundSettings = {
+    ...normalizeCustomBackground(s.customBackground, null),
+    customImageDataUrl: null,
+  };
   const payload = {
     hideExplicit: s.hideExplicit,
     autoplay: s.autoplay,
@@ -73,6 +87,7 @@ function persistSettings(s: UserSettings): void {
     homeSectionOrder: s.homeSectionOrder,
     youtubeSound: s.youtubeSound,
     episodePlaybackRates: s.episodePlaybackRates,
+    customBackground: safeBackgroundMeta,
   };
   try {
     window.localStorage.setItem('soundclear_user_settings_v1', JSON.stringify(payload));
@@ -120,8 +135,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   hydrate: async () => {
     try {
-      const [rec, accountProfile] = await Promise.all([
+      const [rec, customBgImgRec, accountProfile] = await Promise.all([
         db.kvState.get('settings'),
+        db.kvState.get(CUSTOM_BACKGROUND_IMAGE_KV_KEY),
         loadLocalAudioProfile('local'),
       ]);
       let stored =
@@ -136,6 +152,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           // Ignore malformed fallback
         }
       }
+
+      const storedBgImage = isSafeBackgroundImageUrl(customBgImgRec?.value)
+        ? customBgImgRec.value
+        : null;
 
       let effectiveProfile = accountProfile;
       try {
@@ -178,6 +198,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           ...(stored.youtubeSound || {}),
         };
         yt.defaultPlaybackRate = clampPlaybackRate(yt.defaultPlaybackRate ?? 1);
+        const customBackground = normalizeCustomBackground(stored.customBackground, storedBgImage);
 
         set({
           hideExplicit: Boolean(stored.hideExplicit),
@@ -187,11 +208,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           homeSectionOrder: order,
           youtubeSound: yt,
           episodePlaybackRates: stored.episodePlaybackRates || {},
+          customBackground,
           localProfile: effectiveProfile,
           hydrated: true,
         });
       } else {
-        set({ localProfile: effectiveProfile, hydrated: true });
+        set({
+          customBackground: normalizeCustomBackground(null, storedBgImage),
+          localProfile: effectiveProfile,
+          hydrated: true,
+        });
       }
 
       void get().syncAudioSettingsFromBackend('local');
@@ -515,5 +541,54 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   resetHomeSectionOrder: () => {
     get().updateSetting('homeSectionOrder', [...DEFAULT_HOME_SECTION_ORDER]);
+  },
+
+  updateCustomBackground: (patch) => {
+    const current = get().customBackground;
+    const next = normalizeCustomBackground(
+      { ...current, ...patch },
+      patch.customImageDataUrl !== undefined
+        ? patch.customImageDataUrl
+        : current.customImageDataUrl,
+    );
+    set({ customBackground: next });
+    persistSettings(get());
+  },
+
+  setCustomBackgroundImage: async (dataUrl, fileName) => {
+    const safeUrl = isSafeBackgroundImageUrl(dataUrl) ? dataUrl : null;
+    const current = get().customBackground;
+    const next = normalizeCustomBackground(
+      {
+        ...current,
+        mode: safeUrl ? 'image' : current.mode === 'image' ? 'default' : current.mode,
+        customImageName: safeUrl ? (fileName ?? current.customImageName ?? 'Latar Kustom') : null,
+      },
+      safeUrl,
+    );
+    set({ customBackground: next });
+    persistSettings(get());
+    try {
+      if (safeUrl) {
+        await db.kvState.put({
+          key: CUSTOM_BACKGROUND_IMAGE_KV_KEY,
+          value: safeUrl,
+        });
+      } else {
+        await db.kvState.delete(CUSTOM_BACKGROUND_IMAGE_KV_KEY);
+      }
+    } catch {
+      // Non-fatal IndexedDB fallback
+    }
+  },
+
+  resetCustomBackground: async () => {
+    set({ customBackground: { ...DEFAULT_CUSTOM_BACKGROUND } });
+    persistSettings(get());
+    try {
+      await db.kvState.delete(CUSTOM_BACKGROUND_IMAGE_KV_KEY);
+    } catch {
+      // Ignore delete error
+    }
   },
 }));

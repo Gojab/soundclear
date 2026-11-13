@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { buildStreamAudioUrl, fetchStreamAudioMeta } from '../api/client';
 import { db, migrateLegacyLocalStorage } from '../db/soundclearDb';
 import type {
   ConcreteQualityTier,
@@ -16,7 +17,12 @@ import type {
 } from '../types/music';
 import { classifyStreamQualityBadge } from '../utils/audioMath';
 import { isSupportedLocalAudioFile, parseLocalAudioFile } from '../utils/localAudioImport';
-import { getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
+import {
+  formatArtists,
+  getPlayableVideoId,
+  getTrackUniqueId,
+  isLocalTrack,
+} from '../utils/playerLogic';
 
 export type LibrarySortMode = 'newest' | 'alpha' | 'last_played';
 export type LibraryFilterType =
@@ -717,21 +723,107 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       return { ok: true, record: rec };
     }
 
-    // Online catalog track: persist complete track metadata & artwork cache for offline browsing/sync without extracting prohibited audio streams
+    // Online catalog track: download real audio stream when available, with metadata fallback if offline
+    const videoId = getPlayableVideoId(track) || id;
+    const artistName = formatArtists(track.artists);
+    const streamMeta = {
+      title: track.title,
+      artist: artistName,
+      durationSeconds: track.durationSeconds,
+      quality: requestedTier,
+    };
+
+    let downloadedBlob: Blob | null = null;
+    let resolvedCodec = 'AAC';
+    let resolvedBitrate: number | null = 160;
+    let resolvedSampleRate: number | null = 44100;
+    let resolvedMime = 'audio/mp4';
+
+    try {
+      const [metaResp, audioResp] = await Promise.all([
+        fetchStreamAudioMeta(videoId, streamMeta).catch(() => null),
+        fetch(buildStreamAudioUrl(videoId, streamMeta)),
+      ]);
+      if (audioResp.ok) {
+        const blob = await audioResp.blob();
+        if (blob.size > 1024) {
+          downloadedBlob = blob;
+          resolvedCodec = metaResp?.codec || (blob.type.includes('mpeg') ? 'MP3' : 'AAC');
+          resolvedBitrate = metaResp?.bitrateKbps ?? resolvedBitrate;
+          resolvedSampleRate = metaResp?.sampleRateHz ?? resolvedSampleRate;
+          resolvedMime = metaResp?.mimeType || blob.type || 'audio/mp4';
+        }
+      }
+    } catch {
+      downloadedBlob = null;
+    }
+
+    if (downloadedBlob) {
+      const badge = classifyStreamQualityBadge({
+        codec: resolvedCodec,
+        bitrateKbps: resolvedBitrate,
+        sampleRateHz: resolvedSampleRate,
+        lossless: false,
+      });
+      const rec: OfflineDownloadRecord = {
+        id,
+        track: { ...track, id },
+        downloadedAt: Date.now(),
+        qualityTier: requestedTier,
+        codec: resolvedCodec,
+        bitrateKbps: resolvedBitrate,
+        sampleRateHz: resolvedSampleRate,
+        bitDepth: null,
+        lossless: badge.lossless,
+        hiRes: badge.hiRes,
+        replayGainDb: null,
+        estimatedLufs: -14,
+        peakLinear: 0.95,
+        fileSize: downloadedBlob.size,
+        mimeType: resolvedMime,
+        hasAudioBlob: true,
+        blob: downloadedBlob,
+      };
+      await db.offlineDownloads.put(rec);
+      if ('caches' in window) {
+        try {
+          const cache = await window.caches.open(OFFLINE_AUDIO_CACHE);
+          await cache.put(
+            `/offline-audio/${encodeURIComponent(id)}`,
+            new Response(downloadedBlob, {
+              headers: { 'Content-Type': resolvedMime },
+            }),
+          );
+          if (track.thumbnail && !track.thumbnail.startsWith('blob:')) {
+            const thumbResp = await fetch(track.thumbnail).catch(() => null);
+            if (thumbResp && thumbResp.ok) {
+              await cache.put(track.thumbnail, thumbResp.clone());
+            }
+          }
+        } catch {
+          // IndexedDB already persisted the offline blob
+        }
+      }
+      set((state) => ({
+        offlineDownloads: [rec, ...state.offlineDownloads.filter((d) => d.id !== id)],
+      }));
+      return { ok: true, record: rec };
+    }
+
     const tierDefaults: Record<ConcreteQualityTier, { bitrate: number; codec: string; sampleRate: number }> = {
       low: { bitrate: 96, codec: 'AAC-HE', sampleRate: 44100 },
-      normal: { bitrate: 160, codec: 'AAC / Opus', sampleRate: 44100 },
-      high: { bitrate: 256, codec: 'AAC High', sampleRate: 48000 },
-      very_high: { bitrate: 320, codec: 'Opus Very High', sampleRate: 48000 },
-      lossless: { bitrate: 1411, codec: 'FLAC', sampleRate: 44100 },
-      hi_res: { bitrate: 2304, codec: 'FLAC Hi-Res', sampleRate: 96000 },
+      normal: { bitrate: 128, codec: 'AAC', sampleRate: 44100 },
+      high: { bitrate: 160, codec: 'AAC', sampleRate: 44100 },
+      very_high: { bitrate: 160, codec: 'AAC', sampleRate: 44100 },
+      lossless: { bitrate: 160, codec: 'AAC', sampleRate: 44100 },
+      hi_res: { bitrate: 160, codec: 'AAC', sampleRate: 44100 },
     };
     const tierMeta = tierDefaults[requestedTier] || tierDefaults.high;
     const badge = classifyStreamQualityBadge({
       codec: tierMeta.codec,
       bitrateKbps: tierMeta.bitrate,
       sampleRateHz: tierMeta.sampleRate,
-      lossless: requestedTier === 'lossless' || requestedTier === 'hi_res',
+      lossless: false,
     });
 
     const manifestPayload = JSON.stringify({
@@ -753,9 +845,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       codec: tierMeta.codec,
       bitrateKbps: tierMeta.bitrate,
       sampleRateHz: tierMeta.sampleRate,
-      bitDepth: badge.hiRes ? 24 : badge.lossless ? 16 : null,
-      lossless: badge.lossless,
-      hiRes: badge.hiRes,
+      bitDepth: null,
+      lossless: false,
+      hiRes: false,
       replayGainDb: null,
       estimatedLufs: -14,
       peakLinear: 0.95,

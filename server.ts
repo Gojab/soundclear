@@ -83,7 +83,7 @@ async function checkPythonDepsReady(pythonBin: string): Promise<boolean> {
   try {
     const res = await runCommandAsync(
       pythonBin,
-      ['-c', 'import ytmusicapi, fastapi, uvicorn, PIL, dotenv, requests'],
+      ['-c', 'import ytmusicapi, yt_dlp, fastapi, uvicorn, PIL, dotenv, requests'],
       { stdio: 'ignore' },
     );
     return res.code === 0;
@@ -309,6 +309,8 @@ function proxyApiToPython(req: Request, res: Response): void {
 }
 
 function forwardToPython(req: Request, res: Response, targetPath: string): void {
+  const pathname = targetPath.split('?')[0];
+  const isAudioStream = pathname.startsWith('/api/stream/');
   const headers: http.OutgoingHttpHeaders = { ...req.headers };
   delete headers.host;
 
@@ -319,28 +321,43 @@ function forwardToPython(req: Request, res: Response, targetPath: string): void 
       path: targetPath,
       method: req.method,
       headers,
-      timeout: 30000,
+      timeout: isAudioStream ? 120000 : 30000,
     },
     (proxyRes) => {
+      if (res.writableEnded || res.destroyed) {
+        proxyRes.resume();
+        return;
+      }
       res.status(proxyRes.statusCode || 502);
       for (const [key, val] of Object.entries(proxyRes.headers)) {
         if (val !== undefined && key.toLowerCase() !== 'transfer-encoding') {
           res.setHeader(key, val);
         }
       }
+      proxyRes.on('error', () => {
+        if (!res.writableEnded && !res.destroyed) {
+          res.end();
+        }
+      });
       proxyRes.pipe(res);
     },
   );
 
+  res.on('close', () => {
+    if (!proxyReq.destroyed) {
+      proxyReq.destroy();
+    }
+  });
+
   proxyReq.on('timeout', () => {
     proxyReq.destroy();
-    if (!res.headersSent) {
+    if (!res.headersSent && !res.writableEnded) {
       res.status(504).json({ detail: 'Permintaan ke backend Python melewati batas waktu.' });
     }
   });
 
   proxyReq.on('error', (err) => {
-    if (!res.headersSent) {
+    if (!res.headersSent && !res.writableEnded && !res.destroyed) {
       res.status(502).json({
         detail: `Gagal menghubungi backend musik Python: ${err.message}`,
       });

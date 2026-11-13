@@ -12,6 +12,7 @@ import {
   ListPlus,
   ListStart,
   Radio,
+  Search,
   Trash2,
   User,
   X,
@@ -289,6 +290,21 @@ export function GlobalTrackContextMenu({
                   </button>
                 </>
               )}
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  const artistPart = track.artists[0]?.name || '';
+                  const q = `${track.title} ${artistPart}`.trim();
+                  navigate({ name: 'search', query: q, filter: 'songs' });
+                  closeMenu();
+                }}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+              >
+                <Search className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                <span>Cari lagu serupa</span>
+              </button>
 
               {!localFile && (
                 <button

@@ -13,6 +13,7 @@ import {
   getPlayableVideoId,
   getTrackUniqueId,
   interleaveSmartShuffleTracks,
+  isExcludedRegionalItem,
   isLocalTrack,
   isPlayableTrack,
 } from '../utils/playerLogic';
@@ -194,6 +195,7 @@ function filterHiddenAndExplicit(tracks: MediaItem[]): MediaItem[] {
   const hidden = new Set(useLibraryStore.getState().hiddenTrackIds);
   const hideExplicit = useSettingsStore.getState().hideExplicit;
   return tracks.filter((t) => {
+    if (isExcludedRegionalItem(t)) return false;
     const id = getTrackUniqueId(t) || t.id;
     if (hidden.has(id)) return false;
     if (hideExplicit && t.isExplicit) return false;

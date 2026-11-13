@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Mic2 } from 'lucide-react';
 import { fetchLyrics } from '../api/client';
 import { usePlayerStore } from '../store/playerStore';
-import { findActiveLyricIndex } from '../utils/playerLogic';
+import { findActiveLyricIndex, formatArtists, getPlayableVideoId } from '../utils/playerLogic';
 
 export function LyricsView() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -12,11 +12,24 @@ export function LyricsView() {
   const requestSeek = usePlayerStore((s) => s.requestSeek);
 
   const activeLineRef = useRef<HTMLButtonElement | null>(null);
+  const videoId = getPlayableVideoId(currentTrack);
+  const artistName = currentTrack ? formatArtists(currentTrack.artists) : '';
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['lyrics', lyricsBrowseId],
-    queryFn: ({ signal }) => fetchLyrics(lyricsBrowseId!, signal),
-    enabled: Boolean(lyricsBrowseId),
+    queryKey: ['lyrics', currentTrack?.id, lyricsBrowseId, currentTrack?.title, artistName],
+    queryFn: ({ signal }) =>
+      fetchLyrics(
+        {
+          browseId: lyricsBrowseId,
+          videoId,
+          title: currentTrack!.title,
+          artist: artistName,
+          album: currentTrack!.album?.name,
+          durationSeconds: currentTrack!.durationSeconds,
+        },
+        signal,
+      ),
+    enabled: Boolean(currentTrack?.title || lyricsBrowseId),
   });
 
   const activeIndex = data?.hasTimestamps
@@ -36,15 +49,6 @@ export function LyricsView() {
     return (
       <div className="py-12 text-center text-xs text-white/45">
         Putar lagu untuk menampilkan lirik.
-      </div>
-    );
-  }
-
-  if (!lyricsBrowseId) {
-    return (
-      <div className="py-12 px-4 text-center space-y-2">
-        <Mic2 className="w-6 h-6 text-white/35 mx-auto" strokeWidth={1.75} />
-        <p className="text-xs text-white/55">Lirik tidak tersedia untuk lagu ini.</p>
       </div>
     );
   }
