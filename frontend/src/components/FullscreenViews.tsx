@@ -228,6 +228,8 @@ export function FullscreenNowPlayingModal() {
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const repeat = usePlayerStore((s) => s.repeat);
   const ambientColor = usePlayerStore((s) => s.ambientColor);
+  const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
+  const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
   const togglePlayPause = usePlayerStore((s) => s.togglePlayPause);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
@@ -304,6 +306,22 @@ export function FullscreenNowPlayingModal() {
             {currentTrack.title}
           </h2>
           <p className="text-sm text-white/65 truncate">{formatArtists(currentTrack.artists)}</p>
+          {activeStreamMeta && (
+            <p
+              className={`text-xs font-medium pt-0.5 ${
+                activeStreamMeta.hiRes
+                  ? 'text-[#F5C451]'
+                  : activeStreamMeta.lossless
+                    ? 'text-[#2EE6A6]'
+                    : 'text-white/55'
+              }`}
+            >
+              {activeStreamMeta.badgeLabel}
+            </p>
+          )}
+          {webAudioWarning && (
+            <p className="text-[11px] text-amber-200/85 pt-0.5">{webAudioWarning}</p>
+          )}
         </div>
 
         <div className="w-full space-y-2">

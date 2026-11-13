@@ -1,7 +1,14 @@
 import { create } from 'zustand';
 import { fetchArtworkColor, fetchWatchPlaylist } from '../api/client';
 import { db, type PersistedPlayerSession } from '../db/soundclearDb';
-import type { MediaItem, RepeatMode } from '../types/music';
+import type {
+  ActiveStreamMeta,
+  ConcreteQualityTier,
+  MediaItem,
+  RepeatMode,
+  StreamOptionsResponse,
+} from '../types/music';
+import { clampPlaybackRate } from '../utils/audioMath';
 import {
   getPlayableVideoId,
   getTrackUniqueId,
@@ -57,6 +64,13 @@ interface PlayerState {
   pendingSeekSeconds: number | null;
   playerError: string | null;
 
+  activeStreamMeta: ActiveStreamMeta | null;
+  streamOptions: StreamOptionsResponse | null;
+  selectedQualityOverride: ConcreteQualityTier | null;
+  webAudioWarning: string | null;
+  networkEffectiveType: string | null;
+  bufferingStallCount: number;
+
   hydrate: () => Promise<void>;
   playTrack: (
     track: MediaItem,
@@ -106,6 +120,14 @@ interface PlayerState {
   setFullscreenNowPlaying: (open: boolean) => void;
   setFloatingMiniOpen: (open: boolean) => void;
   setPlayerError: (error: string | null) => void;
+
+  setActiveStreamMeta: (meta: ActiveStreamMeta | null) => void;
+  setStreamOptions: (opts: StreamOptionsResponse | null) => void;
+  setSelectedQualityOverride: (tier: ConcreteQualityTier | null) => void;
+  setWebAudioWarning: (warning: string | null) => void;
+  setNetworkEffectiveType: (effectiveType: string | null) => void;
+  recordBufferingStall: () => void;
+  resetBufferingStalls: () => void;
 }
 
 const DEFAULT_AMBIENT: AmbientColor = { r: 22, g: 48, b: 40 };
@@ -265,6 +287,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   pendingSeekSeconds: null,
   playerError: null,
 
+  activeStreamMeta: null,
+  streamOptions: null,
+  selectedQualityOverride: null,
+  webAudioWarning: null,
+  networkEffectiveType: null,
+  bufferingStallCount: 0,
+
   hydrate: async () => {
     try {
       const rec = await db.kvState.get('player_session');
@@ -349,6 +378,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       seekVersion: startAt > 0 ? state.seekVersion + 1 : state.seekVersion,
       lyricsBrowseId: null,
       playerError: null,
+      activeStreamMeta: null,
+      streamOptions: null,
+      selectedQualityOverride: null,
+      webAudioWarning: null,
+      bufferingStallCount: 0,
       rightPanelOpen: options?.openPanel ? true : state.rightPanelOpen,
     }));
 
@@ -380,6 +414,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       playbackRate: targetRate,
       lyricsBrowseId: null,
       playerError: null,
+      activeStreamMeta: null,
+      streamOptions: null,
+      selectedQualityOverride: null,
+      webAudioWarning: null,
+      bufferingStallCount: 0,
     }));
 
     persistPlayerSession(get(), true);
@@ -406,6 +445,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       playbackRate: targetRate,
       lyricsBrowseId: null,
       playerError: null,
+      activeStreamMeta: null,
+      streamOptions: null,
+      selectedQualityOverride: null,
+      webAudioWarning: null,
+      bufferingStallCount: 0,
     }));
     persistPlayerSession(get(), true);
     void hydrateTrackContext(target, false, get, set);
@@ -431,6 +475,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       playbackRate: targetRate,
       lyricsBrowseId: null,
       playerError: null,
+      activeStreamMeta: null,
+      streamOptions: null,
+      selectedQualityOverride: null,
+      webAudioWarning: null,
+      bufferingStallCount: 0,
     }));
     persistPlayerSession(get(), true);
     void hydrateTrackContext(target, false, get, set);
@@ -615,20 +664,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   setPlaybackRate: (playbackRate) => {
+    const clampedRate = clampPlaybackRate(playbackRate);
     const current = get().currentTrack;
     if (current?.type === 'episode') {
       const epKey = getPlayableVideoId(current) || current.id;
       if (epKey) {
-        useSettingsStore.getState().setEpisodePlaybackRate(epKey, playbackRate);
+        useSettingsStore.getState().setEpisodePlaybackRate(epKey, clampedRate);
       }
     }
-    set({ playbackRate });
+    set({ playbackRate: clampedRate });
     persistPlayerSession(get(), true);
   },
 
   setCrossfadeSeconds: (seconds) => {
     const clamped = Math.max(0, Math.min(12, Math.round(seconds)));
-    useSettingsStore.getState().updateYoutubeSound('trackFadeSeconds', clamped);
+    useSettingsStore.getState().updateLocalProfile({ crossfadeSeconds: clamped });
     set({ crossfadeSeconds: clamped });
     persistPlayerSession(get(), true);
   },
@@ -673,6 +723,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         playbackRate: resolvePlaybackRateForTrack(target),
         lyricsBrowseId: null,
         playerError: null,
+        activeStreamMeta: null,
+        streamOptions: null,
+        selectedQualityOverride: null,
+        webAudioWarning: null,
+        bufferingStallCount: 0,
       });
       persistPlayerSession(get(), true);
       void hydrateTrackContext(target, false, get, set);
@@ -720,6 +775,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       playbackRate: resolvePlaybackRateForTrack(prev),
       lyricsBrowseId: null,
       playerError: null,
+      activeStreamMeta: null,
+      streamOptions: null,
+      selectedQualityOverride: null,
+      webAudioWarning: null,
+      bufferingStallCount: 0,
     });
     persistPlayerSession(get(), true);
     void hydrateTrackContext(prev, false, get, set);
@@ -770,4 +830,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setFullscreenNowPlaying: (open) => set({ fullscreenNowPlaying: open }),
   setFloatingMiniOpen: (open) => set({ floatingMiniOpen: open }),
   setPlayerError: (error) => set({ playerError: error }),
+
+  setActiveStreamMeta: (activeStreamMeta) => set({ activeStreamMeta }),
+  setStreamOptions: (streamOptions) => set({ streamOptions }),
+  setSelectedQualityOverride: (selectedQualityOverride) => set({ selectedQualityOverride }),
+  setWebAudioWarning: (webAudioWarning) => set({ webAudioWarning }),
+  setNetworkEffectiveType: (networkEffectiveType) => set({ networkEffectiveType }),
+  recordBufferingStall: () =>
+    set((state) => ({ bufferingStallCount: Math.min(10, state.bufferingStallCount + 1) })),
+  resetBufferingStalls: () => set({ bufferingStallCount: 0 }),
 }));

@@ -8,7 +8,12 @@ coverage/
 !.env.example
 backend/.venv/
 backend/__pycache__/
+backend/.spotapi_sessions.json
+*spotapi*sessions*.json
+.spotapi*
 *headers_auth*.json
 browser.json
 ytmusic_auth*.json
 .ytmusic_auth*
+backend/.audio_settings.json
+*.audio_settings.json

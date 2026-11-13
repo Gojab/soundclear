@@ -23,6 +23,12 @@ export function isLocalTrack(item: MediaItem | null | undefined): boolean {
   return Boolean(item && (item.type === 'local' || item.localFileId));
 }
 
+const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+export function isYouTubeVideoId(id: string | null | undefined): boolean {
+  return Boolean(id && YOUTUBE_VIDEO_ID_RE.test(id));
+}
+
 export function getPlayableVideoId(item: MediaItem | null | undefined): string | null {
   if (!item || isLocalTrack(item)) return null;
   if (item.videoId) return item.videoId;

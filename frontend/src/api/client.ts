@@ -7,6 +7,7 @@ import type {
   ChartsResponse,
   EpisodeDetailResponse,
   HomeResponse,
+  LocalAudioProfile,
   LyricsResponse,
   MediaItem,
   MoodPlaylistsResponse,
@@ -17,6 +18,7 @@ import type {
   SearchResponse,
   SongCreditsResponse,
   SongRelatedResponse,
+  StreamOptionsResponse,
   SuggestResponse,
   WatchPlaylistResponse,
 } from '../types/music';
@@ -35,7 +37,7 @@ async function requestJson<T>(
   path: string,
   options?: {
     signal?: AbortSignal;
-    method?: 'GET' | 'POST' | 'DELETE';
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
     body?: unknown;
   },
 ): Promise<T> {
@@ -241,3 +243,114 @@ export function fetchArtworkColor(
     { signal },
   );
 }
+
+export interface PlayResolveResponse {
+  id: string;
+  youtubeVideoId: string;
+  candidates: string[];
+}
+
+const playResolveCache = new Map<string, Promise<PlayResolveResponse>>();
+
+export function resolvePlayableYoutube(
+  id: string,
+  meta?: {
+    title?: string;
+    artist?: string;
+    type?: string;
+    durationSeconds?: number | null;
+  },
+): Promise<PlayResolveResponse> {
+  const key = `${id}|${meta?.title || ''}|${meta?.artist || ''}`;
+  const cached = playResolveCache.get(key);
+  if (cached) return cached;
+
+  const params = new URLSearchParams({ id });
+  if (meta?.title) params.set('title', meta.title);
+  if (meta?.artist) params.set('artist', meta.artist);
+  if (meta?.type) params.set('type', meta.type);
+  if (meta?.durationSeconds && meta.durationSeconds > 0) {
+    params.set('durationSeconds', String(Math.round(meta.durationSeconds)));
+  }
+
+  const req = requestJson<PlayResolveResponse>(`/play/resolve?${params.toString()}`).catch((err) => {
+    playResolveCache.delete(key);
+    throw err;
+  });
+  playResolveCache.set(key, req);
+  return req;
+}
+
+export function fetchTrackPreviewUrl(trackId: string): Promise<{ id: string; previewUrl: string }> {
+  return requestJson<{ id: string; previewUrl: string }>(
+    `/play/preview/${encodeURIComponent(trackId)}`,
+  );
+}
+
+const streamOptionsCache = new Map<string, Promise<StreamOptionsResponse>>();
+
+export function fetchStreamOptions(
+  trackId: string,
+  forceRefresh = false,
+): Promise<StreamOptionsResponse> {
+  if (forceRefresh) {
+    streamOptionsCache.delete(trackId);
+  }
+  const hit = streamOptionsCache.get(trackId);
+  if (hit) return hit;
+
+  const req = requestJson<StreamOptionsResponse>(
+    `/stream/options/${encodeURIComponent(trackId)}`,
+  ).catch((err) => {
+    streamOptionsCache.delete(trackId);
+    throw err;
+  });
+  streamOptionsCache.set(trackId, req);
+  return req;
+}
+
+export interface ServerAudioSettingsBundle {
+  localProfile?: Partial<LocalAudioProfile>;
+  defaultPlaybackRate?: number;
+  fadeOnPauseResume?: boolean;
+  trackFadeSeconds?: number;
+  maxVolumeLimit?: number;
+  dataSaver?: boolean;
+}
+
+export function fetchAccountAudioSettings(
+  accountKey?: string,
+  signal?: AbortSignal,
+): Promise<{ accountKey: string; settings: ServerAudioSettingsBundle | null }> {
+  const qs = accountKey ? `?accountKey=${encodeURIComponent(accountKey)}` : '';
+  return requestJson<{ accountKey: string; settings: ServerAudioSettingsBundle | null }>(
+    `/account/audio-settings${qs}`,
+    { signal },
+  );
+}
+
+export function saveAccountAudioSettings(
+  settings: ServerAudioSettingsBundle,
+  accountKey?: string,
+): Promise<{ accountKey: string; settings: ServerAudioSettingsBundle }> {
+  return requestJson<{ accountKey: string; settings: ServerAudioSettingsBundle }>(
+    '/account/audio-settings',
+    {
+      method: 'PUT',
+      body: { accountKey, settings },
+    },
+  );
+}
+
+export function resetAccountAudioSettings(
+  accountKey?: string,
+): Promise<{ accountKey: string; settings: null }> {
+  const qs = accountKey ? `?accountKey=${encodeURIComponent(accountKey)}` : '';
+  return requestJson<{ accountKey: string; settings: null }>(
+    `/account/audio-settings/reset${qs}`,
+    { method: 'POST' },
+  );
+}
+
+
+

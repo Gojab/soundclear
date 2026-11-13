@@ -7,6 +7,7 @@ import type {
   LocalAudioProfile,
   LocalPlaylist,
   MediaItem,
+  OfflineDownloadRecord,
   PlayHistoryEntry,
   PlaylistFolder,
   RecentSearchEntry,
@@ -75,16 +76,30 @@ export const DEFAULT_YOUTUBE_SOUND: YouTubeSoundSettings = {
 };
 
 export const DEFAULT_LOCAL_AUDIO_PROFILE: LocalAudioProfile = {
+  wifiQuality: 'auto',
+  cellularQuality: 'normal',
+  autoAdjustQuality: true,
+  downloadQuality: 'high',
   eqEnabled: true,
   presetId: 'flat',
   preampDb: 0,
   bands: [...BUILTIN_EQ_PRESETS[0].bands],
   customPresets: [],
+  bassBoostEnabled: false,
+  bassBoostLevel: 35,
+  stereoWidenerEnabled: false,
+  stereoWidenerLevel: 35,
   normalizationTarget: 'off',
+  useReplayGain: true,
+  limiterEnabled: true,
   monoAudio: false,
   balance: 0,
+  outputDeviceId: '',
+  directMode: false,
   crossfadeSeconds: 0,
   gaplessPlayback: true,
+  fadeOnPlayPause: true,
+  skipSilence: false,
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -109,6 +124,7 @@ export class SoundClearDatabase extends Dexie {
   recentSearches!: Table<RecentSearchEntry, number>;
   hiddenTracks!: Table<HiddenTrackRecord, string>;
   localFiles!: Table<LocalAudioFileRecord, string>;
+  offlineDownloads!: Table<OfflineDownloadRecord, string>;
   kvState!: Table<KvRecord, string>;
 
   constructor() {
@@ -141,6 +157,22 @@ export class SoundClearDatabase extends Dexie {
       localFiles: 'id, addedAt, title, artist',
       kvState: 'key',
     });
+
+    this.version(3).stores({
+      likedTracks: 'id, addedAt',
+      playlists: 'id, folderId, pinned, createdAt, lastPlayedAt',
+      playlistFolders: 'id, createdAt',
+      savedAlbums: 'id, pinned, savedAt, lastPlayedAt',
+      followedArtists: 'id, pinned, followedAt, lastPlayedAt',
+      savedPodcasts: 'id, pinned, savedAt, lastPlayedAt',
+      episodeProgress: 'episodeId, podcastId, updatedAt',
+      playHistory: '++uid, trackId, playedAt, sourceType',
+      recentSearches: '++uid, query, searchedAt',
+      hiddenTracks: 'id, hiddenAt',
+      localFiles: 'id, addedAt, title, artist',
+      offlineDownloads: 'id, downloadedAt',
+      kvState: 'key',
+    });
   }
 }
 
@@ -150,37 +182,52 @@ export function getLocalAudioProfileKey(accountKey: string): string {
   return `local_audio_profile_${accountKey || 'local'}`;
 }
 
+export function normalizeLocalAudioProfile(raw?: Partial<LocalAudioProfile> | null): LocalAudioProfile {
+  const safe = raw && typeof raw === 'object' ? raw : {};
+  return {
+    ...DEFAULT_LOCAL_AUDIO_PROFILE,
+    ...safe,
+    bands:
+      Array.isArray(safe.bands) && safe.bands.length === 10
+        ? safe.bands
+        : [...DEFAULT_LOCAL_AUDIO_PROFILE.bands],
+    customPresets: Array.isArray(safe.customPresets) ? safe.customPresets : [],
+  };
+}
+
 export async function loadLocalAudioProfile(accountKey: string): Promise<LocalAudioProfile> {
+  const storageKey = getLocalAudioProfileKey(accountKey);
   try {
-    const rec = await db.kvState.get(getLocalAudioProfileKey(accountKey));
+    const rec = await db.kvState.get(storageKey);
     if (rec?.value && typeof rec.value === 'object') {
-      const raw = rec.value as Partial<LocalAudioProfile>;
-      return {
-        ...DEFAULT_LOCAL_AUDIO_PROFILE,
-        ...raw,
-        bands:
-          Array.isArray(raw.bands) && raw.bands.length === 10
-            ? raw.bands
-            : [...DEFAULT_LOCAL_AUDIO_PROFILE.bands],
-        customPresets: Array.isArray(raw.customPresets) ? raw.customPresets : [],
-      };
+      return normalizeLocalAudioProfile(rec.value as Partial<LocalAudioProfile>);
+    }
+  } catch {
+    // Fallback to localStorage below
+  }
+  try {
+    const lsRaw = window.localStorage.getItem(storageKey);
+    if (lsRaw) {
+      return normalizeLocalAudioProfile(JSON.parse(lsRaw) as Partial<LocalAudioProfile>);
     }
   } catch {
     // Fallback to default
   }
-  return {
-    ...DEFAULT_LOCAL_AUDIO_PROFILE,
-    bands: [...DEFAULT_LOCAL_AUDIO_PROFILE.bands],
-    customPresets: [],
-  };
+  return normalizeLocalAudioProfile(null);
 }
 
 export async function saveLocalAudioProfile(
   accountKey: string,
   profile: LocalAudioProfile,
 ): Promise<void> {
+  const storageKey = getLocalAudioProfileKey(accountKey);
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(profile));
+  } catch {
+    // Ignore quota errors
+  }
   await db.kvState.put({
-    key: getLocalAudioProfileKey(accountKey),
+    key: storageKey,
     value: profile,
   });
 }

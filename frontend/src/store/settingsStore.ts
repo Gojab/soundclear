@@ -1,11 +1,18 @@
 import { create } from 'zustand';
 import {
+  fetchAccountAudioSettings,
+  resetAccountAudioSettings,
+  saveAccountAudioSettings,
+  type ServerAudioSettingsBundle,
+} from '../api/client';
+import {
   db,
   DEFAULT_HOME_SECTION_ORDER,
   DEFAULT_LOCAL_AUDIO_PROFILE,
   DEFAULT_SETTINGS,
   DEFAULT_YOUTUBE_SOUND,
   loadLocalAudioProfile,
+  normalizeLocalAudioProfile,
   saveLocalAudioProfile,
 } from '../db/soundclearDb';
 import type {
@@ -15,7 +22,21 @@ import type {
   UserSettings,
   YouTubeSoundSettings,
 } from '../types/music';
-import { BUILTIN_EQ_PRESETS, clampEqGainDb, clampNumber } from '../utils/audioMath';
+import {
+  BUILTIN_EQ_PRESETS,
+  clampEqGainDb,
+  clampNumber,
+  clampPlaybackRate,
+} from '../utils/audioMath';
+
+export type AudioSettingsSection =
+  | 'streaming'
+  | 'download'
+  | 'eq'
+  | 'normalization'
+  | 'playback'
+  | 'output'
+  | 'all';
 
 interface SettingsState extends UserSettings {
   hydrated: boolean;
@@ -23,6 +44,7 @@ interface SettingsState extends UserSettings {
   localProfile: LocalAudioProfile;
   hydrate: () => Promise<void>;
   setAccountKey: (accountKey: string) => Promise<void>;
+  syncAudioSettingsFromBackend: (accountKey?: string) => Promise<void>;
   updateSetting: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
   updateYoutubeSound: <K extends keyof YouTubeSoundSettings>(
     key: K,
@@ -34,26 +56,55 @@ interface SettingsState extends UserSettings {
   setEqBandGain: (index: number, dbGain: number) => void;
   setEqPreamp: (dbGain: number) => void;
   saveCustomPreset: (name: string) => EqPreset | null;
+  renameCustomPreset: (presetId: string, newName: string) => boolean;
   deleteCustomPreset: (presetId: string) => void;
+  resetAudioProfileSection: (section: AudioSettingsSection) => void;
   moveHomeSection: (id: HomeSectionId, direction: 'up' | 'down') => void;
   resetHomeSectionOrder: () => void;
 }
 
 function persistSettings(s: UserSettings): void {
+  const payload = {
+    hideExplicit: s.hideExplicit,
+    autoplay: s.autoplay,
+    dataSaver: s.dataSaver,
+    showRightPanel: s.showRightPanel,
+    homeSectionOrder: s.homeSectionOrder,
+    youtubeSound: s.youtubeSound,
+    episodePlaybackRates: s.episodePlaybackRates,
+  };
+  try {
+    window.localStorage.setItem('soundclear_user_settings_v1', JSON.stringify(payload));
+  } catch {
+    // Ignore quota errors
+  }
   void db.kvState
     .put({
       key: 'settings',
-      value: {
-        hideExplicit: s.hideExplicit,
-        autoplay: s.autoplay,
-        dataSaver: s.dataSaver,
-        showRightPanel: s.showRightPanel,
-        homeSectionOrder: s.homeSectionOrder,
-        youtubeSound: s.youtubeSound,
-        episodePlaybackRates: s.episodePlaybackRates,
-      },
+      value: payload,
     })
     .catch(() => {});
+}
+
+let backendSyncTimer: number | null = null;
+function scheduleBackendAudioSettingsSync(state: SettingsState): void {
+  if (!state.hydrated) return;
+  if (backendSyncTimer !== null) {
+    window.clearTimeout(backendSyncTimer);
+  }
+  backendSyncTimer = window.setTimeout(() => {
+    backendSyncTimer = null;
+    const latest = useSettingsStore.getState();
+    const bundle: ServerAudioSettingsBundle = {
+      localProfile: latest.localProfile,
+      defaultPlaybackRate: latest.youtubeSound.defaultPlaybackRate,
+      fadeOnPauseResume: latest.youtubeSound.fadeOnPauseResume,
+      trackFadeSeconds: latest.youtubeSound.trackFadeSeconds,
+      maxVolumeLimit: latest.youtubeSound.maxVolumeLimit,
+      dataSaver: latest.dataSaver,
+    };
+    void saveAccountAudioSettings(bundle, latest.accountKey).catch(() => {});
+  }, 450);
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -72,22 +123,37 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         db.kvState.get('settings'),
         loadLocalAudioProfile('local'),
       ]);
-      if (rec?.value && typeof rec.value === 'object') {
-        const stored = rec.value as Partial<UserSettings>;
+      let stored =
+        rec?.value && typeof rec.value === 'object'
+          ? (rec.value as Partial<UserSettings>)
+          : null;
+      if (!stored) {
+        try {
+          const rawLs = window.localStorage.getItem('soundclear_user_settings_v1');
+          if (rawLs) stored = JSON.parse(rawLs) as Partial<UserSettings>;
+        } catch {
+          // Ignore malformed fallback
+        }
+      }
+
+      if (stored) {
         const order =
           Array.isArray(stored.homeSectionOrder) && stored.homeSectionOrder.length > 0
             ? stored.homeSectionOrder
             : DEFAULT_HOME_SECTION_ORDER;
+        const yt = {
+          ...DEFAULT_YOUTUBE_SOUND,
+          ...(stored.youtubeSound || {}),
+        };
+        yt.defaultPlaybackRate = clampPlaybackRate(yt.defaultPlaybackRate ?? 1);
+
         set({
           hideExplicit: Boolean(stored.hideExplicit),
           autoplay: stored.autoplay ?? true,
           dataSaver: Boolean(stored.dataSaver),
           showRightPanel: stored.showRightPanel ?? true,
           homeSectionOrder: order,
-          youtubeSound: {
-            ...DEFAULT_YOUTUBE_SOUND,
-            ...(stored.youtubeSound || {}),
-          },
+          youtubeSound: yt,
           episodePlaybackRates: stored.episodePlaybackRates || {},
           localProfile: accountProfile,
           hydrated: true,
@@ -95,31 +161,86 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       } else {
         set({ localProfile: accountProfile, hydrated: true });
       }
+
+      void get().syncAudioSettingsFromBackend('local');
     } catch {
       set({ hydrated: true });
     }
   },
 
+  syncAudioSettingsFromBackend: async (explicitKey) => {
+    const key = explicitKey || get().accountKey || 'local';
+    try {
+      const resp = await fetchAccountAudioSettings(key);
+      if (!resp.settings || typeof resp.settings !== 'object') return;
+      const bundle = resp.settings;
+      if (bundle.localProfile) {
+        const merged = normalizeLocalAudioProfile({
+          ...get().localProfile,
+          ...bundle.localProfile,
+        });
+        set({ localProfile: merged });
+        void saveLocalAudioProfile(key, merged).catch(() => {});
+      }
+      set((state) => {
+        const nextYt = { ...state.youtubeSound };
+        if (typeof bundle.defaultPlaybackRate === 'number') {
+          nextYt.defaultPlaybackRate = clampPlaybackRate(bundle.defaultPlaybackRate);
+        }
+        if (typeof bundle.fadeOnPauseResume === 'boolean') {
+          nextYt.fadeOnPauseResume = bundle.fadeOnPauseResume;
+        }
+        if (typeof bundle.trackFadeSeconds === 'number') {
+          nextYt.trackFadeSeconds = Math.max(0, Math.min(12, Math.round(bundle.trackFadeSeconds)));
+        }
+        if (typeof bundle.maxVolumeLimit === 'number') {
+          nextYt.maxVolumeLimit = Math.max(20, Math.min(100, Math.round(bundle.maxVolumeLimit)));
+        }
+        return {
+          youtubeSound: nextYt,
+          dataSaver: typeof bundle.dataSaver === 'boolean' ? bundle.dataSaver : state.dataSaver,
+        };
+      });
+      persistSettings(get());
+    } catch {
+      // Offline or unconfigured backend fallback silently ignored
+    }
+  },
+
   setAccountKey: async (accountKey) => {
     const cleanKey = accountKey || 'local';
-    if (get().accountKey === cleanKey && get().hydrated) return;
+    if (get().accountKey === cleanKey && get().hydrated) {
+      await get().syncAudioSettingsFromBackend(cleanKey);
+      return;
+    }
     const profile = await loadLocalAudioProfile(cleanKey);
     set({ accountKey: cleanKey, localProfile: profile });
+    await get().syncAudioSettingsFromBackend(cleanKey);
   },
 
   updateSetting: (key, value) => {
     set({ [key]: value } as Partial<SettingsState>);
-    persistSettings(get());
+    const next = get();
+    persistSettings(next);
+    if (key === 'dataSaver') {
+      scheduleBackendAudioSettingsSync(next);
+    }
   },
 
   updateYoutubeSound: (key, value) => {
+    const cleanVal =
+      key === 'defaultPlaybackRate' && typeof value === 'number'
+        ? clampPlaybackRate(value)
+        : value;
     set((state) => ({
       youtubeSound: {
         ...state.youtubeSound,
-        [key]: value,
+        [key]: cleanVal,
       },
     }));
-    persistSettings(get());
+    const next = get();
+    persistSettings(next);
+    scheduleBackendAudioSettingsSync(next);
   },
 
   setEpisodePlaybackRate: (episodeId, rate) => {
@@ -129,7 +250,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       if (rate === null) {
         delete next[episodeId];
       } else {
-        next[episodeId] = clampNumber(rate, 0.25, 2);
+        next[episodeId] = clampNumber(rate, 0.5, 2);
       }
       return { episodePlaybackRates: next };
     });
@@ -137,12 +258,36 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   updateLocalProfile: (patch) => {
-    const next: LocalAudioProfile = {
-      ...get().localProfile,
+    const current = get().localProfile;
+    const next = normalizeLocalAudioProfile({
+      ...current,
       ...patch,
-    };
+    });
     set({ localProfile: next });
     void saveLocalAudioProfile(get().accountKey, next).catch(() => {});
+
+    // Keep overlapping YouTube sound playback mirror flags synchronized
+    if (
+      typeof patch.crossfadeSeconds === 'number' ||
+      typeof patch.fadeOnPlayPause === 'boolean'
+    ) {
+      set((state) => ({
+        youtubeSound: {
+          ...state.youtubeSound,
+          trackFadeSeconds:
+            typeof patch.crossfadeSeconds === 'number'
+              ? patch.crossfadeSeconds
+              : state.youtubeSound.trackFadeSeconds,
+          fadeOnPauseResume:
+            typeof patch.fadeOnPlayPause === 'boolean'
+              ? patch.fadeOnPlayPause
+              : state.youtubeSound.fadeOnPauseResume,
+        },
+      }));
+      persistSettings(get());
+    }
+
+    scheduleBackendAudioSettingsSync(get());
   },
 
   applyEqPreset: (presetId) => {
@@ -195,6 +340,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     return preset;
   },
 
+  renameCustomPreset: (presetId, newName) => {
+    const clean = newName.trim();
+    if (!clean) return false;
+    const profile = get().localProfile;
+    const exists = profile.customPresets.some((p) => p.id === presetId);
+    if (!exists) return false;
+    const nextPresets = profile.customPresets.map((p) =>
+      p.id === presetId ? { ...p, name: clean } : p,
+    );
+    get().updateLocalProfile({ customPresets: nextPresets });
+    return true;
+  },
+
   deleteCustomPreset: (presetId) => {
     const profile = get().localProfile;
     const nextPresets = profile.customPresets.filter((p) => p.id !== presetId);
@@ -203,6 +361,94 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       presetId: nextPresetId,
       customPresets: nextPresets,
     });
+  },
+
+  resetAudioProfileSection: (section) => {
+    const def = DEFAULT_LOCAL_AUDIO_PROFILE;
+    if (section === 'streaming') {
+      get().updateLocalProfile({
+        wifiQuality: def.wifiQuality,
+        cellularQuality: def.cellularQuality,
+        autoAdjustQuality: def.autoAdjustQuality,
+      });
+      get().updateSetting('dataSaver', false);
+      return;
+    }
+    if (section === 'download') {
+      get().updateLocalProfile({
+        downloadQuality: def.downloadQuality,
+      });
+      return;
+    }
+    if (section === 'eq') {
+      get().updateLocalProfile({
+        eqEnabled: def.eqEnabled,
+        presetId: 'flat',
+        preampDb: 0,
+        bands: [...BUILTIN_EQ_PRESETS[0].bands],
+        bassBoostEnabled: def.bassBoostEnabled,
+        bassBoostLevel: def.bassBoostLevel,
+        stereoWidenerEnabled: def.stereoWidenerEnabled,
+        stereoWidenerLevel: def.stereoWidenerLevel,
+      });
+      return;
+    }
+    if (section === 'normalization') {
+      get().updateLocalProfile({
+        normalizationTarget: def.normalizationTarget,
+        useReplayGain: def.useReplayGain,
+        limiterEnabled: def.limiterEnabled,
+      });
+      get().updateYoutubeSound('maxVolumeLimit', DEFAULT_YOUTUBE_SOUND.maxVolumeLimit);
+      return;
+    }
+    if (section === 'playback') {
+      get().updateLocalProfile({
+        crossfadeSeconds: def.crossfadeSeconds,
+        gaplessPlayback: def.gaplessPlayback,
+        fadeOnPlayPause: def.fadeOnPlayPause,
+        skipSilence: def.skipSilence,
+      });
+      set((state) => ({
+        youtubeSound: {
+          ...state.youtubeSound,
+          defaultPlaybackRate: DEFAULT_YOUTUBE_SOUND.defaultPlaybackRate,
+          trackFadeSeconds: DEFAULT_YOUTUBE_SOUND.trackFadeSeconds,
+          fadeOnPauseResume: DEFAULT_YOUTUBE_SOUND.fadeOnPauseResume,
+          fadeOutOnSleepTimer: DEFAULT_YOUTUBE_SOUND.fadeOutOnSleepTimer,
+          resumeLastPosition: DEFAULT_YOUTUBE_SOUND.resumeLastPosition,
+          autoStartOnOpen: DEFAULT_YOUTUBE_SOUND.autoStartOnOpen,
+        },
+      }));
+      persistSettings(get());
+      scheduleBackendAudioSettingsSync(get());
+      return;
+    }
+    if (section === 'output') {
+      get().updateLocalProfile({
+        monoAudio: def.monoAudio,
+        balance: def.balance,
+        outputDeviceId: def.outputDeviceId,
+        directMode: def.directMode,
+      });
+      return;
+    }
+
+    // 'all': reset every audio setting (preserve custom presets only if user doesn't reset, or reset clean)
+    const freshProfile = normalizeLocalAudioProfile({
+      ...DEFAULT_LOCAL_AUDIO_PROFILE,
+      customPresets: [],
+    });
+    set((state) => ({
+      localProfile: freshProfile,
+      dataSaver: false,
+      youtubeSound: { ...DEFAULT_YOUTUBE_SOUND },
+      autoplay: state.autoplay,
+    }));
+    const latest = get();
+    persistSettings(latest);
+    void saveLocalAudioProfile(latest.accountKey, freshProfile).catch(() => {});
+    void resetAccountAudioSettings(latest.accountKey).catch(() => {});
   },
 
   moveHomeSection: (id, direction) => {

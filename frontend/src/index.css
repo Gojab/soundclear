@@ -113,6 +113,54 @@ input[type="range"].sc-range::-moz-range-thumb {
   background: #ffffff;
 }
 
+/* Always-visible precision sliders for Settings / EQ / DSP controls */
+input[type="range"].sc-range-visible {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.16);
+  height: 5px;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+
+input[type="range"].sc-range-visible::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 9999px;
+}
+
+input[type="range"].sc-range-visible::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #2ee6a6;
+  border: 2px solid #06130e;
+  margin-top: -4.5px;
+  opacity: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  transition: transform 120ms ease;
+}
+
+input[type="range"].sc-range-visible:hover::-webkit-slider-thumb,
+input[type="range"].sc-range-visible:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+input[type="range"].sc-range-visible::-moz-range-track {
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+input[type="range"].sc-range-visible::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #2ee6a6;
+  border: 2px solid #06130e;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

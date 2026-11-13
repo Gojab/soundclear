@@ -1,23 +1,29 @@
 import { create } from 'zustand';
+import { fetchStreamOptions } from '../api/client';
 import { db, migrateLegacyLocalStorage } from '../db/soundclearDb';
 import type {
+  ConcreteQualityTier,
   EpisodeProgressEntry,
   FollowedArtistEntry,
   LocalAudioFileRecord,
   LocalPlaylist,
   MediaItem,
+  OfflineDownloadRecord,
   PlayHistoryEntry,
   PlaylistFolder,
   RecentSearchEntry,
   SavedAlbumEntry,
   SavedPodcastEntry,
 } from '../types/music';
+import { classifyStreamQualityBadge, selectEffectiveStreamOption } from '../utils/audioMath';
 import { isSupportedLocalAudioFile, parseLocalAudioFile } from '../utils/localAudioImport';
-import { getTrackUniqueId } from '../utils/playerLogic';
+import { getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 
 export type LibrarySortMode = 'newest' | 'alpha' | 'last_played';
 export type LibraryFilterType = 'all' | 'playlists' | 'albums' | 'artists' | 'podcasts' | 'local';
 export type LibraryViewMode = 'list' | 'grid' | 'compact';
+
+const OFFLINE_AUDIO_CACHE = 'soundclear-offline-audio-v1';
 
 interface LibraryState {
   hydrated: boolean;
@@ -32,6 +38,7 @@ interface LibraryState {
   recentSearches: RecentSearchEntry[];
   hiddenTrackIds: string[];
   localFiles: LocalAudioFileRecord[];
+  offlineDownloads: OfflineDownloadRecord[];
 
   sortMode: LibrarySortMode;
   filterType: LibraryFilterType;
@@ -105,6 +112,13 @@ interface LibraryState {
 
   importLocalFiles: (files: FileList | File[]) => Promise<{ imported: number; skipped: number }>;
   deleteLocalFile: (id: string) => Promise<void>;
+
+  downloadTrackOffline: (
+    track: MediaItem,
+    requestedTier: ConcreteQualityTier,
+  ) => Promise<{ ok: boolean; reason?: string; record?: OfflineDownloadRecord }>;
+  deleteOfflineDownload: (trackId: string) => Promise<void>;
+  isTrackDownloadedOffline: (trackId: string | null | undefined) => boolean;
 }
 
 function normalizeTrackId(track: MediaItem): string {
@@ -124,6 +138,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   recentSearches: [],
   hiddenTrackIds: [],
   localFiles: [],
+  offlineDownloads: [],
 
   sortMode: 'newest',
   filterType: 'all',
@@ -144,6 +159,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       recentSearches,
       hiddenRecs,
       localFiles,
+      offlineDownloads,
     ] = await Promise.all([
       db.likedTracks.orderBy('addedAt').reverse().toArray(),
       db.playlists.orderBy('createdAt').reverse().toArray(),
@@ -156,6 +172,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       db.recentSearches.orderBy('searchedAt').reverse().toArray(),
       db.hiddenTracks.toArray(),
       db.localFiles.orderBy('addedAt').reverse().toArray(),
+      db.offlineDownloads.orderBy('downloadedAt').reverse().toArray(),
     ]);
 
     const episodeProgress: Record<string, EpisodeProgressEntry> = {};
@@ -176,6 +193,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       recentSearches,
       hiddenTrackIds: hiddenRecs.map((r) => r.id),
       localFiles,
+      offlineDownloads,
     });
   },
 
@@ -629,5 +647,164 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       localFiles: state.localFiles.filter((f) => f.id !== id),
     }));
     await db.localFiles.delete(id).catch(() => {});
+  },
+
+  downloadTrackOffline: async (track, requestedTier) => {
+    const id = getTrackUniqueId(track) || track.id;
+    if (!id) {
+      return { ok: false, reason: 'ID lagu tidak valid.' };
+    }
+
+    if (isLocalTrack(track)) {
+      const localRec =
+        get().localFiles.find((f) => f.id === id) || (await db.localFiles.get(id));
+      if (!localRec) {
+        return { ok: false, reason: 'File audio lokal tidak ditemukan.' };
+      }
+      const badge = classifyStreamQualityBadge({
+        codec: localRec.codec || localRec.mimeType,
+        bitrateKbps: localRec.bitrateKbps,
+        sampleRateHz: localRec.sampleRateHz,
+        bitDepth: localRec.bitDepth,
+        lossless: localRec.lossless,
+      });
+      const rec: OfflineDownloadRecord = {
+        id,
+        track: { ...track, id },
+        downloadedAt: Date.now(),
+        qualityTier: badge.hiRes ? 'hi_res' : badge.lossless ? 'lossless' : requestedTier,
+        codec: localRec.codec || 'Lokal',
+        bitrateKbps: localRec.bitrateKbps ?? null,
+        sampleRateHz: localRec.sampleRateHz ?? null,
+        bitDepth: localRec.bitDepth ?? null,
+        lossless: badge.lossless,
+        hiRes: badge.hiRes,
+        replayGainDb: localRec.replayGainDb ?? null,
+        estimatedLufs: localRec.estimatedLufs,
+        peakLinear: localRec.peakLinear,
+        fileSize: localRec.fileSize,
+        mimeType: localRec.mimeType,
+        blob: localRec.blob,
+      };
+      await db.offlineDownloads.put(rec);
+      if ('caches' in window) {
+        try {
+          const cache = await window.caches.open(OFFLINE_AUDIO_CACHE);
+          await cache.put(
+            `/offline-audio/${encodeURIComponent(id)}`,
+            new Response(localRec.blob, {
+              headers: { 'Content-Type': localRec.mimeType || 'audio/mpeg' },
+            }),
+          );
+        } catch {
+          // IndexedDB already persisted the offline blob
+        }
+      }
+      set((state) => ({
+        offlineDownloads: [rec, ...state.offlineDownloads.filter((d) => d.id !== id)],
+      }));
+      return { ok: true, record: rec };
+    }
+
+    const trackKey = getPlayableVideoId(track) || id;
+    try {
+      const opts = await fetchStreamOptions(trackKey, true);
+      if (!opts.audiodownload_allowed) {
+        return {
+          ok: false,
+          reason:
+            opts.downloadDisabledReason ||
+            'Sumber lagu ini tidak mengizinkan unduhan offline (audiodownload_allowed bernilai false).',
+        };
+      }
+
+      const sel = selectEffectiveStreamOption(opts.options, {
+        requestedTier,
+        dataSaver: false,
+        autoAdjustQuality: false,
+      });
+      const opt = sel.selectedOption;
+      if (!opt || (!opt.proxyUrl && !opt.streamUrl)) {
+        return {
+          ok: false,
+          reason: 'Tidak ada stream audio yang tersedia untuk diunduh.',
+        };
+      }
+
+      const fetchUrl = opt.proxyUrl || opt.streamUrl!;
+      const res = await fetch(fetchUrl);
+      if (!res.ok) {
+        return { ok: false, reason: `Gagal mengunduh audio (HTTP ${res.status}).` };
+      }
+      const blob = await res.blob();
+      const mimeType = blob.type || res.headers.get('Content-Type') || 'audio/mpeg';
+      const badge = classifyStreamQualityBadge({
+        codec: opt.codec,
+        bitrateKbps: opt.bitrateKbps,
+        sampleRateHz: opt.sampleRateHz,
+        bitDepth: opt.bitDepth,
+        lossless: opt.lossless,
+      });
+
+      const rec: OfflineDownloadRecord = {
+        id: trackKey,
+        track: { ...track, id: trackKey },
+        downloadedAt: Date.now(),
+        qualityTier: opt.tier,
+        codec: opt.codec || 'Audio',
+        bitrateKbps: opt.bitrateKbps ?? null,
+        sampleRateHz: opt.sampleRateHz ?? null,
+        bitDepth: opt.bitDepth ?? null,
+        lossless: badge.lossless,
+        hiRes: badge.hiRes,
+        replayGainDb: opts.replayGainDb ?? null,
+        estimatedLufs: -14,
+        peakLinear: 0.92,
+        fileSize: blob.size,
+        mimeType,
+        blob,
+      };
+      await db.offlineDownloads.put(rec);
+      if ('caches' in window) {
+        try {
+          const cache = await window.caches.open(OFFLINE_AUDIO_CACHE);
+          await cache.put(
+            `/offline-audio/${encodeURIComponent(trackKey)}`,
+            new Response(blob, { headers: { 'Content-Type': mimeType } }),
+          );
+        } catch {
+          // Non-fatal
+        }
+      }
+      set((state) => ({
+        offlineDownloads: [rec, ...state.offlineDownloads.filter((d) => d.id !== trackKey)],
+      }));
+      return { ok: true, record: rec };
+    } catch {
+      return {
+        ok: false,
+        reason: 'Gagal memeriksa izin unduhan atau mengambil stream dari server.',
+      };
+    }
+  },
+
+  deleteOfflineDownload: async (trackId) => {
+    set((state) => ({
+      offlineDownloads: state.offlineDownloads.filter((d) => d.id !== trackId),
+    }));
+    await db.offlineDownloads.delete(trackId).catch(() => {});
+    if ('caches' in window) {
+      try {
+        const cache = await window.caches.open(OFFLINE_AUDIO_CACHE);
+        await cache.delete(`/offline-audio/${encodeURIComponent(trackId)}`);
+      } catch {
+        // Ignore
+      }
+    }
+  },
+
+  isTrackDownloadedOffline: (trackId) => {
+    if (!trackId) return false;
+    return get().offlineDownloads.some((d) => d.id === trackId);
   },
 }));

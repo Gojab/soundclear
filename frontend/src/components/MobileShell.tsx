@@ -18,6 +18,7 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
+  Sliders,
   Sparkles,
 } from 'lucide-react';
 import { useLibraryStore } from '../store/libraryStore';
@@ -28,7 +29,6 @@ import {
   formatArtists,
   formatTime,
   getTrackUniqueId,
-  isLocalTrack,
 } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 import { LyricsView } from './LyricsView';
@@ -56,6 +56,8 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
   const sleepTimerMode = usePlayerStore((s) => s.sleepTimerMode);
   const ambientColor = usePlayerStore((s) => s.ambientColor);
   const mobileExpanded = usePlayerStore((s) => s.mobileExpanded);
+  const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
+  const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
   const togglePlayPause = usePlayerStore((s) => s.togglePlayPause);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
@@ -72,7 +74,6 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
   const trackKey = getTrackUniqueId(currentTrack);
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
   const toggleLike = useLibraryStore((s) => s.toggleLike);
-  const localPlaying = isLocalTrack(currentTrack);
 
   const safeDuration = duration > 0 ? duration : currentTrack?.durationSeconds || 0;
   const progressPct =
@@ -261,6 +262,20 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     <p className="text-sm text-white/60 truncate mt-0.5">
                       {formatArtists(currentTrack.artists)}
                     </p>
+                    {activeStreamMeta && (
+                      <p
+                        className={`text-[11px] font-medium truncate mt-0.5 ${
+                          activeStreamMeta.hiRes
+                            ? 'text-[#F5C451]'
+                            : activeStreamMeta.lossless
+                              ? 'text-[#2EE6A6]'
+                              : 'text-white/45'
+                        }`}
+                      >
+                        {activeStreamMeta.badgeLabel}
+                        {webAudioWarning ? ` · ${webAudioWarning}` : ''}
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -382,18 +397,17 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     {playbackRate}x
                   </button>
 
-                  {localPlaying && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileExpanded(false);
-                        navigate({ name: 'settings', tab: 'sound', focusEq: true });
-                      }}
-                      className="px-3 py-2 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 text-[#2EE6A6] font-medium"
-                    >
-                      EQ Lokal
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileExpanded(false);
+                      navigate({ name: 'settings', tab: 'sound', focusEq: false });
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 text-[#2EE6A6] font-medium"
+                  >
+                    <Sliders className="w-3.5 h-3.5" strokeWidth={1.85} />
+                    Pengaturan Audio
+                  </button>
 
                   <button
                     type="button"

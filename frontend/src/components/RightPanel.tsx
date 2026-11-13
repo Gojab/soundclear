@@ -236,6 +236,8 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
   const setFullscreenNowPlaying = usePlayerStore((s) => s.setFullscreenNowPlaying);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const playerError = usePlayerStore((s) => s.playerError);
+  const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
+  const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
   const navigate = useNavigationStore((s) => s.navigate);
   const openMenu = useContextMenuStore((s) => s.openMenu);
@@ -378,6 +380,36 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                 </button>
               </div>
             </div>
+
+            {activeStreamMeta && (
+              <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] border border-white/[0.06] px-3 py-2">
+                <span
+                  className={`text-[11px] font-medium truncate ${
+                    activeStreamMeta.hiRes
+                      ? 'text-[#F5C451]'
+                      : activeStreamMeta.lossless
+                        ? 'text-[#2EE6A6]'
+                        : 'text-white/70'
+                  }`}
+                >
+                  {activeStreamMeta.badgeLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
+                  className="inline-flex items-center gap-1 text-[11px] text-[#2EE6A6] hover:underline shrink-0"
+                >
+                  <Sliders className="w-3 h-3" strokeWidth={1.9} />
+                  Audio
+                </button>
+              </div>
+            )}
+
+            {webAudioWarning && (
+              <p className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-2">
+                {webAudioWarning}
+              </p>
+            )}
 
             {playerError && (
               <p className="text-xs text-red-300 bg-red-500/10 border border-red-400/20 rounded-xl px-3 py-2">

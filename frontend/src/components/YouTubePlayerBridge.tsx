@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  fetchStreamOptions,
+  fetchTrackPreviewUrl,
+  resolvePlayableYoutube,
+} from '../api/client';
+import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -6,7 +12,7 @@ import {
   clampYoutubeVolume,
   computeNonOverlappingFadeMultiplier,
 } from '../utils/audioMath';
-import { formatArtists, getPlayableVideoId } from '../utils/playerLogic';
+import { formatArtists, getPlayableVideoId, isYouTubeVideoId } from '../utils/playerLogic';
 
 interface YTPlayer {
   loadVideoById: (options: string | { videoId: string; startSeconds?: number }) => void;
@@ -27,6 +33,13 @@ interface YTPlayer {
 interface YTPlayerEvent {
   data: number;
   target: YTPlayer;
+}
+
+interface NetworkInformationLike {
+  effectiveType?: string;
+  downlink?: number;
+  addEventListener?: (type: string, listener: () => void) => void;
+  removeEventListener?: (type: string, listener: () => void) => void;
 }
 
 declare global {
@@ -92,9 +105,13 @@ export function YouTubePlayerBridge() {
   const playerRef = useRef<YTPlayer | null>(null);
   const readyRef = useRef(false);
   const loadedVideoIdRef = useRef<string | null>(null);
+  const loadedYtIdRef = useRef<string | null>(null);
+  const candidatesRef = useRef<string[]>([]);
+  const candidateIdxRef = useRef(0);
+  const fallbackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const usingFallbackAudioRef = useRef(false);
   const microFadeTimerRef = useRef<number | null>(null);
-
-  const [ytActuallyPlaying, setYtActuallyPlaying] = useState(false);
+  const bufferStallTimerRef = useRef<number | null>(null);
 
   const hydrated = usePlayerStore((s) => s.hydrated);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -108,10 +125,197 @@ export function YouTubePlayerBridge() {
   const karaokeOpen = usePlayerStore((s) => s.karaokeOpen);
   const fullscreenNowPlaying = usePlayerStore((s) => s.fullscreenNowPlaying);
   const playerError = usePlayerStore((s) => s.playerError);
+  const selectedQualityOverride = usePlayerStore((s) => s.selectedQualityOverride);
+  const sourceLabel = usePlayerStore((s) => s.sourceLabel);
 
+  const offlineDownloads = useLibraryStore((s) => s.offlineDownloads);
   const youtubeSound = useSettingsStore((s) => s.youtubeSound);
 
-  const currentVideoId = getPlayableVideoId(currentTrack);
+  const [ytActuallyPlaying, setYtActuallyPlaying] = useState(false);
+
+  const rawVideoId = getPlayableVideoId(currentTrack);
+  const offlineExists = Boolean(
+    rawVideoId && offlineDownloads.some((d) => d.id === rawVideoId),
+  );
+  const handledByHtmlAudio = Boolean(
+    !rawVideoId ||
+      selectedQualityOverride !== null ||
+      (offlineExists &&
+        (sourceLabel === 'Unduhan Offline' ||
+          (typeof navigator !== 'undefined' && navigator.onLine === false))),
+  );
+  const currentVideoId = handledByHtmlAudio ? null : rawVideoId;
+
+  const stopFallbackAudio = () => {
+    usingFallbackAudioRef.current = false;
+    const audio = fallbackAudioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+      } catch {
+        // Ignore
+      }
+    }
+  };
+
+  const activateYoutubeMeta = (trackKey: string) => {
+    const store = usePlayerStore.getState();
+    const opts = store.streamOptions;
+    const localProf = useSettingsStore.getState().localProfile;
+    store.setWebAudioWarning('Efek suara tidak tersedia untuk lagu ini');
+    store.setActiveStreamMeta({
+      trackId: trackKey,
+      requestedTier: localProf.wifiQuality,
+      actualTier: 'youtube',
+      codec: 'YouTube Stream',
+      bitrateKbps: 128,
+      sampleRateHz: 44100,
+      bitDepth: null,
+      lossless: false,
+      hiRes: false,
+      badgeLabel: 'YouTube Stream',
+      sourceMode: 'youtube-iframe',
+      proxiedViaBackend: false,
+      audiodownloadAllowed: opts?.audiodownload_allowed ?? false,
+      replayGainDb: opts?.replayGainDb ?? null,
+    });
+  };
+
+  const tryFallbackPreview = (trackKey: string, onFail: () => void) => {
+    if (isYouTubeVideoId(trackKey)) {
+      onFail();
+      return;
+    }
+
+    // Prefer switching cleanly into our Web Audio CORS-proxied `<audio>` tier if streamOptions discovered one
+    const latestStore = usePlayerStore.getState();
+    const firstAvailable = latestStore.streamOptions?.options.find((o) => o.available);
+    if (firstAvailable) {
+      latestStore.setSelectedQualityOverride(firstAvailable.tier);
+      return;
+    }
+
+    void fetchTrackPreviewUrl(trackKey)
+      .then(({ previewUrl }) => {
+        const latest = usePlayerStore.getState();
+        if (getPlayableVideoId(latest.currentTrack) !== trackKey) return;
+        if (!fallbackAudioRef.current) {
+          const el = new Audio();
+          el.preload = 'auto';
+          el.onplaying = () => {
+            const s = usePlayerStore.getState();
+            if (!usingFallbackAudioRef.current) return;
+            s.setIsBuffering(false);
+            if (!s.isPlaying) s.setIsPlaying(true);
+            s.setPlayerError(null);
+            s.setWebAudioWarning('Efek suara tidak tersedia untuk lagu ini');
+          };
+          el.onpause = () => {
+            const s = usePlayerStore.getState();
+            if (!usingFallbackAudioRef.current || el.ended) return;
+            s.setIsBuffering(false);
+            if (s.isPlaying) s.setIsPlaying(false);
+          };
+          el.onended = () => {
+            if (!usingFallbackAudioRef.current) return;
+            const s = usePlayerStore.getState();
+            s.setIsBuffering(false);
+            s.handleTrackEnded();
+          };
+          el.onerror = () => {
+            if (!usingFallbackAudioRef.current) return;
+            onFail();
+          };
+          fallbackAudioRef.current = el;
+        }
+
+        const audio = fallbackAudioRef.current;
+        const ytSound = useSettingsStore.getState().youtubeSound;
+        const cappedVol = clampYoutubeVolume(latest.volume, ytSound.maxVolumeLimit, latest.isMuted);
+        usingFallbackAudioRef.current = true;
+        audio.src = previewUrl;
+        audio.volume = cappedVol / 100;
+        audio.muted = latest.isMuted;
+        audio.playbackRate = latest.playbackRate || 1;
+        latest.setPlayerError(null);
+        latest.setWebAudioWarning('Efek suara tidak tersedia untuk lagu ini');
+        latest.setActiveStreamMeta({
+          trackId: trackKey,
+          requestedTier: useSettingsStore.getState().localProfile.wifiQuality,
+          actualTier: 'normal',
+          codec: 'MP3',
+          bitrateKbps: 128,
+          sampleRateHz: 44100,
+          bitDepth: null,
+          lossless: false,
+          hiRes: false,
+          badgeLabel: 'MP3 · 128 kbps (Pratinjau)',
+          sourceMode: 'fallback-no-fx',
+          proxiedViaBackend: false,
+          audiodownloadAllowed: false,
+          replayGainDb: null,
+        });
+        if (latest.isPlaying) {
+          void audio.play().catch((err: unknown) => {
+            const name = err instanceof Error ? err.name : '';
+            if (name === 'NotAllowedError') {
+              const s = usePlayerStore.getState();
+              s.setIsBuffering(false);
+              s.setIsPlaying(false);
+              return;
+            }
+            onFail();
+          });
+        }
+      })
+      .catch(() => {
+        onFail();
+      });
+  };
+
+  // Monitor navigator.connection for Auto-Adjust Quality
+  useEffect(() => {
+    const nav = navigator as Navigator & { connection?: NetworkInformationLike };
+    const conn = nav.connection;
+    if (!conn) {
+      usePlayerStore.getState().setNetworkEffectiveType(null);
+      return;
+    }
+    const updateConn = () => {
+      usePlayerStore.getState().setNetworkEffectiveType(conn.effectiveType || null);
+    };
+    updateConn();
+    conn.addEventListener?.('change', updateConn);
+    return () => {
+      conn.removeEventListener?.('change', updateConn);
+    };
+  }, []);
+
+  // Fetch stream options metadata for active catalog track
+  useEffect(() => {
+    if (!rawVideoId) return;
+    let cancelled = false;
+    void fetchStreamOptions(rawVideoId)
+      .then((opts) => {
+        if (cancelled) return;
+        const latest = usePlayerStore.getState();
+        if (getPlayableVideoId(latest.currentTrack) !== rawVideoId) return;
+        latest.setStreamOptions(opts);
+        if (latest.activeStreamMeta?.sourceMode === 'youtube-iframe') {
+          latest.setActiveStreamMeta({
+            ...latest.activeStreamMeta,
+            audiodownloadAllowed: opts.audiodownload_allowed,
+            replayGainDb: opts.replayGainDb ?? null,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [rawVideoId]);
 
   // Initialize single persistent YouTube IFrame player once
   useEffect(() => {
@@ -154,32 +358,89 @@ export function YouTubePlayerBridge() {
               event.target.unMute();
             }
 
-            const vid = getPlayableVideoId(state.currentTrack);
-            if (vid && loadedVideoIdRef.current !== vid) {
+            const track = state.currentTrack;
+            const vid = getPlayableVideoId(track);
+            const skipYt =
+              !vid ||
+              state.selectedQualityOverride !== null ||
+              (useLibraryStore.getState().offlineDownloads.some((d) => d.id === vid) &&
+                (state.sourceLabel === 'Unduhan Offline' || !navigator.onLine));
+
+            if (track && vid && !skipYt && loadedVideoIdRef.current !== vid) {
               loadedVideoIdRef.current = vid;
+              activateYoutubeMeta(vid);
               const startSec = ytSound.resumeLastPosition
                 ? Math.floor(state.pendingSeekSeconds ?? state.currentTime ?? 0)
                 : 0;
-              if (state.isPlaying) {
-                event.target.loadVideoById({ videoId: vid, startSeconds: startSec });
+              if (isYouTubeVideoId(vid)) {
+                candidatesRef.current = [vid];
+                candidateIdxRef.current = 0;
+                loadedYtIdRef.current = vid;
+                if (state.isPlaying) {
+                  event.target.loadVideoById({ videoId: vid, startSeconds: startSec });
+                } else {
+                  event.target.cueVideoById({ videoId: vid, startSeconds: startSec });
+                }
+                state.clearPendingSeek();
               } else {
-                event.target.cueVideoById({ videoId: vid, startSeconds: startSec });
+                loadedYtIdRef.current = null;
+                candidatesRef.current = [];
+                candidateIdxRef.current = 0;
+                void resolvePlayableYoutube(vid, {
+                  title: track.title,
+                  artist: formatArtists(track.artists),
+                  type: track.type,
+                  durationSeconds: track.durationSeconds,
+                })
+                  .then((resolved) => {
+                    const latest = usePlayerStore.getState();
+                    if (!readyRef.current || !playerRef.current) return;
+                    if (getPlayableVideoId(latest.currentTrack) !== vid) return;
+                    if (latest.selectedQualityOverride !== null) return;
+                    const list =
+                      resolved.candidates.length > 0
+                        ? resolved.candidates
+                        : [resolved.youtubeVideoId];
+                    candidatesRef.current = list;
+                    candidateIdxRef.current = 0;
+                    loadedYtIdRef.current = list[0];
+                    if (latest.isPlaying) {
+                      playerRef.current.loadVideoById({ videoId: list[0], startSeconds: startSec });
+                    } else {
+                      playerRef.current.cueVideoById({ videoId: list[0], startSeconds: startSec });
+                    }
+                    latest.clearPendingSeek();
+                  })
+                  .catch(() => {
+                    tryFallbackPreview(vid, () => {
+                      const latest = usePlayerStore.getState();
+                      if (getPlayableVideoId(latest.currentTrack) !== vid) return;
+                      latest.setIsBuffering(false);
+                      latest.setIsPlaying(false);
+                      latest.setPlayerError('Gagal menemukan sumber pemutaran audio untuk lagu ini.');
+                    });
+                  });
               }
-              state.clearPendingSeek();
             }
           },
           onStateChange: (event) => {
             const YTState = window.YT?.PlayerState;
             if (!YTState) return;
             const store = usePlayerStore.getState();
-            // Ignore YT events if a local file is now active
-            if (!getPlayableVideoId(store.currentTrack)) return;
+            const vid = getPlayableVideoId(store.currentTrack);
+            if (!vid || store.selectedQualityOverride !== null) return;
+
+            if (bufferStallTimerRef.current !== null) {
+              window.clearTimeout(bufferStallTimerRef.current);
+              bufferStallTimerRef.current = null;
+            }
 
             if (event.data === YTState.PLAYING) {
               setYtActuallyPlaying(true);
               store.setIsBuffering(false);
               if (!store.isPlaying) store.setIsPlaying(true);
               store.setPlayerError(null);
+              activateYoutubeMeta(vid);
               try {
                 event.target.setPlaybackRate(store.playbackRate);
               } catch {
@@ -191,6 +452,9 @@ export function YouTubePlayerBridge() {
               if (store.isPlaying) store.setIsPlaying(false);
             } else if (event.data === YTState.BUFFERING) {
               store.setIsBuffering(true);
+              bufferStallTimerRef.current = window.setTimeout(() => {
+                usePlayerStore.getState().recordBufferingStall();
+              }, 3500);
             } else if (event.data === YTState.ENDED) {
               setYtActuallyPlaying(false);
               store.setIsBuffering(false);
@@ -200,19 +464,39 @@ export function YouTubePlayerBridge() {
           onError: (event) => {
             setYtActuallyPlaying(false);
             const store = usePlayerStore.getState();
-            if (!getPlayableVideoId(store.currentTrack)) return;
-            store.setIsBuffering(false);
-            store.setIsPlaying(false);
-            const code = event.data;
-            let msg = 'Track ini tidak tersedia untuk diputar via YouTube Player.';
-            if (code === 101 || code === 150) {
-              msg = 'Pemilik lagu membatasi pemutaran di pemutar sematan YouTube.';
-            } else if (code === 100) {
-              msg = 'Video tidak ditemukan atau bersifat pribadi.';
-            } else if (code === 5) {
-              msg = 'Browser ini tidak mendukung pemutaran media HTML5 YouTube.';
+            const trackKey = getPlayableVideoId(store.currentTrack);
+            if (!trackKey || store.selectedQualityOverride !== null) return;
+
+            if (candidateIdxRef.current + 1 < candidatesRef.current.length) {
+              candidateIdxRef.current += 1;
+              const nextYtId = candidatesRef.current[candidateIdxRef.current];
+              loadedYtIdRef.current = nextYtId;
+              try {
+                event.target.loadVideoById({ videoId: nextYtId, startSeconds: 0 });
+                return;
+              } catch {
+                // Fall through
+              }
             }
-            store.setPlayerError(msg);
+
+            const showYtError = () => {
+              const latest = usePlayerStore.getState();
+              if (getPlayableVideoId(latest.currentTrack) !== trackKey) return;
+              latest.setIsBuffering(false);
+              latest.setIsPlaying(false);
+              const code = event.data;
+              let msg = 'Track ini tidak tersedia untuk diputar via YouTube Player.';
+              if (code === 101 || code === 150) {
+                msg = 'Pemilik lagu membatasi pemutaran di pemutar sematan YouTube.';
+              } else if (code === 100) {
+                msg = 'Video tidak ditemukan atau bersifat pribadi.';
+              } else if (code === 5) {
+                msg = 'Browser ini tidak mendukung pemutaran media HTML5 YouTube.';
+              }
+              latest.setPlayerError(msg);
+            };
+
+            tryFallbackPreview(trackKey, showYtError);
           },
         },
       });
@@ -225,6 +509,10 @@ export function YouTubePlayerBridge() {
       if (microFadeTimerRef.current) {
         window.clearInterval(microFadeTimerRef.current);
       }
+      if (bufferStallTimerRef.current !== null) {
+        window.clearTimeout(bufferStallTimerRef.current);
+      }
+      stopFallbackAudio();
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
@@ -237,13 +525,10 @@ export function YouTubePlayerBridge() {
     };
   }, []);
 
-  // Reset active video overlay whenever track changes or playback pauses
   useEffect(() => {
     setYtActuallyPlaying(false);
   }, [currentVideoId]);
 
-  // Overlay visible YouTube player inside RightPanel [data-yt-visible-slot]
-  // Only shown when playback is genuinely active without errors, so idle/paused/blocked states reveal artwork.
   useEffect(() => {
     const syncSlotPosition = () => {
       const wrapper = wrapperRef.current;
@@ -311,11 +596,15 @@ export function YouTubePlayerBridge() {
     fullscreenNowPlaying,
   ]);
 
-  // Load/cue YouTube video OR pause immediately if switching to a Local file
+  // Load/cue YouTube video or yield immediately when LocalAudioEngine handles track
   useEffect(() => {
     if (!hydrated || !readyRef.current || !playerRef.current) return;
-    if (!currentVideoId) {
+    if (!currentVideoId || !currentTrack) {
       loadedVideoIdRef.current = null;
+      loadedYtIdRef.current = null;
+      candidatesRef.current = [];
+      candidateIdxRef.current = 0;
+      stopFallbackAudio();
       try {
         playerRef.current.pauseVideo();
       } catch {
@@ -326,26 +615,87 @@ export function YouTubePlayerBridge() {
 
     if (loadedVideoIdRef.current === currentVideoId) return;
     loadedVideoIdRef.current = currentVideoId;
+    stopFallbackAudio();
+    activateYoutubeMeta(currentVideoId);
+
     const state = usePlayerStore.getState();
     const ytSound = useSettingsStore.getState().youtubeSound;
     const startSec = ytSound.resumeLastPosition
       ? Math.floor(state.pendingSeekSeconds ?? state.currentTime ?? 0)
       : 0;
-    try {
-      if (state.isPlaying) {
-        playerRef.current.loadVideoById({ videoId: currentVideoId, startSeconds: startSec });
-      } else {
-        playerRef.current.cueVideoById({ videoId: currentVideoId, startSeconds: startSec });
-      }
-      state.clearPendingSeek();
-    } catch {
-      // Ignore
-    }
-  }, [hydrated, currentVideoId]);
 
-  // Sync play / pause with optional short fade-in / fade-out
+    if (isYouTubeVideoId(currentVideoId)) {
+      candidatesRef.current = [currentVideoId];
+      candidateIdxRef.current = 0;
+      loadedYtIdRef.current = currentVideoId;
+      try {
+        if (state.isPlaying) {
+          playerRef.current.loadVideoById({ videoId: currentVideoId, startSeconds: startSec });
+        } else {
+          playerRef.current.cueVideoById({ videoId: currentVideoId, startSeconds: startSec });
+        }
+        state.clearPendingSeek();
+      } catch {
+        // Ignore
+      }
+      return;
+    }
+
+    loadedYtIdRef.current = null;
+    candidatesRef.current = [];
+    candidateIdxRef.current = 0;
+    const targetId = currentVideoId;
+
+    void resolvePlayableYoutube(targetId, {
+      title: currentTrack.title,
+      artist: formatArtists(currentTrack.artists),
+      type: currentTrack.type,
+      durationSeconds: currentTrack.durationSeconds,
+    })
+      .then((resolved) => {
+        const latest = usePlayerStore.getState();
+        if (!readyRef.current || !playerRef.current) return;
+        if (getPlayableVideoId(latest.currentTrack) !== targetId) return;
+        if (latest.selectedQualityOverride !== null) return;
+        const list =
+          resolved.candidates.length > 0 ? resolved.candidates : [resolved.youtubeVideoId];
+        candidatesRef.current = list;
+        candidateIdxRef.current = 0;
+        loadedYtIdRef.current = list[0];
+        try {
+          if (latest.isPlaying) {
+            playerRef.current.loadVideoById({ videoId: list[0], startSeconds: startSec });
+          } else {
+            playerRef.current.cueVideoById({ videoId: list[0], startSeconds: startSec });
+          }
+          latest.clearPendingSeek();
+        } catch {
+          // Ignore
+        }
+      })
+      .catch(() => {
+        tryFallbackPreview(targetId, () => {
+          const latest = usePlayerStore.getState();
+          if (getPlayableVideoId(latest.currentTrack) !== targetId) return;
+          latest.setIsBuffering(false);
+          latest.setIsPlaying(false);
+          latest.setPlayerError('Gagal menemukan sumber pemutaran audio untuk lagu ini.');
+        });
+      });
+  }, [hydrated, currentVideoId, currentTrack]);
+
+  // Sync play / pause with fade
   useEffect(() => {
-    if (!readyRef.current || !playerRef.current || !currentVideoId) return;
+    if (usingFallbackAudioRef.current && fallbackAudioRef.current && currentVideoId) {
+      if (isPlaying) {
+        void fallbackAudioRef.current.play().catch(() => {});
+      } else {
+        fallbackAudioRef.current.pause();
+      }
+      return;
+    }
+
+    if (!readyRef.current || !playerRef.current || !currentVideoId || !loadedYtIdRef.current) return;
     if (microFadeTimerRef.current) {
       window.clearInterval(microFadeTimerRef.current);
       microFadeTimerRef.current = null;
@@ -404,10 +754,14 @@ export function YouTubePlayerBridge() {
     }
   }, [isPlaying, currentVideoId]);
 
-  // Enforce maxVolumeLimit, volume & mute
   useEffect(() => {
-    if (!readyRef.current || !playerRef.current || !currentVideoId) return;
     const cappedVol = clampYoutubeVolume(volume, youtubeSound.maxVolumeLimit, isMuted);
+    if (usingFallbackAudioRef.current && fallbackAudioRef.current && currentVideoId) {
+      fallbackAudioRef.current.volume = cappedVol / 100;
+      fallbackAudioRef.current.muted = isMuted;
+      return;
+    }
+    if (!readyRef.current || !playerRef.current || !currentVideoId) return;
     try {
       playerRef.current.setVolume(cappedVol);
       if (isMuted) {
@@ -420,8 +774,11 @@ export function YouTubePlayerBridge() {
     }
   }, [volume, isMuted, youtubeSound.maxVolumeLimit, currentVideoId]);
 
-  // Sync playback rate
   useEffect(() => {
+    if (usingFallbackAudioRef.current && fallbackAudioRef.current && currentVideoId) {
+      fallbackAudioRef.current.playbackRate = playbackRate;
+      return;
+    }
     if (!readyRef.current || !playerRef.current || !currentVideoId) return;
     try {
       playerRef.current.setPlaybackRate(playbackRate);
@@ -430,9 +787,18 @@ export function YouTubePlayerBridge() {
     }
   }, [playbackRate, currentVideoId]);
 
-  // Handle explicit seek requests
   useEffect(() => {
-    if (pendingSeekSeconds === null || !readyRef.current || !playerRef.current || !currentVideoId) return;
+    if (pendingSeekSeconds === null || !currentVideoId) return;
+    if (usingFallbackAudioRef.current && fallbackAudioRef.current) {
+      try {
+        fallbackAudioRef.current.currentTime = Math.max(0, pendingSeekSeconds);
+      } catch {
+        // Ignore
+      }
+      usePlayerStore.getState().clearPendingSeek();
+      return;
+    }
+    if (!readyRef.current || !playerRef.current) return;
     try {
       playerRef.current.seekTo(pendingSeekSeconds, true);
     } catch {
@@ -441,10 +807,18 @@ export function YouTubePlayerBridge() {
     usePlayerStore.getState().clearPendingSeek();
   }, [seekVersion, pendingSeekSeconds, currentVideoId]);
 
-  // Poll progress + non-overlapping track fade (0-12s) + sleep timer fade-out + Media Session position
   useEffect(() => {
     if (!isPlaying || !currentVideoId) return;
     const interval = window.setInterval(() => {
+      if (usingFallbackAudioRef.current && fallbackAudioRef.current) {
+        const audio = fallbackAudioRef.current;
+        const cur = audio.currentTime;
+        const dur = Number.isFinite(audio.duration) ? audio.duration : 0;
+        if (Number.isFinite(cur)) {
+          usePlayerStore.getState().setProgress(cur, dur > 0 ? dur : undefined);
+        }
+        return;
+      }
       if (!readyRef.current || !playerRef.current) return;
       try {
         const cur = playerRef.current.getCurrentTime();
@@ -496,7 +870,7 @@ export function YouTubePlayerBridge() {
     return () => window.clearInterval(interval);
   }, [isPlaying, currentVideoId]);
 
-  // Media Session API (lock screen & media keys)
+  // Media Session API
   useEffect(() => {
     if (!('mediaSession' in navigator) || !currentTrack) return;
 
@@ -539,7 +913,7 @@ export function YouTubePlayerBridge() {
     }
   }, [currentTrack, isPlaying]);
 
-  // Global keyboard shortcuts (Space, Arrows, M, L, S, R, ?)
+  // Global keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;

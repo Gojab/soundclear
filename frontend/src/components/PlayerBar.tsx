@@ -54,6 +54,8 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const rightPanelTab = usePlayerStore((s) => s.rightPanelTab);
   const floatingMiniOpen = usePlayerStore((s) => s.floatingMiniOpen);
+  const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
+  const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
   const youtubeSound = useSettingsStore((s) => s.youtubeSound);
 
@@ -132,7 +134,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                 roundedClass="rounded-md"
               />
             </button>
-            <div className="min-w-0 max-w-[200px] xl:max-w-[240px]">
+            <div className="min-w-0 max-w-[210px] xl:max-w-[250px]">
               <p className="text-sm font-semibold text-white truncate hover:underline cursor-pointer" onClick={() => setFullscreenNowPlaying(true)}>
                 {currentTrack.title}
               </p>
@@ -154,6 +156,32 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                   </span>
                 ))}
               </div>
+              {activeStreamMeta && (
+                <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
+                    title={webAudioWarning || `Kualitas termuat: ${activeStreamMeta.badgeLabel}`}
+                    className={`text-[10px] font-medium truncate hover:underline ${
+                      activeStreamMeta.hiRes
+                        ? 'text-[#F5C451]'
+                        : activeStreamMeta.lossless
+                          ? 'text-[#2EE6A6]'
+                          : 'text-white/45'
+                    }`}
+                  >
+                    {activeStreamMeta.badgeLabel}
+                  </button>
+                  {webAudioWarning && (
+                    <span
+                      title={webAudioWarning}
+                      className="text-[10px] text-amber-300/85 truncate"
+                    >
+                      · Tanpa FX
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <button
               type="button"
@@ -294,6 +322,16 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
 
       {/* Right: Lyrics/Karaoke, Queue, Panel toggle, Speaker & Volume, PiP, Fullscreen */}
       <div ref={popoverRef} className="flex items-center justify-end gap-1 relative">
+        <button
+          type="button"
+          onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
+          aria-label="Buka Pengaturan Audio"
+          title="Pengaturan Audio & EQ"
+          className="w-8 h-8 rounded-full flex items-center justify-center text-white/65 hover:text-[#2EE6A6] transition-colors"
+        >
+          <Sliders className="w-4 h-4" strokeWidth={1.85} />
+        </button>
+
         <button
           type="button"
           onClick={() => {
@@ -533,23 +571,30 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
               </div>
             </div>
 
-            {/* EQ Button (only enabled when local file is playing) */}
-            <div className="pt-2.5 border-t border-white/[0.08] space-y-1">
+            {/* Pengaturan Audio & EQ button (always accessible) */}
+            <div className="pt-2.5 border-t border-white/[0.08] space-y-1.5">
+              {activeStreamMeta && (
+                <div className="flex items-center justify-between text-[11px] text-white/65">
+                  <span>Stream aktif</span>
+                  <span className="font-mono-num text-white/90 truncate max-w-[165px]">
+                    {activeStreamMeta.badgeLabel}
+                  </span>
+                </div>
+              )}
               <button
                 type="button"
-                disabled={!localPlaying}
                 onClick={() => {
                   setSpeakerOpen(false);
-                  navigate({ name: 'settings', tab: 'sound', focusEq: true });
+                  navigate({ name: 'settings', tab: 'sound', focusEq: false });
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-full bg-[#2EE6A6] text-[#06130E] font-semibold hover:brightness-105 disabled:bg-white/[0.08] disabled:text-white/35 disabled:cursor-not-allowed transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-full bg-[#2EE6A6] text-[#06130E] font-semibold hover:brightness-105 transition-colors"
               >
                 <Sliders className="w-3.5 h-3.5" strokeWidth={2} />
-                <span>Equalizer (EQ)</span>
+                <span>Pengaturan Audio &amp; EQ</span>
               </button>
-              {!localPlaying && (
-                <p className="text-[11px] text-white/45 text-center">
-                  Tombol EQ hanya aktif saat File Lokal diputar.
+              {webAudioWarning && (
+                <p className="text-[11px] text-amber-300/85 text-center leading-snug">
+                  {webAudioWarning}
                 </p>
               )}
             </div>

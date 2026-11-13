@@ -1,31 +1,66 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  bassBoostLevelToDb,
   BUILTIN_EQ_PRESETS,
   clampEqGainDb,
+  clampPlaybackRate,
   clampYoutubeVolume,
+  classifyStreamQualityBadge,
+  computeEqFrequencyResponseCurve,
   computeEqualPowerCrossfade,
   computeNonOverlappingFadeMultiplier,
   computeNormalizationGain,
   EQ_FREQUENCIES,
   estimateLoudnessFromRms,
+  NORMALIZATION_TARGETS_LUFS,
   preampDbToLinear,
+  selectEffectiveStreamOption,
+  stereoWidenerLevelToSideGain,
 } from './audioMath.ts';
+import type { StreamQualityOption } from '../types/music';
 
-test('EQ has 10 standard frequencies and all 11 named presets', () => {
+test('EQ has 10 standard frequencies and all 19 named presets', () => {
   assert.equal(EQ_FREQUENCIES.length, 10);
   assert.equal(EQ_FREQUENCIES[0], 31);
   assert.equal(EQ_FREQUENCIES[9], 16000);
-  assert.equal(BUILTIN_EQ_PRESETS.length, 11);
+  assert.equal(BUILTIN_EQ_PRESETS.length, 19);
   for (const preset of BUILTIN_EQ_PRESETS) {
     assert.equal(preset.bands.length, 10);
   }
+  const names = new Set(BUILTIN_EQ_PRESETS.map((p) => p.name));
+  for (const required of [
+    'Flat',
+    'Bass Booster',
+    'Bass Reducer',
+    'Treble Booster',
+    'Vocal Booster',
+    'Acoustic',
+    'Classical',
+    'Dance',
+    'Electronic',
+    'Hip-Hop',
+    'Jazz',
+    'Latin',
+    'Loudness',
+    'Piano',
+    'Pop',
+    'R&B',
+    'Rock',
+    'Small Speakers',
+    'Spoken Word',
+  ]) {
+    assert.ok(names.has(required), `Missing preset: ${required}`);
+  }
 });
 
-test('clampEqGainDb clamps gains strictly within ±12 dB at 0.5 step', () => {
+test('clampEqGainDb and clampPlaybackRate enforce strict audio ranges', () => {
   assert.equal(clampEqGainDb(24), 12);
   assert.equal(clampEqGainDb(-18), -12);
   assert.equal(clampEqGainDb(3.4), 3.5);
+  assert.equal(clampPlaybackRate(0.2), 0.5);
+  assert.equal(clampPlaybackRate(3.0), 2.0);
+  assert.equal(clampPlaybackRate(1.25), 1.25);
 });
 
 test('clampYoutubeVolume respects maxVolumeLimit and mute state', () => {
@@ -56,22 +91,159 @@ test('computeEqualPowerCrossfade preserves constant power across transition', ()
   assert.ok(Math.abs(end.inGain - 1) < 1e-6);
 });
 
-test('loudness estimation and normalization gain work cleanly without clipping', () => {
+test('loudness estimation, LUFS targets (-19/-14/-11), and ReplayGain work without clipping', () => {
+  assert.equal(NORMALIZATION_TARGETS_LUFS.quiet, -19);
+  assert.equal(NORMALIZATION_TARGETS_LUFS.normal, -14);
+  assert.equal(NORMALIZATION_TARGETS_LUFS.loud, -11);
+
   const quietLufs = estimateLoudnessFromRms(0.05);
   const loudLufs = estimateLoudnessFromRms(0.5);
   assert.ok(quietLufs < loudLufs);
 
-  assert.equal(computeNormalizationGain(-18, 'off'), 1);
-  const quietGain = computeNormalizationGain(-18, 'quiet', 0.8);
-  const normalGain = computeNormalizationGain(-18, 'normal', 0.5);
-  const loudGain = computeNormalizationGain(-18, 'loud', 0.3);
+  assert.equal(computeNormalizationGain(-19, 'off'), 1);
+  const quietGain = computeNormalizationGain(-19, 'quiet', 0.8);
+  const normalGain = computeNormalizationGain(-19, 'normal', 0.5);
+  const loudGain = computeNormalizationGain(-19, 'loud', 0.3);
   assert.ok(Math.abs(quietGain - 1) < 0.05);
   assert.ok(normalGain > quietGain);
   assert.ok(loudGain >= normalGain);
+
+  // ReplayGain takes precedence over estimated LUFS (-18 LUFS reference)
+  const rgNormalGain = computeNormalizationGain(-30, 'normal', 0.5, 0);
+  // +4 dB shift from -18 to -14 LUFS -> ~1.585 linear gain
+  assert.ok(rgNormalGain > 1.5 && rgNormalGain < 1.65);
 });
 
-test('preampDbToLinear maps 0 dB to unity gain', () => {
+test('preampDbToLinear, bassBoost, stereoWidener, and EQ curve behave accurately', () => {
   assert.equal(preampDbToLinear(0), 1);
   assert.ok(preampDbToLinear(6) > 1.9);
   assert.ok(preampDbToLinear(-6) < 0.55);
+
+  assert.equal(bassBoostLevelToDb(false, 80), 0);
+  assert.equal(bassBoostLevelToDb(true, 100), 9);
+  assert.equal(stereoWidenerLevelToSideGain(false, 100), 1);
+  assert.ok(stereoWidenerLevelToSideGain(true, 100) > 1.8);
+
+  const flatCurve = computeEqFrequencyResponseCurve({
+    eqEnabled: true,
+    preampDb: 0,
+    bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    pointCount: 32,
+  });
+  assert.equal(flatCurve.length, 32);
+  assert.ok(flatCurve.every((p) => Math.abs(p.db) < 0.01));
+
+  const boostedCurve = computeEqFrequencyResponseCurve({
+    eqEnabled: true,
+    directMode: false,
+    preampDb: 0,
+    bands: [6, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    bassBoostEnabled: true,
+    bassBoostLevel: 50,
+    pointCount: 32,
+  });
+  assert.ok(boostedCurve[0].db > boostedCurve[boostedCurve.length - 1].db + 5);
+
+  const bypassedCurve = computeEqFrequencyResponseCurve({
+    eqEnabled: true,
+    directMode: true,
+    preampDb: 5,
+    bands: [6, 6, 0, 0, 0, 0, 0, 0, 0, 0],
+    bassBoostEnabled: true,
+    bassBoostLevel: 100,
+    pointCount: 32,
+  });
+  assert.ok(bypassedCurve.every((p) => p.db === 0));
 });
+
+test('classifyStreamQualityBadge never fakes Lossless or Hi-Res via upsampling', () => {
+  const mp3FakeLossless = classifyStreamQualityBadge({
+    codec: 'MP3',
+    bitrateKbps: 320,
+    sampleRateHz: 96000,
+    bitDepth: 24,
+    lossless: true,
+  });
+  assert.equal(mp3FakeLossless.lossless, false);
+  assert.equal(mp3FakeLossless.hiRes, false);
+
+  const cdFlac = classifyStreamQualityBadge({
+    codec: 'FLAC',
+    sampleRateHz: 44100,
+    bitDepth: 16,
+    lossless: true,
+  });
+  assert.equal(cdFlac.lossless, true);
+  assert.equal(cdFlac.hiRes, false);
+  assert.match(cdFlac.badgeLabel, /Lossless/);
+
+  const hiResFlac = classifyStreamQualityBadge({
+    codec: 'FLAC',
+    sampleRateHz: 96000,
+    bitDepth: 24,
+    lossless: true,
+  });
+  assert.equal(hiResFlac.lossless, true);
+  assert.equal(hiResFlac.hiRes, true);
+  assert.match(hiResFlac.badgeLabel, /Hi-Res Lossless/);
+});
+
+test('selectEffectiveStreamOption downgrades gracefully on slow networks and Data Saver', () => {
+  const options: StreamQualityOption[] = [
+    {
+      tier: 'low',
+      label: 'Rendah',
+      available: true,
+      codec: 'MP3',
+      bitrateKbps: 96,
+      lossless: false,
+      hiRes: false,
+      corsSupported: true,
+    },
+    {
+      tier: 'high',
+      label: 'Tinggi',
+      available: true,
+      codec: 'AAC',
+      bitrateKbps: 256,
+      lossless: false,
+      hiRes: false,
+      corsSupported: true,
+    },
+    {
+      tier: 'hi_res',
+      label: 'Hi-Res Lossless',
+      available: false,
+      unavailableReason: 'Tidak tersedia untuk lagu ini',
+      lossless: false,
+      hiRes: false,
+      corsSupported: false,
+    },
+  ];
+
+  const saverPick = selectEffectiveStreamOption(options, {
+    requestedTier: 'high',
+    dataSaver: true,
+    autoAdjustQuality: true,
+  });
+  assert.equal(saverPick.selectedOption?.tier, 'low');
+  assert.equal(saverPick.downgradedByNetwork, true);
+
+  const slowNetPick = selectEffectiveStreamOption(options, {
+    requestedTier: 'high',
+    dataSaver: false,
+    autoAdjustQuality: true,
+    effectiveType: '2g',
+  });
+  assert.equal(slowNetPick.selectedOption?.tier, 'low');
+  assert.equal(slowNetPick.downgradedByNetwork, true);
+
+  // Requesting unavailable hi_res picks nearest available lower tier honestly
+  const unavailablePick = selectEffectiveStreamOption(options, {
+    requestedTier: 'hi_res',
+    dataSaver: false,
+    autoAdjustQuality: false,
+  });
+  assert.equal(unavailablePick.selectedOption?.tier, 'high');
+});
+

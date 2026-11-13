@@ -10,6 +10,7 @@ import {
   getTrackUniqueId,
   isLocalTrack,
   isPlayableTrack,
+  isYouTubeVideoId,
   mergeWatchTracksIntoQueue,
 } from './playerLogic';
 import type { LyricLine, MediaItem } from '../types/music';
@@ -86,4 +87,12 @@ test('local audio tracks stay isolated from YouTube videoId resolution', () => {
   assert.equal(getPlayableVideoId(localItem), null);
   assert.equal(getTrackUniqueId(localItem), 'local_123');
   assert.equal(isPlayableTrack(localItem), true);
+});
+
+test('isYouTubeVideoId distinguishes 11-char YouTube IDs from Spotify track IDs', () => {
+  assert.equal(isYouTubeVideoId('dQw4w9WgXcQ'), true);
+  assert.equal(isYouTubeVideoId('CSKr9seKdgI'), true);
+  assert.equal(isYouTubeVideoId('4xoY4lZNoTjEuHsSmhgF1G'), false);
+  assert.equal(isYouTubeVideoId(''), false);
+  assert.equal(isYouTubeVideoId(null), false);
 });

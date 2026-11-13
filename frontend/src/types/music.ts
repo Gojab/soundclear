@@ -329,6 +329,68 @@ export interface YouTubeSoundSettings {
 
 export type NormalizationTarget = 'off' | 'quiet' | 'normal' | 'loud';
 
+export type StreamQualityTier =
+  | 'auto'
+  | 'low'
+  | 'normal'
+  | 'high'
+  | 'very_high'
+  | 'lossless'
+  | 'hi_res';
+
+export type ConcreteQualityTier = Exclude<StreamQualityTier, 'auto'>;
+
+export interface StreamQualityOption {
+  tier: ConcreteQualityTier;
+  label: string;
+  available: boolean;
+  unavailableReason?: string | null;
+  codec?: string | null;
+  bitrateKbps?: number | null;
+  sampleRateHz?: number | null;
+  bitDepth?: number | null;
+  lossless: boolean;
+  hiRes: boolean;
+  corsSupported: boolean;
+  streamUrl?: string | null;
+  proxyUrl?: string | null;
+  rawUrl?: string | null;
+  isPreview?: boolean;
+}
+
+export interface StreamOptionsResponse {
+  trackId: string;
+  audiodownload_allowed: boolean;
+  downloadDisabledReason?: string | null;
+  replayGainDb?: number | null;
+  youtubeFallbackAvailable: boolean;
+  options: StreamQualityOption[];
+}
+
+export type AudioSourceMode =
+  | 'webaudio'
+  | 'direct'
+  | 'fallback-no-fx'
+  | 'youtube-iframe'
+  | 'test-tone';
+
+export interface ActiveStreamMeta {
+  trackId: string;
+  requestedTier: StreamQualityTier;
+  actualTier: ConcreteQualityTier | 'youtube' | 'local' | 'offline';
+  codec: string;
+  bitrateKbps?: number | null;
+  sampleRateHz?: number | null;
+  bitDepth?: number | null;
+  lossless: boolean;
+  hiRes: boolean;
+  badgeLabel: string;
+  sourceMode: AudioSourceMode;
+  proxiedViaBackend?: boolean;
+  audiodownloadAllowed: boolean;
+  replayGainDb?: number | null;
+}
+
 export interface EqPreset {
   id: string;
   name: string;
@@ -338,16 +400,30 @@ export interface EqPreset {
 }
 
 export interface LocalAudioProfile {
+  wifiQuality: StreamQualityTier;
+  cellularQuality: StreamQualityTier;
+  autoAdjustQuality: boolean;
+  downloadQuality: ConcreteQualityTier;
   eqEnabled: boolean;
   presetId: string;
   preampDb: number;
   bands: number[];
   customPresets: EqPreset[];
+  bassBoostEnabled: boolean;
+  bassBoostLevel: number; // 0-100%
+  stereoWidenerEnabled: boolean;
+  stereoWidenerLevel: number; // 0-100%
   normalizationTarget: NormalizationTarget;
+  useReplayGain: boolean;
+  limiterEnabled: boolean;
   monoAudio: boolean;
   balance: number; // -1 (kiri penuh) s.d. +1 (kanan penuh)
+  outputDeviceId: string;
+  directMode: boolean;
   crossfadeSeconds: number; // 0-12 detik
   gaplessPlayback: boolean;
+  fadeOnPlayPause: boolean;
+  skipSilence: boolean;
 }
 
 export interface LocalAudioFileRecord {
@@ -362,7 +438,33 @@ export interface LocalAudioFileRecord {
   coverDataUrl?: string | null;
   estimatedLufs: number;
   peakLinear: number;
+  codec?: string;
+  bitrateKbps?: number | null;
+  sampleRateHz?: number | null;
+  bitDepth?: number | null;
+  lossless?: boolean;
+  hiRes?: boolean;
+  replayGainDb?: number | null;
   addedAt: number;
+  blob: Blob;
+}
+
+export interface OfflineDownloadRecord {
+  id: string;
+  track: MediaItem;
+  downloadedAt: number;
+  qualityTier: ConcreteQualityTier;
+  codec: string;
+  bitrateKbps?: number | null;
+  sampleRateHz?: number | null;
+  bitDepth?: number | null;
+  lossless: boolean;
+  hiRes: boolean;
+  replayGainDb?: number | null;
+  estimatedLufs: number;
+  peakLinear: number;
+  fileSize: number;
+  mimeType: string;
   blob: Blob;
 }
 
