@@ -14,7 +14,9 @@ class AlbumRef(BaseModel):
     name: str
 
 
-ItemType = Literal["song", "video", "album", "artist", "playlist"]
+ItemType = Literal[
+    "song", "video", "album", "artist", "playlist", "podcast", "episode"
+]
 
 
 class MediaItem(BaseModel):
@@ -32,6 +34,11 @@ class MediaItem(BaseModel):
     playlistId: Optional[str] = None
     videoId: Optional[str] = None
     browseId: Optional[str] = None
+    description: Optional[str] = None
+    published: Optional[str] = None
+    podcastId: Optional[str] = None
+    creditsBrowseId: Optional[str] = None
+    genre: Optional[str] = None
 
 
 class HomeSection(BaseModel):
@@ -81,6 +88,24 @@ class SuggestResponse(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
 
 
+class SongCredit(BaseModel):
+    role: str
+    names: list[str] = Field(default_factory=list)
+
+
+class SongCreditsResponse(BaseModel):
+    videoId: str
+    title: str
+    credits: list[SongCredit] = Field(default_factory=list)
+
+
+class SongRelatedResponse(BaseModel):
+    videoId: str
+    tracks: list[MediaItem] = Field(default_factory=list)
+    playlists: list[MediaItem] = Field(default_factory=list)
+    artists: list[MediaItem] = Field(default_factory=list)
+
+
 class ArtistDetailResponse(BaseModel):
     id: str
     name: str
@@ -93,6 +118,8 @@ class ArtistDetailResponse(BaseModel):
     songs: list[MediaItem] = Field(default_factory=list)
     albums: list[MediaItem] = Field(default_factory=list)
     singles: list[MediaItem] = Field(default_factory=list)
+    compilations: list[MediaItem] = Field(default_factory=list)
+    appearsOn: list[MediaItem] = Field(default_factory=list)
     videos: list[MediaItem] = Field(default_factory=list)
     related: list[MediaItem] = Field(default_factory=list)
 
@@ -107,6 +134,8 @@ class AlbumDetailResponse(BaseModel):
     description: Optional[str] = None
     thumbnail: Optional[str] = None
     audioPlaylistId: Optional[str] = None
+    credits: list[SongCredit] = Field(default_factory=list)
+    moreFromArtist: list[MediaItem] = Field(default_factory=list)
     tracks: list[MediaItem] = Field(default_factory=list)
 
 
@@ -144,8 +173,82 @@ class LyricsResponse(BaseModel):
     plainText: Optional[str] = None
 
 
+class PodcastEpisode(BaseModel):
+    id: str
+    videoId: str
+    title: str
+    description: Optional[str] = None
+    duration: Optional[str] = None
+    durationSeconds: Optional[int] = None
+    published: Optional[str] = None
+    thumbnail: Optional[str] = None
+    podcastId: Optional[str] = None
+    podcastTitle: Optional[str] = None
+
+
+class PodcastDetailResponse(BaseModel):
+    id: str
+    title: str
+    author: Optional[str] = None
+    authorId: Optional[str] = None
+    description: Optional[str] = None
+    thumbnail: Optional[str] = None
+    episodes: list[PodcastEpisode] = Field(default_factory=list)
+
+
+class EpisodeDetailResponse(BaseModel):
+    id: str
+    videoId: str
+    title: str
+    description: Optional[str] = None
+    duration: Optional[str] = None
+    durationSeconds: Optional[int] = None
+    published: Optional[str] = None
+    thumbnail: Optional[str] = None
+    podcastId: Optional[str] = None
+    podcastTitle: Optional[str] = None
+    author: Optional[str] = None
+    authorId: Optional[str] = None
+
+
 class ArtworkColorResponse(BaseModel):
     r: int
     g: int
     b: int
     hex: str
+
+
+class AccountStatusResponse(BaseModel):
+    authenticated: bool
+    mode: Literal["local", "ytmusic"]
+    message: str
+
+
+class AccountLibraryResponse(BaseModel):
+    likedSongs: list[MediaItem] = Field(default_factory=list)
+    playlists: list[MediaItem] = Field(default_factory=list)
+    albums: list[MediaItem] = Field(default_factory=list)
+    artists: list[MediaItem] = Field(default_factory=list)
+    subscriptions: list[MediaItem] = Field(default_factory=list)
+    history: list[MediaItem] = Field(default_factory=list)
+
+
+class AccountRateRequest(BaseModel):
+    videoId: str
+    rating: Literal["LIKE", "DISLIKE", "INDIFFERENT"] = "LIKE"
+
+
+class AccountCreatePlaylistRequest(BaseModel):
+    title: str
+    description: str = ""
+    videoIds: list[str] = Field(default_factory=list)
+
+
+class AccountAddPlaylistItemsRequest(BaseModel):
+    playlistId: str
+    videoIds: list[str] = Field(default_factory=list)
+
+
+class AccountSubscribeRequest(BaseModel):
+    channelIds: list[str] = Field(default_factory=list)
+    subscribe: bool = True

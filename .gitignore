@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+backend/.venv/
+backend/__pycache__/
+*headers_auth*.json
+browser.json
+ytmusic_auth*.json
+.ytmusic_auth*

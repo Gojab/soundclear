@@ -176,3 +176,126 @@ def test_get_home_excludes_indian_and_mandarin(monkeypatch):
     assert [s["title"] for s in sections] == ["New releases"]
     titles = [item["title"] for item in sections[0]["items"]]
     assert titles == ["Jangan Lama-lama", "夜に駆ける", "Boogie Woogie"]
+
+
+def test_normalize_podcast_and_episode_items():
+    podcast_raw = {
+        "resultType": "podcast",
+        "title": "Podcast Malam",
+        "browseId": "MPSPPL123",
+        "thumbnails": [{"url": "https://i.ytimg.com/pod.jpg", "width": 544, "height": 544}],
+    }
+    pod = normalize_media_item(podcast_raw)
+    assert pod is not None
+    assert pod.type == "podcast"
+    assert pod.id == "MPSPPL123"
+    assert pod.podcastId == "MPSPPL123"
+
+    episode_raw = {
+        "resultType": "episode",
+        "title": "Episode 1",
+        "videoId": "epVid01",
+        "videoType": "MUSIC_VIDEO_TYPE_PODCAST_EPISODE",
+        "date": "12 Jan",
+        "duration": "25:10",
+        "podcast": {"id": "MPSPPL123", "name": "Podcast Malam"},
+        "thumbnails": [{"url": "https://i.ytimg.com/ep.jpg", "width": 400, "height": 225}],
+    }
+    ep = normalize_media_item(episode_raw)
+    assert ep is not None
+    assert ep.type == "episode"
+    assert ep.id == "epVid01"
+    assert ep.podcastId == "MPSPPL123"
+    assert ep.published == "12 Jan"
+    assert ep.durationSeconds == 1510
+
+
+def test_song_credits_and_related_endpoints(monkeypatch):
+    client = TestClient(app)
+    from main import service
+
+    monkeypatch.setattr(
+        service._yt,
+        "get_album",
+        lambda browseId: {
+            "tracks": [
+                {"videoId": "v1", "title": "Lagu Satu", "creditsBrowseId": "MPTC123"}
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        service._yt,
+        "get_song_credits",
+        lambda browseId: {
+            "performed_by": {"localized_title": "Performed by", "data": ["Tulus"]},
+            "written_by": {"localized_title": "Written by", "data": ["Tulus", "Petra"]},
+            "other_sections": [],
+        },
+    )
+    monkeypatch.setattr(
+        service._yt,
+        "get_watch_playlist",
+        lambda videoId, radio=True, limit=15: {
+            "related": "MPTR_test",
+            "tracks": [{"videoId": "v2", "title": "Rekomendasi", "artists": [{"name": "Yura"}]}],
+        },
+    )
+    monkeypatch.setattr(
+        service._yt,
+        "get_song_related",
+        lambda browseId: [
+            {
+                "title": "You might also like",
+                "contents": [
+                    {"videoId": "v3", "title": "Mirip", "artists": [{"name": "Raisa"}]}
+                ],
+            }
+        ],
+    )
+    service._cache.clear()
+
+    cred_resp = client.get("/song/v1/credits", params={"albumId": "MPREb_1"})
+    assert cred_resp.status_code == 200
+    cred_data = cred_resp.json()
+    assert cred_data["title"] == "Lagu Satu"
+    assert cred_data["credits"][0]["role"] == "Dibawakan oleh"
+    assert cred_data["credits"][0]["names"] == ["Tulus"]
+
+    rel_resp = client.get("/song/v1/related")
+    assert rel_resp.status_code == 200
+    rel_data = rel_resp.json()
+    assert [t["title"] for t in rel_data["tracks"]] == ["Mirip"]
+
+
+def test_account_status_local_fallback():
+    client = TestClient(app)
+    status_resp = client.get("/account/status")
+    assert status_resp.status_code == 200
+    assert status_resp.json()["authenticated"] is False
+    assert status_resp.json()["mode"] == "local"
+
+    rate_resp = client.post("/account/rate", json={"videoId": "v1", "rating": "LIKE"})
+    assert rate_resp.status_code == 200
+    assert rate_resp.json()["synced"] is False
+
+
+def test_vercel_api_entrypoint_handles_api_prefix_and_root():
+    import importlib.util
+
+    api_index_path = Path(__file__).resolve().parents[2] / "api" / "index.py"
+    spec = importlib.util.spec_from_file_location("vercel_api_index", api_index_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    client = TestClient(module.app)
+    for path in ("/health", "/api/health"):
+        resp = client.get(path)
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok", "service": "soundclear"}
+
+    acct_resp = client.get("/api/account/status")
+    assert acct_resp.status_code == 200
+    assert acct_resp.json()["mode"] == "local"
+
+

@@ -1,9 +1,13 @@
 [
+  "backend/tests/test_service.py::test_account_status_local_fallback",
   "backend/tests/test_service.py::test_get_home_excludes_indian_and_mandarin",
   "backend/tests/test_service.py::test_get_moods_returns_groups",
   "backend/tests/test_service.py::test_normalize_media_item_watch_shape",
+  "backend/tests/test_service.py::test_normalize_podcast_and_episode_items",
   "backend/tests/test_service.py::test_parse_duration_seconds",
   "backend/tests/test_service.py::test_pick_largest_thumbnail",
+  "backend/tests/test_service.py::test_song_credits_and_related_endpoints",
   "backend/tests/test_service.py::test_ttl_cache_expiration",
+  "backend/tests/test_service.py::test_vercel_api_entrypoint_handles_api_prefix_and_root",
   "backend/tests/test_service.py::test_ytmusic_error_mapped_cleanly"
 ]

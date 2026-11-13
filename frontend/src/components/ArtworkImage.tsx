@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Disc3, Music, User } from 'lucide-react';
+import { Disc3, Music, Podcast, User } from 'lucide-react';
+import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItemType } from '../types/music';
+import { getEffectiveThumbnail } from '../utils/playerLogic';
 
 interface ArtworkImageProps {
   src?: string | null;
@@ -18,9 +20,18 @@ export function ArtworkImage({
   roundedClass = 'rounded-xl',
 }: ArtworkImageProps) {
   const [failed, setFailed] = useState(false);
+  const dataSaver = useSettingsStore((s) => s.dataSaver);
+  const resolvedSrc = getEffectiveThumbnail(src, dataSaver);
 
-  if (!src || failed) {
-    const Icon = type === 'artist' ? User : type === 'album' ? Disc3 : Music;
+  if (!resolvedSrc || failed) {
+    const Icon =
+      type === 'artist'
+        ? User
+        : type === 'album'
+          ? Disc3
+          : type === 'podcast' || type === 'episode'
+            ? Podcast
+            : Music;
     return (
       <div
         className={`${className} ${roundedClass} flex items-center justify-center bg-white/[0.06] border border-white/[0.08] text-white/40 shrink-0`}
@@ -33,7 +44,7 @@ export function ArtworkImage({
 
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       referrerPolicy="no-referrer"
       loading="lazy"

@@ -8,7 +8,7 @@ export interface AlbumRef {
   name: string;
 }
 
-export type MediaItemType = 'song' | 'video' | 'album' | 'artist' | 'playlist';
+export type MediaItemType = 'song' | 'video' | 'album' | 'artist' | 'playlist' | 'podcast' | 'episode';
 
 export interface MediaItem {
   id: string;
@@ -25,6 +25,11 @@ export interface MediaItem {
   playlistId?: string | null;
   videoId?: string | null;
   browseId?: string | null;
+  description?: string | null;
+  published?: string | null;
+  podcastId?: string | null;
+  creditsBrowseId?: string | null;
+  genre?: string | null;
 }
 
 export interface HomeSection {
@@ -63,7 +68,15 @@ export interface MoodPlaylistsResponse {
   playlists: MediaItem[];
 }
 
-export type SearchFilter = 'all' | 'songs' | 'albums' | 'artists' | 'playlists' | 'videos';
+export type SearchFilter =
+  | 'all'
+  | 'songs'
+  | 'albums'
+  | 'artists'
+  | 'playlists'
+  | 'videos'
+  | 'podcasts'
+  | 'episodes';
 
 export interface SearchResponse {
   query: string;
@@ -88,8 +101,15 @@ export interface ArtistDetailResponse {
   songs: MediaItem[];
   albums: MediaItem[];
   singles: MediaItem[];
+  compilations: MediaItem[];
+  appearsOn: MediaItem[];
   videos: MediaItem[];
   related: MediaItem[];
+}
+
+export interface SongCredit {
+  role: string;
+  names: string[];
 }
 
 export interface AlbumDetailResponse {
@@ -102,6 +122,8 @@ export interface AlbumDetailResponse {
   description?: string | null;
   thumbnail?: string | null;
   audioPlaylistId?: string | null;
+  credits: SongCredit[];
+  moreFromArtist: MediaItem[];
   tracks: MediaItem[];
 }
 
@@ -139,6 +161,57 @@ export interface LyricsResponse {
   plainText?: string | null;
 }
 
+export interface SongCreditsResponse {
+  videoId: string;
+  title: string;
+  credits: SongCredit[];
+}
+
+export interface SongRelatedResponse {
+  videoId: string;
+  tracks: MediaItem[];
+  playlists: MediaItem[];
+  artists: MediaItem[];
+}
+
+export interface PodcastEpisode {
+  id: string;
+  videoId: string;
+  title: string;
+  description?: string | null;
+  duration?: string | null;
+  durationSeconds?: number | null;
+  published?: string | null;
+  thumbnail?: string | null;
+  podcastId?: string | null;
+  podcastTitle?: string | null;
+}
+
+export interface PodcastDetailResponse {
+  id: string;
+  title: string;
+  author?: string | null;
+  authorId?: string | null;
+  description?: string | null;
+  thumbnail?: string | null;
+  episodes: PodcastEpisode[];
+}
+
+export interface EpisodeDetailResponse {
+  id: string;
+  videoId: string;
+  title: string;
+  description?: string | null;
+  duration?: string | null;
+  durationSeconds?: number | null;
+  published?: string | null;
+  thumbnail?: string | null;
+  podcastId?: string | null;
+  podcastTitle?: string | null;
+  author?: string | null;
+  authorId?: string | null;
+}
+
 export interface ArtworkColorResponse {
   r: number;
   g: number;
@@ -146,14 +219,108 @@ export interface ArtworkColorResponse {
   hex: string;
 }
 
+export interface AccountStatusResponse {
+  authenticated: boolean;
+  mode: 'local' | 'ytmusic';
+  message: string;
+}
+
+export interface AccountLibraryResponse {
+  likedSongs: MediaItem[];
+  playlists: MediaItem[];
+  albums: MediaItem[];
+  artists: MediaItem[];
+  subscriptions: MediaItem[];
+  history: MediaItem[];
+}
+
 export type RepeatMode = 'off' | 'all' | 'one';
 
 export interface LocalPlaylist {
   id: string;
   name: string;
+  description?: string;
+  coverUrl?: string | null;
+  folderId?: string | null;
+  pinned?: boolean;
   createdAt: number;
+  updatedAt?: number;
+  lastPlayedAt?: number | null;
   tracks: MediaItem[];
 }
+
+export interface PlaylistFolder {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
+export interface SavedAlbumEntry {
+  id: string;
+  pinned?: boolean;
+  savedAt: number;
+  lastPlayedAt?: number | null;
+  item: MediaItem;
+}
+
+export interface FollowedArtistEntry {
+  id: string;
+  pinned?: boolean;
+  followedAt: number;
+  lastPlayedAt?: number | null;
+  item: MediaItem;
+}
+
+export interface SavedPodcastEntry {
+  id: string;
+  pinned?: boolean;
+  savedAt: number;
+  lastPlayedAt?: number | null;
+  item: MediaItem;
+}
+
+export interface EpisodeProgressEntry {
+  episodeId: string;
+  podcastId?: string | null;
+  positionSeconds: number;
+  durationSeconds: number;
+  completed: boolean;
+  updatedAt: number;
+}
+
+export interface PlayHistoryEntry {
+  uid?: number;
+  trackId: string;
+  playedAt: number;
+  durationListenedSec: number;
+  sourceType: 'song' | 'episode';
+  genreHint?: string | null;
+  track: MediaItem;
+}
+
+export interface RecentSearchEntry {
+  uid?: number;
+  query: string;
+  searchedAt: number;
+}
+
+export interface UserSettings {
+  hideExplicit: boolean;
+  autoplay: boolean;
+  dataSaver: boolean;
+  showRightPanel: boolean;
+  homeSectionOrder: string[];
+}
+
+export type HomeSectionId =
+  | 'continue'
+  | 'daily_mix'
+  | 'frequent'
+  | 'artist_releases'
+  | 'for_you_mix'
+  | 'charts'
+  | 'home_feed'
+  | 'moods';
 
 export type RouteView =
   | { name: 'home' }
@@ -163,6 +330,11 @@ export type RouteView =
   | { name: 'artist'; id: string }
   | { name: 'album'; id: string }
   | { name: 'playlist'; id: string }
+  | { name: 'podcast'; id: string }
+  | { name: 'episode'; id: string }
   | { name: 'library' }
   | { name: 'liked' }
-  | { name: 'local-playlist'; id: string };
+  | { name: 'local-playlist'; id: string }
+  | { name: 'recap' }
+  | { name: 'settings' }
+  | { name: 'shortcuts' };

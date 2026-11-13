@@ -1,4 +1,5 @@
-import { Heart, ListEnd, ListPlus, Pause, Play, Trash2 } from 'lucide-react';
+import { GripVertical, Heart, ListEnd, ListPlus, MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react';
+import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
@@ -10,6 +11,10 @@ interface TrackRowProps {
   track: MediaItem;
   index?: number;
   showAlbum?: boolean;
+  compact?: boolean;
+  draggable?: boolean;
+  onDragStartIndex?: (index: number) => void;
+  onDropIndex?: (index: number) => void;
   onPlay: () => void;
   onAddToPlaylist?: (track: MediaItem) => void;
   onRemove?: () => void;
@@ -19,6 +24,10 @@ export function TrackRow({
   track,
   index,
   showAlbum = true,
+  compact = false,
+  draggable = false,
+  onDragStartIndex,
+  onDropIndex,
   onPlay,
   onAddToPlaylist,
   onRemove,
@@ -29,6 +38,7 @@ export function TrackRow({
   const addToQueue = usePlayerStore((s) => s.addToQueue);
 
   const navigate = useNavigationStore((s) => s.navigate);
+  const openMenu = useContextMenuStore((s) => s.openMenu);
 
   const trackKey = getPlayableVideoId(track) || track.id;
   const activeKey = currentTrack ? getPlayableVideoId(currentTrack) || currentTrack.id : null;
@@ -36,6 +46,7 @@ export function TrackRow({
 
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
   const toggleLike = useLibraryStore((s) => s.toggleLike);
+  const isHidden = useLibraryStore((s) => s.isTrackHidden(trackKey));
 
   const handlePrimaryClick = () => {
     if (isCurrent) {
@@ -45,12 +56,47 @@ export function TrackRow({
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    openMenu(e.clientX, e.clientY, track, {
+      onAddToPlaylist,
+      onRemoveFromList: onRemove,
+    });
+  };
+
   return (
     <div
-      className={`track-row group flex items-center gap-3 px-3 py-2 rounded-xl ${
-        isCurrent ? 'bg-white/[0.08]' : ''
-      }`}
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!draggable || typeof index !== 'number') return;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(index));
+        onDragStartIndex?.(index);
+      }}
+      onDragOver={(e) => {
+        if (!draggable) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      }}
+      onDrop={(e) => {
+        if (!draggable || typeof index !== 'number') return;
+        e.preventDefault();
+        onDropIndex?.(index);
+      }}
+      onContextMenu={handleContextMenu}
+      className={`track-row group flex items-center gap-3 px-3 ${
+        compact ? 'py-1.5' : 'py-2'
+      } rounded-xl ${isCurrent ? 'bg-white/[0.08]' : ''} ${isHidden ? 'opacity-45' : ''}`}
     >
+      {draggable && (
+        <span
+          className="text-white/30 group-hover:text-white/60 cursor-grab active:cursor-grabbing shrink-0"
+          aria-hidden="true"
+        >
+          <GripVertical className="w-4 h-4" strokeWidth={1.75} />
+        </span>
+      )}
+
       {typeof index === 'number' && (
         <div className="w-6 text-center shrink-0">
           <span
@@ -76,42 +122,51 @@ export function TrackRow({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={handlePrimaryClick}
-        aria-label={`${isCurrent && isPlaying ? 'Jeda' : 'Putar'} ${track.title}`}
-        className="relative w-11 h-11 shrink-0 rounded-lg overflow-hidden focus-visible:outline-2 focus-visible:outline-[#2EE6A6]"
-      >
-        <ArtworkImage
-          src={track.thumbnail}
-          alt={track.title}
-          type={track.type}
-          className="w-full h-full"
-          roundedClass="rounded-lg"
-        />
-        <span
-          className={`absolute inset-0 flex items-center justify-center bg-black/50 transition-opacity duration-120 ${
-            isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-          }`}
-        >
-          {isCurrent && isPlaying ? (
-            <Pause className="w-4 h-4 text-[#2EE6A6] fill-[#2EE6A6]" strokeWidth={1.75} />
-          ) : (
-            <Play className="w-4 h-4 text-white fill-white" strokeWidth={1.75} />
-          )}
-        </span>
-      </button>
-
-      <div className="min-w-0 flex-1">
+      {!compact && (
         <button
           type="button"
           onClick={handlePrimaryClick}
-          className={`block w-full text-left text-sm font-medium truncate transition-colors ${
-            isCurrent ? 'text-[#2EE6A6]' : 'text-white hover:text-white'
-          }`}
+          aria-label={`${isCurrent && isPlaying ? 'Jeda' : 'Putar'} ${track.title}`}
+          className="relative w-11 h-11 shrink-0 rounded-lg overflow-hidden focus-visible:outline-2 focus-visible:outline-[#2EE6A6]"
         >
-          {track.title}
+          <ArtworkImage
+            src={track.thumbnail}
+            alt={track.title}
+            type={track.type}
+            className="w-full h-full"
+            roundedClass="rounded-lg"
+          />
+          <span
+            className={`absolute inset-0 flex items-center justify-center bg-black/50 transition-opacity duration-120 ${
+              isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            }`}
+          >
+            {isCurrent && isPlaying ? (
+              <Pause className="w-4 h-4 text-[#2EE6A6] fill-[#2EE6A6]" strokeWidth={1.75} />
+            ) : (
+              <Play className="w-4 h-4 text-white fill-white" strokeWidth={1.75} />
+            )}
+          </span>
         </button>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <button
+            type="button"
+            onClick={handlePrimaryClick}
+            className={`block text-left text-sm font-medium truncate transition-colors ${
+              isCurrent ? 'text-[#2EE6A6]' : 'text-white hover:text-white'
+            }`}
+          >
+            {track.title}
+          </button>
+          {track.isExplicit && (
+            <span className="text-[10px] font-semibold text-white/45 shrink-0" title="Konten eksplisit">
+              E
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 text-xs text-white/55 truncate mt-0.5">
           {track.artists && track.artists.length > 0 ? (
             track.artists.map((artist, idx) => (
@@ -202,6 +257,22 @@ export function TrackRow({
             <Trash2 className="w-4 h-4" strokeWidth={1.75} />
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            openMenu(rect.right - 220, rect.bottom + 6, track, {
+              onAddToPlaylist,
+              onRemoveFromList: onRemove,
+            });
+          }}
+          aria-label={`Opsi lainnya untuk ${track.title}`}
+          title="Opsi lainnya"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.08] transition-colors"
+        >
+          <MoreHorizontal className="w-4 h-4" strokeWidth={1.75} />
+        </button>
 
         <span className="w-10 text-right text-xs text-white/50 tabular-nums">
           {track.duration || '—'}

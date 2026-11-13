@@ -118,3 +118,65 @@ export function mergeWatchTracksIntoQueue(
 
   return [...head, ...manualUpcoming, ...additions];
 }
+
+export function getEffectiveThumbnail(
+  url: string | null | undefined,
+  dataSaver: boolean,
+): string | null {
+  if (!url) return null;
+  if (!dataSaver) return url;
+  // Downscale Googleusercontent artwork URLs cleanly when Data Saver is enabled
+  return url.replace(/=w\d+-h\d+/, '=w120-h120');
+}
+
+export function findDuplicateTrackIndices(tracks: MediaItem[]): Set<number> {
+  const seen = new Set<string>();
+  const duplicates = new Set<number>();
+  tracks.forEach((track, idx) => {
+    const key = getPlayableVideoId(track) || track.id;
+    if (seen.has(key)) {
+      duplicates.add(idx);
+    } else {
+      seen.add(key);
+    }
+  });
+  return duplicates;
+}
+
+export function interleaveSmartShuffleTracks(
+  upcoming: MediaItem[],
+  recommended: MediaItem[],
+  currentVideoId: string | null,
+): MediaItem[] {
+  const existingIds = new Set<string>();
+  if (currentVideoId) existingIds.add(currentVideoId);
+  for (const t of upcoming) {
+    const vid = getPlayableVideoId(t);
+    if (vid) existingIds.add(vid);
+  }
+
+  const freshRecs = recommended.filter((r) => {
+    const vid = getPlayableVideoId(r);
+    if (!vid || existingIds.has(vid)) return false;
+    existingIds.add(vid);
+    return true;
+  });
+
+  if (freshRecs.length === 0) return upcoming;
+  if (upcoming.length === 0) return freshRecs.slice(0, 10);
+
+  const result: MediaItem[] = [];
+  let recIdx = 0;
+  for (let i = 0; i < upcoming.length; i += 1) {
+    result.push(upcoming[i]);
+    if ((i + 1) % 2 === 0 && recIdx < freshRecs.length) {
+      result.push(freshRecs[recIdx]);
+      recIdx += 1;
+    }
+  }
+  while (recIdx < Math.min(freshRecs.length, 6)) {
+    result.push(freshRecs[recIdx]);
+    recIdx += 1;
+  }
+  return result;
+}

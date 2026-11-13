@@ -1,15 +1,144 @@
-import { Heart, ListMusic, ListPlus, Mic2, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Heart, Info, ListMusic, ListPlus, Mic2, MoreHorizontal, X } from 'lucide-react';
+import { fetchSongCredits, fetchSongRelated } from '../api/client';
+import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import type { MediaItem } from '../types/music';
-import { getPlayableVideoId } from '../utils/playerLogic';
+import { formatArtists, getPlayableVideoId } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 import { LyricsView } from './LyricsView';
 import { QueueView } from './QueueView';
 
 interface RightPanelProps {
   onAddToPlaylist: (track: MediaItem) => void;
+}
+
+function SongDetailsAndRelated({
+  track,
+  onAddToPlaylist,
+}: {
+  track: MediaItem;
+  onAddToPlaylist: (track: MediaItem) => void;
+}) {
+  const videoId = getPlayableVideoId(track) || track.id;
+  const playTrackList = usePlayerStore((s) => s.playTrackList);
+  const navigate = useNavigationStore((s) => s.navigate);
+
+  const creditsQuery = useQuery({
+    queryKey: ['song-credits', videoId, track.album?.id, track.creditsBrowseId],
+    queryFn: ({ signal }) =>
+      fetchSongCredits(videoId, track.album?.id, track.creditsBrowseId, signal),
+    enabled: Boolean(videoId),
+  });
+
+  const relatedQuery = useQuery({
+    queryKey: ['song-related', videoId],
+    queryFn: ({ signal }) => fetchSongRelated(videoId, signal),
+    enabled: Boolean(videoId),
+  });
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <h4 className="text-xs font-semibold text-white/55">Kredit Lagu</h4>
+        {creditsQuery.isLoading ? (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-10 rounded-xl bg-white/[0.06]" />
+            <div className="h-10 rounded-xl bg-white/[0.06]" />
+          </div>
+        ) : creditsQuery.data && creditsQuery.data.credits.length > 0 ? (
+          <div className="space-y-1.5">
+            {creditsQuery.data.credits.map((credit) => (
+              <div
+                key={credit.role}
+                className="rounded-xl bg-white/[0.04] border border-white/[0.06] px-3 py-2"
+              >
+                <p className="text-[11px] text-white/45">{credit.role}</p>
+                <p className="text-xs text-white mt-0.5">{credit.names.join(', ')}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-white/45">
+            {formatArtists(track.artists)}
+            {track.album?.name ? ` · ${track.album.name}` : ''}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <h4 className="text-xs font-semibold text-white/55">Lagu Terkait</h4>
+        {relatedQuery.isLoading ? (
+          <div className="space-y-2 animate-pulse">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-11 rounded-xl bg-white/[0.06]" />
+            ))}
+          </div>
+        ) : relatedQuery.data && relatedQuery.data.tracks.length > 0 ? (
+          <div className="space-y-1">
+            {relatedQuery.data.tracks.slice(0, 8).map((rel, idx) => (
+              <button
+                key={`${rel.id}-${idx}`}
+                type="button"
+                onClick={() => playTrackList(relatedQuery.data.tracks, idx, 'Lagu Terkait')}
+                className="w-full flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+              >
+                <ArtworkImage
+                  src={rel.thumbnail}
+                  alt={rel.title}
+                  className="w-9 h-9"
+                  roundedClass="rounded-lg"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-white truncate">{rel.title}</p>
+                  <p className="text-[11px] text-white/50 truncate">
+                    {formatArtists(rel.artists)}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-white/45">Belum ada lagu terkait untuk lagu ini.</p>
+        )}
+      </div>
+
+      {relatedQuery.data && relatedQuery.data.artists.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold text-white/55">Artis Serupa</h4>
+          <div className="space-y-1">
+            {relatedQuery.data.artists.slice(0, 5).map((art) => (
+              <button
+                key={art.id}
+                type="button"
+                onClick={() => navigate({ name: 'artist', id: art.browseId || art.id })}
+                className="w-full flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+              >
+                <ArtworkImage
+                  src={art.thumbnail}
+                  alt={art.title}
+                  type="artist"
+                  className="w-9 h-9"
+                  roundedClass="rounded-full"
+                />
+                <span className="text-xs font-medium text-white truncate">{art.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onAddToPlaylist(track)}
+        className="w-full py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-medium text-white/80 transition-colors"
+      >
+        Simpan ke Playlist
+      </button>
+    </div>
+  );
 }
 
 export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
@@ -21,6 +150,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
   const playerError = usePlayerStore((s) => s.playerError);
 
   const navigate = useNavigationStore((s) => s.navigate);
+  const openMenu = useContextMenuStore((s) => s.openMenu);
 
   const trackKey = currentTrack ? getPlayableVideoId(currentTrack) || currentTrack.id : null;
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
@@ -48,11 +178,16 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {currentTrack ? (
           <div className="space-y-3">
-            <div className="aspect-square w-full overflow-hidden rounded-xl">
+            {/* Visible YouTube IFrame slot */}
+            <div
+              data-yt-visible-slot="true"
+              className="relative aspect-video w-full overflow-hidden rounded-xl bg-black border border-white/[0.08]"
+            >
               <ArtworkImage
                 src={currentTrack.thumbnail}
                 alt={currentTrack.title}
-                className="w-full h-full"
+                type={currentTrack.type}
+                className="w-full h-full opacity-35"
                 roundedClass="rounded-xl"
               />
             </div>
@@ -82,12 +217,12 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-0.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => toggleLike(currentTrack)}
                   aria-label={liked ? 'Hapus dari lagu disukai' : 'Sukai lagu ini'}
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
                     liked ? 'text-[#2EE6A6]' : 'text-white/55 hover:text-white hover:bg-white/[0.08]'
                   }`}
                 >
@@ -97,9 +232,20 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                   type="button"
                   onClick={() => onAddToPlaylist(currentTrack)}
                   aria-label="Simpan lagu ke playlist"
-                  className="w-9 h-9 rounded-lg flex items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] transition-colors"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] transition-colors"
                 >
                   <ListPlus className="w-4 h-4" strokeWidth={1.75} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    openMenu(rect.right - 220, rect.bottom + 6, currentTrack, { onAddToPlaylist });
+                  }}
+                  aria-label="Opsi lagu sedang diputar"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] transition-colors"
+                >
+                  <MoreHorizontal className="w-4 h-4" strokeWidth={1.75} />
                 </button>
               </div>
             </div>
@@ -122,14 +268,14 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
         <div
           role="tablist"
           aria-label="Tab panel sedang diputar"
-          className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/[0.05] border border-white/[0.06]"
+          className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-white/[0.05] border border-white/[0.06]"
         >
           <button
             type="button"
             role="tab"
             aria-selected={rightPanelTab === 'queue'}
             onClick={() => setRightPanelTab('queue')}
-            className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
               rightPanelTab === 'queue'
                 ? 'bg-white/[0.1] text-[#2EE6A6]'
                 : 'text-white/60 hover:text-white'
@@ -143,7 +289,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             role="tab"
             aria-selected={rightPanelTab === 'lyrics'}
             onClick={() => setRightPanelTab('lyrics')}
-            className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
               rightPanelTab === 'lyrics'
                 ? 'bg-white/[0.1] text-[#2EE6A6]'
                 : 'text-white/60 hover:text-white'
@@ -152,9 +298,35 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             <Mic2 className="w-3.5 h-3.5" strokeWidth={1.75} />
             Lirik
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={rightPanelTab === 'details'}
+            onClick={() => setRightPanelTab('details')}
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+              rightPanelTab === 'details'
+                ? 'bg-white/[0.1] text-[#2EE6A6]'
+                : 'text-white/60 hover:text-white'
+            }`}
+          >
+            <Info className="w-3.5 h-3.5" strokeWidth={1.75} />
+            Kredit
+          </button>
         </div>
 
-        <div>{rightPanelTab === 'queue' ? <QueueView /> : <LyricsView />}</div>
+        <div>
+          {rightPanelTab === 'queue' ? (
+            <QueueView />
+          ) : rightPanelTab === 'lyrics' ? (
+            <LyricsView />
+          ) : currentTrack ? (
+            <SongDetailsAndRelated track={currentTrack} onAddToPlaylist={onAddToPlaylist} />
+          ) : (
+            <p className="text-xs text-white/45 py-8 text-center">
+              Putar lagu untuk melihat kredit dan lagu terkait.
+            </p>
+          )}
+        </div>
       </div>
     </aside>
   );

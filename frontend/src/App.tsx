@@ -1,23 +1,47 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Disc3, PanelRightOpen, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Disc3,
+  PanelRightOpen,
+  Search,
+  Settings,
+} from 'lucide-react';
+import {
+  FloatingMiniPlayerController,
+  FullscreenKaraokeModal,
+  FullscreenNowPlayingModal,
+} from './components/FullscreenViews';
 import { MobileShell } from './components/MobileShell';
 import { PlayerBar } from './components/PlayerBar';
 import { PlaylistModal } from './components/PlaylistModal';
 import { RightPanel } from './components/RightPanel';
 import { Sidebar } from './components/Sidebar';
+import { GlobalTrackContextMenu } from './components/TrackContextMenu';
 import { YouTubePlayerBridge } from './components/YouTubePlayerBridge';
 import { AlbumDetailPage, ArtistDetailPage, PlaylistDetailPage } from './pages/DetailPages';
 import { HomePage } from './pages/HomePage';
-import { LibraryOverviewPage, LikedTracksPage, LocalPlaylistPage } from './pages/LibraryPages';
+import {
+  LibraryOverviewPage,
+  LikedTracksPage,
+  LocalPlaylistPage,
+} from './pages/LibraryPages';
 import { MoodDetailPage, MoodsPage } from './pages/MoodsPage';
+import { EpisodeDetailPage, PodcastDetailPage } from './pages/PodcastPages';
+import { RecapPage } from './pages/RecapPage';
 import { SearchPage } from './pages/SearchPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { ShortcutsPage } from './pages/ShortcutsPage';
+import { useLibraryStore } from './store/libraryStore';
 import { useNavigationStore } from './store/navigationStore';
 import { usePlayerStore } from './store/playerStore';
-import type { MediaItem } from './types/music';
+import { useSettingsStore } from './store/settingsStore';
+import type { LocalPlaylist, MediaItem } from './types/music';
 
 export default function App() {
   const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
   const [trackForPlaylist, setTrackForPlaylist] = useState<MediaItem | null>(null);
+  const [editingPlaylist, setEditingPlaylist] = useState<LocalPlaylist | null>(null);
 
   const currentRoute = useNavigationStore((s) => s.currentRoute);
   const navigate = useNavigationStore((s) => s.navigate);
@@ -31,13 +55,30 @@ export default function App() {
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const setRightPanelOpen = usePlayerStore((s) => s.setRightPanelOpen);
 
+  useEffect(() => {
+    const boot = async () => {
+      await useSettingsStore.getState().hydrate();
+      await useLibraryStore.getState().hydrate();
+      await usePlayerStore.getState().hydrate();
+    };
+    void boot();
+  }, []);
+
   const openCreatePlaylistModal = () => {
     setTrackForPlaylist(null);
+    setEditingPlaylist(null);
     setPlaylistModalOpen(true);
   };
 
   const openAddToPlaylistModal = (track: MediaItem) => {
     setTrackForPlaylist(track);
+    setEditingPlaylist(null);
+    setPlaylistModalOpen(true);
+  };
+
+  const openEditPlaylistModal = (playlist: LocalPlaylist) => {
+    setTrackForPlaylist(null);
+    setEditingPlaylist(playlist);
     setPlaylistModalOpen(true);
   };
 
@@ -102,9 +143,18 @@ export default function App() {
                   className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs text-white/70 hover:text-white transition-colors whitespace-nowrap"
                 >
                   <Search className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  <span className="hidden sm:inline">Cari lagu atau artis</span>
+                  <span className="hidden sm:inline">Cari lagu atau podcast</span>
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => navigate({ name: 'settings' })}
+                aria-label="Pengaturan"
+                className="md:hidden w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-center text-white/75"
+              >
+                <Settings className="w-4 h-4" strokeWidth={1.75} />
+              </button>
 
               {!rightPanelOpen && (
                 <button
@@ -169,10 +219,19 @@ export default function App() {
               />
             )}
 
+            {currentRoute.name === 'podcast' && (
+              <PodcastDetailPage key={currentRoute.id} id={currentRoute.id} />
+            )}
+
+            {currentRoute.name === 'episode' && (
+              <EpisodeDetailPage key={currentRoute.id} id={currentRoute.id} />
+            )}
+
             {currentRoute.name === 'library' && (
               <LibraryOverviewPage
                 onAddToPlaylist={openAddToPlaylistModal}
                 onOpenCreatePlaylist={openCreatePlaylistModal}
+                onEditPlaylist={openEditPlaylistModal}
               />
             )}
 
@@ -185,8 +244,13 @@ export default function App() {
                 key={currentRoute.id}
                 id={currentRoute.id}
                 onAddToPlaylist={openAddToPlaylistModal}
+                onEditPlaylist={openEditPlaylistModal}
               />
             )}
+
+            {currentRoute.name === 'recap' && <RecapPage />}
+            {currentRoute.name === 'settings' && <SettingsPage />}
+            {currentRoute.name === 'shortcuts' && <ShortcutsPage />}
           </div>
         </main>
 
@@ -199,14 +263,23 @@ export default function App() {
       {/* Mobile mini player + expandable sheet + bottom tabs */}
       <MobileShell onAddToPlaylist={openAddToPlaylistModal} />
 
-      {/* Playlist create / add modal */}
+      {/* Playlist create / add / edit modal */}
       <PlaylistModal
         open={playlistModalOpen}
         trackToAdd={trackForPlaylist}
+        editingPlaylist={editingPlaylist}
         onClose={() => setPlaylistModalOpen(false)}
       />
 
-      {/* Hidden YouTube IFrame Player API bridge */}
+      {/* Global Context Menu + Song Credits Modal + Action Toast */}
+      <GlobalTrackContextMenu onAddToPlaylist={openAddToPlaylistModal} />
+
+      {/* Fullscreen Karaoke, Fullscreen Now Playing, and Desktop PiP / Mini Player */}
+      <FullscreenKaraokeModal />
+      <FullscreenNowPlayingModal />
+      <FloatingMiniPlayerController />
+
+      {/* Persistent YouTube IFrame Player API bridge */}
       <YouTubePlayerBridge />
     </div>
   );

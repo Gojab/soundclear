@@ -1,4 +1,5 @@
 import { Play } from 'lucide-react';
+import { useContextMenuStore } from '../store/contextMenuStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import type { MediaItem } from '../types/music';
@@ -8,16 +9,26 @@ import { ArtworkImage } from './ArtworkImage';
 interface MediaCardProps {
   item: MediaItem;
   subtitle?: string;
+  onAddToPlaylist?: (track: MediaItem) => void;
 }
 
-export function MediaCard({ item, subtitle }: MediaCardProps) {
+export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const navigateToItem = useNavigationStore((s) => s.navigateToItem);
+  const openMenu = useContextMenuStore((s) => s.openMenu);
 
   const playableId = getPlayableVideoId(item);
   const isArtist = item.type === 'artist';
 
   const handleCardClick = () => {
+    if (item.type === 'podcast') {
+      navigateToItem(item);
+      return;
+    }
+    if (item.type === 'episode') {
+      navigateToItem(item);
+      return;
+    }
     if (playableId) {
       playTrack(item);
     } else {
@@ -25,21 +36,38 @@ export function MediaCard({ item, subtitle }: MediaCardProps) {
     }
   };
 
+  const defaultTypeLabel =
+    item.type === 'podcast'
+      ? 'Podcast'
+      : item.type === 'episode'
+        ? item.published || 'Episode'
+        : item.type === 'playlist'
+          ? 'Playlist'
+          : 'Album';
+
   const resolvedSubtitle =
     subtitle ||
     (item.type === 'artist'
       ? item.views || 'Artis'
       : item.artists && item.artists.length > 0
         ? formatArtists(item.artists)
-        : item.year || (item.type === 'playlist' ? 'Playlist' : 'Album'));
+        : item.year || defaultTypeLabel);
 
   return (
-    <div className="glass-card group rounded-2xl p-3 flex flex-col">
+    <div
+      onContextMenu={(e) => {
+        if (playableId || item.type === 'album' || item.type === 'playlist') {
+          e.preventDefault();
+          openMenu(e.clientX, e.clientY, item, { onAddToPlaylist });
+        }
+      }}
+      className="glass-card group rounded-2xl p-3 flex flex-col"
+    >
       <div className="relative aspect-square w-full mb-3 overflow-hidden rounded-xl">
         <button
           type="button"
           onClick={handleCardClick}
-          aria-label={`${playableId ? 'Putar' : 'Buka'} ${item.title}`}
+          aria-label={`${playableId && item.type !== 'episode' ? 'Putar' : 'Buka'} ${item.title}`}
           className="block w-full h-full focus-visible:outline-2 focus-visible:outline-[#2EE6A6]"
         >
           <ArtworkImage

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  BarChart3,
   ChevronDown,
   Compass,
   Heart,
@@ -8,6 +9,7 @@ import {
   ListMusic,
   ListPlus,
   Mic2,
+  Moon,
   Pause,
   Play,
   Repeat,
@@ -16,6 +18,7 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
+  Sparkles,
 } from 'lucide-react';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
@@ -42,7 +45,10 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
   const shuffle = usePlayerStore((s) => s.shuffle);
+  const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const repeat = usePlayerStore((s) => s.repeat);
+  const playbackRate = usePlayerStore((s) => s.playbackRate);
+  const sleepTimerMode = usePlayerStore((s) => s.sleepTimerMode);
   const ambientColor = usePlayerStore((s) => s.ambientColor);
   const mobileExpanded = usePlayerStore((s) => s.mobileExpanded);
 
@@ -51,8 +57,12 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
   const prevTrack = usePlayerStore((s) => s.prevTrack);
   const requestSeek = usePlayerStore((s) => s.requestSeek);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
+  const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
+  const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const setMobileExpanded = usePlayerStore((s) => s.setMobileExpanded);
+  const setKaraokeOpen = usePlayerStore((s) => s.setKaraokeOpen);
 
   const trackKey = currentTrack ? getPlayableVideoId(currentTrack) || currentTrack.id : null;
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
@@ -69,6 +79,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
     { id: 'search' as const, label: 'Cari', icon: Search },
     { id: 'moods' as const, label: 'Mood', icon: Compass },
     { id: 'library' as const, label: 'Koleksi', icon: Library },
+    { id: 'recap' as const, label: 'Rekap', icon: BarChart3 },
   ];
 
   const isLibraryActive =
@@ -104,6 +115,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               <ArtworkImage
                 src={currentTrack.thumbnail}
                 alt={currentTrack.title}
+                type={currentTrack.type}
                 className="w-10 h-10"
                 roundedClass="rounded-lg"
               />
@@ -224,16 +236,17 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
 
           {sheetTab === 'player' && (
             <div className="flex-1 flex flex-col justify-between px-6 pb-8 pt-4 overflow-y-auto">
-              <div className="w-full max-w-[320px] aspect-square mx-auto my-auto">
+              <div className="w-full max-w-[290px] aspect-square mx-auto my-auto">
                 <ArtworkImage
                   src={currentTrack.thumbnail}
                   alt={currentTrack.title}
+                  type={currentTrack.type}
                   className="w-full h-full"
                   roundedClass="rounded-2xl"
                 />
               </div>
 
-              <div className="space-y-6 mt-6">
+              <div className="space-y-5 mt-5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <h2 className="text-lg font-semibold text-white truncate">
@@ -328,6 +341,52 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     <RepeatIcon className="w-5 h-5" strokeWidth={1.75} />
                   </button>
                 </div>
+
+                {/* Extra quick toggles */}
+                <div className="flex items-center justify-between pt-2 border-t border-white/[0.08] text-xs">
+                  <button
+                    type="button"
+                    onClick={toggleSmartShuffle}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.06] ${
+                      smartShuffle ? 'text-[#2EE6A6]' : 'text-white/70'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    Acak Pintar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSleepTimer(sleepTimerMode === 'off' ? 'minutes' : 'off', 30)
+                    }
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.06] ${
+                      sleepTimerMode !== 'off' ? 'text-[#2EE6A6]' : 'text-white/70'
+                    }`}
+                  >
+                    <Moon className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    {sleepTimerMode !== 'off' ? 'Timer Aktif' : 'Timer 30m'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPlaybackRate(playbackRate === 1 ? 1.25 : playbackRate === 1.25 ? 1.5 : 1)}
+                    className="px-3 py-2 rounded-xl bg-white/[0.06] text-white/80 tabular-nums"
+                  >
+                    {playbackRate}x
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileExpanded(false);
+                      setKaraokeOpen(true);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-white/[0.06] text-white/80"
+                  >
+                    Karaoke
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -349,7 +408,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
       {/* Mobile Bottom Tab Bar */}
       <nav
         aria-label="Navigasi seluler"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[58px] bg-[#0E0E11]/90 backdrop-blur-xl border-t border-white/[0.08] grid grid-cols-4"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[58px] bg-[#0E0E11]/90 backdrop-blur-xl border-t border-white/[0.08] grid grid-cols-5"
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;

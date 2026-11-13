@@ -110,16 +110,24 @@ async function startServer(): Promise<void> {
 
   const app = express();
 
-  app.use('/api', async (req, res) => {
+  app.use('/api', express.raw({ type: '*/*', limit: '2mb' }), async (req, res) => {
     const targetPath = req.originalUrl.replace(/^\/api/, '') || '/';
     const targetUrl = `${BACKEND_URL}${targetPath}`;
 
     try {
+      const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
       const upstream = await fetch(targetUrl, {
         method: req.method,
         headers: {
           Accept: 'application/json',
+          ...(hasBody && req.headers['content-type']
+            ? { 'Content-Type': String(req.headers['content-type']) }
+            : {}),
         },
+        body:
+          hasBody && Buffer.isBuffer(req.body) && req.body.length > 0
+            ? new Uint8Array(req.body)
+            : undefined,
       });
 
       const contentType = upstream.headers.get('content-type') || 'application/json';

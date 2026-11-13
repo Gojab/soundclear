@@ -37,6 +37,10 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
       navigate({ name: 'album', id: item.browseId || item.id });
     } else if (item.type === 'playlist') {
       navigate({ name: 'playlist', id: item.playlistId || item.id });
+    } else if (item.type === 'podcast') {
+      navigate({ name: 'podcast', id: item.browseId || item.id });
+    } else if (item.type === 'episode') {
+      navigate({ name: 'episode', id: item.videoId || item.id });
     }
   },
 

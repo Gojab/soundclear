@@ -1,10 +1,11 @@
-import { Play } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchAlbum, fetchArtist, fetchPlaylist } from '../api/client';
+import { Bookmark, Check, Play, UserCheck, UserPlus } from 'lucide-react';
+import { fetchAlbum, fetchArtist, fetchPlaylist, postAccountSubscribe } from '../api/client';
 import { ArtworkImage } from '../components/ArtworkImage';
 import { MediaCard } from '../components/MediaCard';
 import { ErrorBanner, TrackListSkeleton } from '../components/Skeletons';
 import { TrackRow } from '../components/TrackRow';
+import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import type { MediaItem } from '../types/music';
@@ -16,6 +17,8 @@ interface DetailProps {
 
 export function ArtistDetailPage({ id, onAddToPlaylist }: DetailProps) {
   const playTrackList = usePlayerStore((s) => s.playTrackList);
+  const followed = useLibraryStore((s) => s.isArtistFollowed(id));
+  const toggleFollowArtist = useLibraryStore((s) => s.toggleFollowArtist);
 
   const query = useQuery({
     queryKey: ['artist', id],
@@ -50,6 +53,18 @@ export function ArtistDetailPage({ id, onAddToPlaylist }: DetailProps) {
 
   const artist = query.data;
 
+  const handleToggleFollow = () => {
+    toggleFollowArtist({
+      id: artist.id,
+      title: artist.name,
+      artists: [],
+      thumbnail: artist.thumbnail,
+      type: 'artist',
+      views: artist.views,
+    });
+    void postAccountSubscribe([artist.id], !followed).catch(() => {});
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col sm:flex-row sm:items-end gap-5">
@@ -70,31 +85,53 @@ export function ArtistDetailPage({ id, onAddToPlaylist }: DetailProps) {
             {artist.subscribers && artist.views && <span aria-hidden="true">·</span>}
             {artist.views && <span>{artist.views}</span>}
           </div>
-          {artist.songs.length > 0 && (
-            <div className="pt-2">
+          <div className="flex flex-wrap items-center gap-2.5 pt-2">
+            {artist.songs.length > 0 && (
               <button
                 type="button"
-                onClick={() => playTrackList(artist.songs, 0)}
+                onClick={() => playTrackList(artist.songs, 0, artist.name)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Lagu Populer
               </button>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={handleToggleFollow}
+              aria-pressed={followed}
+              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                followed
+                  ? 'bg-white/[0.12] text-[#2EE6A6] border border-[#2EE6A6]/35'
+                  : 'bg-white/[0.07] hover:bg-white/[0.12] text-white'
+              }`}
+            >
+              {followed ? (
+                <>
+                  <UserCheck className="w-4 h-4" strokeWidth={1.75} />
+                  Mengikuti
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" strokeWidth={1.75} />
+                  Ikuti
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
       {artist.songs.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Lagu Populer</h2>
+          <h2 className="text-lg font-semibold text-white">Populer</h2>
           <div className="space-y-1">
             {artist.songs.map((song, idx) => (
               <TrackRow
                 key={`${song.id}-${idx}`}
                 track={song}
                 index={idx}
-                onPlay={() => playTrackList(artist.songs, idx)}
+                onPlay={() => playTrackList(artist.songs, idx, artist.name)}
                 onAddToPlaylist={onAddToPlaylist}
               />
             ))}
@@ -124,9 +161,42 @@ export function ArtistDetailPage({ id, onAddToPlaylist }: DetailProps) {
         </section>
       )}
 
+      {artist.compilations.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-white">Kompilasi</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {artist.compilations.map((c) => (
+              <MediaCard key={c.id} item={c} subtitle={c.year || 'Kompilasi'} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {artist.appearsOn.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-white">Muncul di</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {artist.appearsOn.map((ap) => (
+              <MediaCard key={ap.id} item={ap} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {artist.videos.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-white">Video Musik</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {artist.videos.slice(0, 10).map((v) => (
+              <MediaCard key={v.id} item={v} onAddToPlaylist={onAddToPlaylist} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {artist.related.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Artis Terkait</h2>
+          <h2 className="text-lg font-semibold text-white">Artis Serupa</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {artist.related.map((rel) => (
               <MediaCard key={rel.id} item={rel} subtitle={rel.views || 'Artis'} />
@@ -150,6 +220,8 @@ export function ArtistDetailPage({ id, onAddToPlaylist }: DetailProps) {
 export function AlbumDetailPage({ id, onAddToPlaylist }: DetailProps) {
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const navigate = useNavigationStore((s) => s.navigate);
+  const saved = useLibraryStore((s) => s.isAlbumSaved(id));
+  const toggleSaveAlbum = useLibraryStore((s) => s.toggleSaveAlbum);
 
   const query = useQuery({
     queryKey: ['album', id],
@@ -182,8 +254,19 @@ export function AlbumDetailPage({ id, onAddToPlaylist }: DetailProps) {
 
   const album = query.data;
 
+  const handleToggleSave = () => {
+    toggleSaveAlbum({
+      id: album.id,
+      title: album.title,
+      artists: album.artists,
+      thumbnail: album.thumbnail,
+      type: 'album',
+      year: album.year,
+    });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <header className="flex flex-col sm:flex-row sm:items-end gap-5">
         <ArtworkImage
           src={album.thumbnail}
@@ -233,18 +316,40 @@ export function AlbumDetailPage({ id, onAddToPlaylist }: DetailProps) {
               </>
             )}
           </div>
-          {album.tracks.length > 0 && (
-            <div className="pt-2">
+          <div className="flex flex-wrap items-center gap-2.5 pt-2">
+            {album.tracks.length > 0 && (
               <button
                 type="button"
-                onClick={() => playTrackList(album.tracks, 0)}
+                onClick={() => playTrackList(album.tracks, 0, album.title)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Album
               </button>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={handleToggleSave}
+              aria-pressed={saved}
+              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                saved
+                  ? 'bg-white/[0.12] text-[#2EE6A6] border border-[#2EE6A6]/35'
+                  : 'bg-white/[0.07] hover:bg-white/[0.12] text-white'
+              }`}
+            >
+              {saved ? (
+                <>
+                  <Check className="w-4 h-4" strokeWidth={1.75} />
+                  Tersimpan di Koleksi
+                </>
+              ) : (
+                <>
+                  <Bookmark className="w-4 h-4" strokeWidth={1.75} />
+                  Simpan ke Koleksi
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -255,11 +360,36 @@ export function AlbumDetailPage({ id, onAddToPlaylist }: DetailProps) {
             track={track}
             index={idx}
             showAlbum={false}
-            onPlay={() => playTrackList(album.tracks, idx)}
+            onPlay={() => playTrackList(album.tracks, idx, album.title)}
             onAddToPlaylist={onAddToPlaylist}
           />
         ))}
       </div>
+
+      {album.credits.length > 0 && (
+        <section className="glass-card rounded-2xl p-4 space-y-2.5">
+          <h2 className="text-sm font-semibold text-white">Kredit Album</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            {album.credits.map((c) => (
+              <div key={c.role}>
+                <p className="text-white/45">{c.role}</p>
+                <p className="text-white/85 mt-0.5">{c.names.join(', ')}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {album.moreFromArtist.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-white">Lainnya dari Artis Ini</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {album.moreFromArtist.map((item) => (
+              <MediaCard key={item.id} item={item} subtitle={item.year || 'Album'} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -331,7 +461,7 @@ export function PlaylistDetailPage({ id, onAddToPlaylist }: DetailProps) {
             <div className="pt-2">
               <button
                 type="button"
-                onClick={() => playTrackList(pl.tracks, 0)}
+                onClick={() => playTrackList(pl.tracks, 0, pl.title)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
@@ -348,7 +478,7 @@ export function PlaylistDetailPage({ id, onAddToPlaylist }: DetailProps) {
             key={`${track.id}-${idx}`}
             track={track}
             index={idx}
-            onPlay={() => playTrackList(pl.tracks, idx)}
+            onPlay={() => playTrackList(pl.tracks, idx, pl.title)}
             onAddToPlaylist={onAddToPlaylist}
           />
         ))}

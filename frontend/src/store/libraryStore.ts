@@ -1,99 +1,586 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { LocalPlaylist, MediaItem } from '../types/music';
+import { db, migrateLegacyLocalStorage } from '../db/soundclearDb';
+import type {
+  EpisodeProgressEntry,
+  FollowedArtistEntry,
+  LocalPlaylist,
+  MediaItem,
+  PlayHistoryEntry,
+  PlaylistFolder,
+  RecentSearchEntry,
+  SavedAlbumEntry,
+  SavedPodcastEntry,
+} from '../types/music';
 import { getPlayableVideoId } from '../utils/playerLogic';
 
+export type LibrarySortMode = 'newest' | 'alpha' | 'last_played';
+export type LibraryFilterType = 'all' | 'playlists' | 'albums' | 'artists' | 'podcasts';
+export type LibraryViewMode = 'list' | 'grid' | 'compact';
+
 interface LibraryState {
+  hydrated: boolean;
   likedTracks: MediaItem[];
   playlists: LocalPlaylist[];
+  folders: PlaylistFolder[];
+  savedAlbums: SavedAlbumEntry[];
+  followedArtists: FollowedArtistEntry[];
+  savedPodcasts: SavedPodcastEntry[];
+  episodeProgress: Record<string, EpisodeProgressEntry>;
+  playHistory: PlayHistoryEntry[];
+  recentSearches: RecentSearchEntry[];
+  hiddenTrackIds: string[];
+
+  sortMode: LibrarySortMode;
+  filterType: LibraryFilterType;
+  viewMode: LibraryViewMode;
+
+  hydrate: () => Promise<void>;
+  setSortMode: (mode: LibrarySortMode) => void;
+  setFilterType: (filter: LibraryFilterType) => void;
+  setViewMode: (mode: LibraryViewMode) => void;
+
   toggleLike: (track: MediaItem) => void;
   isLiked: (trackId: string | null | undefined) => boolean;
-  createPlaylist: (name: string, initialTrack?: MediaItem) => LocalPlaylist;
-  renamePlaylist: (playlistId: string, name: string) => void;
+
+  createPlaylist: (
+    name: string,
+    initialTrack?: MediaItem,
+    options?: { description?: string; folderId?: string | null },
+  ) => LocalPlaylist;
+  updatePlaylist: (
+    playlistId: string,
+    patch: Partial<Pick<LocalPlaylist, 'name' | 'description' | 'coverUrl' | 'folderId' | 'pinned'>>,
+  ) => void;
   deletePlaylist: (playlistId: string) => void;
-  addTrackToPlaylist: (playlistId: string, track: MediaItem) => void;
-  removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
+  togglePinPlaylist: (playlistId: string) => void;
+  hasTrackInPlaylist: (playlistId: string, track: MediaItem) => boolean;
+  addTrackToPlaylist: (playlistId: string, track: MediaItem, allowDuplicate?: boolean) => boolean;
+  removeTrackFromPlaylist: (playlistId: string, trackId: string, index?: number) => void;
+  reorderPlaylistTracks: (playlistId: string, fromIndex: number, toIndex: number) => void;
+  removeDuplicatesFromPlaylist: (playlistId: string) => void;
+  markPlaylistPlayed: (playlistId: string) => void;
+
+  createFolder: (name: string) => PlaylistFolder;
+  renameFolder: (folderId: string, name: string) => void;
+  deleteFolder: (folderId: string) => void;
+
+  toggleSaveAlbum: (album: MediaItem) => void;
+  isAlbumSaved: (albumId: string) => boolean;
+  togglePinAlbum: (albumId: string) => void;
+
+  toggleFollowArtist: (artist: MediaItem) => void;
+  isArtistFollowed: (artistId: string) => boolean;
+  togglePinArtist: (artistId: string) => void;
+
+  toggleFollowPodcast: (podcast: MediaItem) => void;
+  isPodcastFollowed: (podcastId: string) => boolean;
+  togglePinPodcast: (podcastId: string) => void;
+
+  saveEpisodeProgress: (
+    episodeId: string,
+    podcastId: string | null | undefined,
+    positionSeconds: number,
+    durationSeconds: number,
+    completed?: boolean,
+  ) => void;
+  markEpisodeCompleted: (
+    episodeId: string,
+    podcastId: string | null | undefined,
+    completed: boolean,
+  ) => void;
+
+  recordPlay: (track: MediaItem, durationListenedSec?: number, genreHint?: string | null) => void;
+  clearPlayHistory: () => Promise<void>;
+
+  addRecentSearch: (query: string) => void;
+  removeRecentSearch: (uid: number) => void;
+  clearRecentSearches: () => void;
+
+  hideTrack: (trackId: string) => void;
+  unhideTrack: (trackId: string) => void;
+  isTrackHidden: (trackId: string | null | undefined) => boolean;
 }
 
 function normalizeTrackId(track: MediaItem): string {
   return getPlayableVideoId(track) || track.id;
 }
 
-export const useLibraryStore = create<LibraryState>()(
-  persist(
-    (set, get) => ({
-      likedTracks: [],
-      playlists: [],
+export const useLibraryStore = create<LibraryState>((set, get) => ({
+  hydrated: false,
+  likedTracks: [],
+  playlists: [],
+  folders: [],
+  savedAlbums: [],
+  followedArtists: [],
+  savedPodcasts: [],
+  episodeProgress: {},
+  playHistory: [],
+  recentSearches: [],
+  hiddenTrackIds: [],
 
-      toggleLike: (track) => {
-        const key = normalizeTrackId(track);
-        const current = get().likedTracks;
-        const exists = current.some((t) => normalizeTrackId(t) === key);
-        if (exists) {
-          set({ likedTracks: current.filter((t) => normalizeTrackId(t) !== key) });
-        } else {
-          set({ likedTracks: [{ ...track, id: key }, ...current] });
+  sortMode: 'newest',
+  filterType: 'all',
+  viewMode: 'list',
+
+  hydrate: async () => {
+    await migrateLegacyLocalStorage();
+
+    const [
+      likedRecs,
+      playlists,
+      folders,
+      savedAlbums,
+      followedArtists,
+      savedPodcasts,
+      epProgressRecs,
+      playHistory,
+      recentSearches,
+      hiddenRecs,
+    ] = await Promise.all([
+      db.likedTracks.orderBy('addedAt').reverse().toArray(),
+      db.playlists.orderBy('createdAt').reverse().toArray(),
+      db.playlistFolders.orderBy('createdAt').reverse().toArray(),
+      db.savedAlbums.orderBy('savedAt').reverse().toArray(),
+      db.followedArtists.orderBy('followedAt').reverse().toArray(),
+      db.savedPodcasts.orderBy('savedAt').reverse().toArray(),
+      db.episodeProgress.toArray(),
+      db.playHistory.orderBy('playedAt').reverse().toArray(),
+      db.recentSearches.orderBy('searchedAt').reverse().toArray(),
+      db.hiddenTracks.toArray(),
+    ]);
+
+    const episodeProgress: Record<string, EpisodeProgressEntry> = {};
+    for (const ep of epProgressRecs) {
+      episodeProgress[ep.episodeId] = ep;
+    }
+
+    set({
+      hydrated: true,
+      likedTracks: likedRecs.map((r) => r.track),
+      playlists,
+      folders,
+      savedAlbums,
+      followedArtists,
+      savedPodcasts,
+      episodeProgress,
+      playHistory,
+      recentSearches,
+      hiddenTrackIds: hiddenRecs.map((r) => r.id),
+    });
+  },
+
+  setSortMode: (sortMode) => set({ sortMode }),
+  setFilterType: (filterType) => set({ filterType }),
+  setViewMode: (viewMode) => set({ viewMode }),
+
+  toggleLike: (track) => {
+    const key = normalizeTrackId(track);
+    const current = get().likedTracks;
+    const exists = current.some((t) => normalizeTrackId(t) === key);
+    if (exists) {
+      set({ likedTracks: current.filter((t) => normalizeTrackId(t) !== key) });
+      void db.likedTracks.delete(key).catch(() => {});
+    } else {
+      const normalized = { ...track, id: key };
+      set({ likedTracks: [normalized, ...current] });
+      void db.likedTracks.put({ id: key, addedAt: Date.now(), track: normalized }).catch(() => {});
+    }
+  },
+
+  isLiked: (trackId) => {
+    if (!trackId) return false;
+    return get().likedTracks.some((t) => normalizeTrackId(t) === trackId);
+  },
+
+  createPlaylist: (name, initialTrack, options) => {
+    const now = Date.now();
+    const newPlaylist: LocalPlaylist = {
+      id: `pl_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      name: name.trim() || 'Playlist Baru',
+      description: options?.description?.trim() || '',
+      coverUrl: initialTrack?.thumbnail || null,
+      folderId: options?.folderId ?? null,
+      pinned: false,
+      createdAt: now,
+      updatedAt: now,
+      lastPlayedAt: null,
+      tracks: initialTrack ? [initialTrack] : [],
+    };
+    set((state) => ({ playlists: [newPlaylist, ...state.playlists] }));
+    void db.playlists.put(newPlaylist).catch(() => {});
+    return newPlaylist;
+  },
+
+  updatePlaylist: (playlistId, patch) => {
+    const updatedAt = Date.now();
+    set((state) => ({
+      playlists: state.playlists.map((pl) => {
+        if (pl.id !== playlistId) return pl;
+        const next = { ...pl, ...patch, updatedAt };
+        void db.playlists.put(next).catch(() => {});
+        return next;
+      }),
+    }));
+  },
+
+  deletePlaylist: (playlistId) => {
+    set((state) => ({
+      playlists: state.playlists.filter((pl) => pl.id !== playlistId),
+    }));
+    void db.playlists.delete(playlistId).catch(() => {});
+  },
+
+  togglePinPlaylist: (playlistId) => {
+    const pl = get().playlists.find((p) => p.id === playlistId);
+    if (!pl) return;
+    get().updatePlaylist(playlistId, { pinned: !pl.pinned });
+  },
+
+  hasTrackInPlaylist: (playlistId, track) => {
+    const pl = get().playlists.find((p) => p.id === playlistId);
+    if (!pl) return false;
+    const key = normalizeTrackId(track);
+    return pl.tracks.some((t) => normalizeTrackId(t) === key);
+  },
+
+  addTrackToPlaylist: (playlistId, track, allowDuplicate = false) => {
+    const pl = get().playlists.find((p) => p.id === playlistId);
+    if (!pl) return false;
+    const key = normalizeTrackId(track);
+    const isDuplicate = pl.tracks.some((t) => normalizeTrackId(t) === key);
+    if (isDuplicate && !allowDuplicate) {
+      return false;
+    }
+    const nextPl: LocalPlaylist = {
+      ...pl,
+      coverUrl: pl.coverUrl || track.thumbnail || null,
+      updatedAt: Date.now(),
+      tracks: [...pl.tracks, track],
+    };
+    set((state) => ({
+      playlists: state.playlists.map((p) => (p.id === playlistId ? nextPl : p)),
+    }));
+    void db.playlists.put(nextPl).catch(() => {});
+    return true;
+  },
+
+  removeTrackFromPlaylist: (playlistId, trackId, index) => {
+    set((state) => ({
+      playlists: state.playlists.map((pl) => {
+        if (pl.id !== playlistId) return pl;
+        const nextTracks =
+          typeof index === 'number'
+            ? pl.tracks.filter((_, idx) => idx !== index)
+            : pl.tracks.filter((t) => normalizeTrackId(t) !== trackId);
+        const nextPl = { ...pl, updatedAt: Date.now(), tracks: nextTracks };
+        void db.playlists.put(nextPl).catch(() => {});
+        return nextPl;
+      }),
+    }));
+  },
+
+  reorderPlaylistTracks: (playlistId, fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return;
+    set((state) => ({
+      playlists: state.playlists.map((pl) => {
+        if (pl.id !== playlistId) return pl;
+        if (
+          fromIndex < 0 ||
+          fromIndex >= pl.tracks.length ||
+          toIndex < 0 ||
+          toIndex >= pl.tracks.length
+        ) {
+          return pl;
         }
-      },
+        const copy = [...pl.tracks];
+        const [moved] = copy.splice(fromIndex, 1);
+        copy.splice(toIndex, 0, moved);
+        const nextPl = { ...pl, updatedAt: Date.now(), tracks: copy };
+        void db.playlists.put(nextPl).catch(() => {});
+        return nextPl;
+      }),
+    }));
+  },
 
-      isLiked: (trackId) => {
-        if (!trackId) return false;
-        return get().likedTracks.some((t) => normalizeTrackId(t) === trackId);
-      },
+  removeDuplicatesFromPlaylist: (playlistId) => {
+    set((state) => ({
+      playlists: state.playlists.map((pl) => {
+        if (pl.id !== playlistId) return pl;
+        const seen = new Set<string>();
+        const unique: MediaItem[] = [];
+        for (const t of pl.tracks) {
+          const key = normalizeTrackId(t);
+          if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(t);
+          }
+        }
+        const nextPl = { ...pl, updatedAt: Date.now(), tracks: unique };
+        void db.playlists.put(nextPl).catch(() => {});
+        return nextPl;
+      }),
+    }));
+  },
 
-      createPlaylist: (name, initialTrack) => {
-        const cleanName = name.trim() || 'Playlist Baru';
-        const newPlaylist: LocalPlaylist = {
-          id: `pl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-          name: cleanName,
-          createdAt: Date.now(),
-          tracks: initialTrack ? [initialTrack] : [],
-        };
-        set((state) => ({ playlists: [newPlaylist, ...state.playlists] }));
-        return newPlaylist;
-      },
+  markPlaylistPlayed: (playlistId) => {
+    set((state) => ({
+      playlists: state.playlists.map((pl) => {
+        if (pl.id !== playlistId) return pl;
+        const nextPl = { ...pl, lastPlayedAt: Date.now() };
+        void db.playlists.put(nextPl).catch(() => {});
+        return nextPl;
+      }),
+    }));
+  },
 
-      renamePlaylist: (playlistId, name) => {
-        const cleanName = name.trim();
-        if (!cleanName) return;
+  createFolder: (name) => {
+    const folder: PlaylistFolder = {
+      id: `fld_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+      name: name.trim() || 'Folder Baru',
+      createdAt: Date.now(),
+    };
+    set((state) => ({ folders: [folder, ...state.folders] }));
+    void db.playlistFolders.put(folder).catch(() => {});
+    return folder;
+  },
+
+  renameFolder: (folderId, name) => {
+    const clean = name.trim();
+    if (!clean) return;
+    set((state) => ({
+      folders: state.folders.map((f) => {
+        if (f.id !== folderId) return f;
+        const updated = { ...f, name: clean };
+        void db.playlistFolders.put(updated).catch(() => {});
+        return updated;
+      }),
+    }));
+  },
+
+  deleteFolder: (folderId) => {
+    set((state) => ({
+      folders: state.folders.filter((f) => f.id !== folderId),
+      playlists: state.playlists.map((pl) => {
+        if (pl.folderId !== folderId) return pl;
+        const updated = { ...pl, folderId: null };
+        void db.playlists.put(updated).catch(() => {});
+        return updated;
+      }),
+    }));
+    void db.playlistFolders.delete(folderId).catch(() => {});
+  },
+
+  toggleSaveAlbum: (album) => {
+    const id = album.browseId || album.id;
+    const exists = get().savedAlbums.some((a) => a.id === id);
+    if (exists) {
+      set((state) => ({ savedAlbums: state.savedAlbums.filter((a) => a.id !== id) }));
+      void db.savedAlbums.delete(id).catch(() => {});
+    } else {
+      const entry: SavedAlbumEntry = {
+        id,
+        pinned: false,
+        savedAt: Date.now(),
+        lastPlayedAt: null,
+        item: { ...album, id, type: 'album' },
+      };
+      set((state) => ({ savedAlbums: [entry, ...state.savedAlbums] }));
+      void db.savedAlbums.put(entry).catch(() => {});
+    }
+  },
+
+  isAlbumSaved: (albumId) => get().savedAlbums.some((a) => a.id === albumId),
+
+  togglePinAlbum: (albumId) => {
+    set((state) => ({
+      savedAlbums: state.savedAlbums.map((a) => {
+        if (a.id !== albumId) return a;
+        const next = { ...a, pinned: !a.pinned };
+        void db.savedAlbums.put(next).catch(() => {});
+        return next;
+      }),
+    }));
+  },
+
+  toggleFollowArtist: (artist) => {
+    const id = artist.browseId || artist.id;
+    const exists = get().followedArtists.some((a) => a.id === id);
+    if (exists) {
+      set((state) => ({ followedArtists: state.followedArtists.filter((a) => a.id !== id) }));
+      void db.followedArtists.delete(id).catch(() => {});
+    } else {
+      const entry: FollowedArtistEntry = {
+        id,
+        pinned: false,
+        followedAt: Date.now(),
+        lastPlayedAt: null,
+        item: { ...artist, id, type: 'artist' },
+      };
+      set((state) => ({ followedArtists: [entry, ...state.followedArtists] }));
+      void db.followedArtists.put(entry).catch(() => {});
+    }
+  },
+
+  isArtistFollowed: (artistId) => get().followedArtists.some((a) => a.id === artistId),
+
+  togglePinArtist: (artistId) => {
+    set((state) => ({
+      followedArtists: state.followedArtists.map((a) => {
+        if (a.id !== artistId) return a;
+        const next = { ...a, pinned: !a.pinned };
+        void db.followedArtists.put(next).catch(() => {});
+        return next;
+      }),
+    }));
+  },
+
+  toggleFollowPodcast: (podcast) => {
+    const id = podcast.browseId || podcast.id;
+    const exists = get().savedPodcasts.some((p) => p.id === id);
+    if (exists) {
+      set((state) => ({ savedPodcasts: state.savedPodcasts.filter((p) => p.id !== id) }));
+      void db.savedPodcasts.delete(id).catch(() => {});
+    } else {
+      const entry: SavedPodcastEntry = {
+        id,
+        pinned: false,
+        savedAt: Date.now(),
+        lastPlayedAt: null,
+        item: { ...podcast, id, type: 'podcast' },
+      };
+      set((state) => ({ savedPodcasts: [entry, ...state.savedPodcasts] }));
+      void db.savedPodcasts.put(entry).catch(() => {});
+    }
+  },
+
+  isPodcastFollowed: (podcastId) => get().savedPodcasts.some((p) => p.id === podcastId),
+
+  togglePinPodcast: (podcastId) => {
+    set((state) => ({
+      savedPodcasts: state.savedPodcasts.map((p) => {
+        if (p.id !== podcastId) return p;
+        const next = { ...p, pinned: !p.pinned };
+        void db.savedPodcasts.put(next).catch(() => {});
+        return next;
+      }),
+    }));
+  },
+
+  saveEpisodeProgress: (episodeId, podcastId, positionSeconds, durationSeconds, completed) => {
+    const prev = get().episodeProgress[episodeId];
+    const autoDone =
+      durationSeconds > 0 && positionSeconds >= Math.max(durationSeconds - 10, durationSeconds * 0.94);
+    const entry: EpisodeProgressEntry = {
+      episodeId,
+      podcastId: podcastId ?? prev?.podcastId ?? null,
+      positionSeconds,
+      durationSeconds: durationSeconds || prev?.durationSeconds || 0,
+      completed: completed ?? (prev?.completed || autoDone),
+      updatedAt: Date.now(),
+    };
+    set((state) => ({
+      episodeProgress: { ...state.episodeProgress, [episodeId]: entry },
+    }));
+    void db.episodeProgress.put(entry).catch(() => {});
+  },
+
+  markEpisodeCompleted: (episodeId, podcastId, completed) => {
+    const prev = get().episodeProgress[episodeId];
+    const entry: EpisodeProgressEntry = {
+      episodeId,
+      podcastId: podcastId ?? prev?.podcastId ?? null,
+      positionSeconds: completed ? prev?.durationSeconds || 0 : 0,
+      durationSeconds: prev?.durationSeconds || 0,
+      completed,
+      updatedAt: Date.now(),
+    };
+    set((state) => ({
+      episodeProgress: { ...state.episodeProgress, [episodeId]: entry },
+    }));
+    void db.episodeProgress.put(entry).catch(() => {});
+  },
+
+  recordPlay: (track, durationListenedSec, genreHint) => {
+    const trackId = normalizeTrackId(track);
+    if (!trackId) return;
+    const entry: PlayHistoryEntry = {
+      trackId,
+      playedAt: Date.now(),
+      durationListenedSec: durationListenedSec ?? track.durationSeconds ?? 180,
+      sourceType: track.type === 'episode' ? 'episode' : 'song',
+      genreHint: genreHint ?? track.genre ?? null,
+      track,
+    };
+    set((state) => ({
+      playHistory: [entry, ...state.playHistory].slice(0, 1000),
+    }));
+    void db.playHistory
+      .add(entry)
+      .then((uid) => {
         set((state) => ({
-          playlists: state.playlists.map((pl) =>
-            pl.id === playlistId ? { ...pl, name: cleanName } : pl,
-          ),
+          playHistory: state.playHistory.map((h) => (h === entry ? { ...h, uid } : h)),
         }));
-      },
+      })
+      .catch(() => {});
+  },
 
-      deletePlaylist: (playlistId) => {
-        set((state) => ({
-          playlists: state.playlists.filter((pl) => pl.id !== playlistId),
-        }));
-      },
+  clearPlayHistory: async () => {
+    set({ playHistory: [] });
+    await db.playHistory.clear();
+  },
 
-      addTrackToPlaylist: (playlistId, track) => {
-        const key = normalizeTrackId(track);
-        set((state) => ({
-          playlists: state.playlists.map((pl) => {
-            if (pl.id !== playlistId) return pl;
-            if (pl.tracks.some((t) => normalizeTrackId(t) === key)) return pl;
-            return { ...pl, tracks: [...pl.tracks, track] };
-          }),
-        }));
-      },
+  addRecentSearch: (query) => {
+    const clean = query.trim();
+    if (!clean) return;
+    const existing = get().recentSearches.filter(
+      (s) => s.query.toLowerCase() !== clean.toLowerCase(),
+    );
+    const duplicates = get().recentSearches.filter(
+      (s) => s.query.toLowerCase() === clean.toLowerCase(),
+    );
+    for (const dup of duplicates) {
+      if (dup.uid) void db.recentSearches.delete(dup.uid).catch(() => {});
+    }
 
-      removeTrackFromPlaylist: (playlistId, trackId) => {
+    const entry: RecentSearchEntry = { query: clean, searchedAt: Date.now() };
+    set({ recentSearches: [entry, ...existing].slice(0, 20) });
+    void db.recentSearches
+      .add(entry)
+      .then((uid) => {
         set((state) => ({
-          playlists: state.playlists.map((pl) => {
-            if (pl.id !== playlistId) return pl;
-            return {
-              ...pl,
-              tracks: pl.tracks.filter((t) => normalizeTrackId(t) !== trackId),
-            };
-          }),
+          recentSearches: state.recentSearches.map((r) => (r === entry ? { ...r, uid } : r)),
         }));
-      },
-    }),
-    {
-      name: 'soundclear_library_v1',
-    },
-  ),
-);
+      })
+      .catch(() => {});
+  },
+
+  removeRecentSearch: (uid) => {
+    set((state) => ({
+      recentSearches: state.recentSearches.filter((r) => r.uid !== uid),
+    }));
+    void db.recentSearches.delete(uid).catch(() => {});
+  },
+
+  clearRecentSearches: () => {
+    set({ recentSearches: [] });
+    void db.recentSearches.clear().catch(() => {});
+  },
+
+  hideTrack: (trackId) => {
+    if (!trackId || get().hiddenTrackIds.includes(trackId)) return;
+    set((state) => ({ hiddenTrackIds: [trackId, ...state.hiddenTrackIds] }));
+    void db.hiddenTracks.put({ id: trackId, hiddenAt: Date.now() }).catch(() => {});
+  },
+
+  unhideTrack: (trackId) => {
+    set((state) => ({
+      hiddenTrackIds: state.hiddenTrackIds.filter((id) => id !== trackId),
+    }));
+    void db.hiddenTracks.delete(trackId).catch(() => {});
+  },
+
+  isTrackHidden: (trackId) => {
+    if (!trackId) return false;
+    return get().hiddenTrackIds.includes(trackId);
+  },
+}));

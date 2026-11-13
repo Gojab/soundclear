@@ -1,0 +1,9 @@
+backend/.venv
+backend/__pycache__
+backend/tests
+.pytest_cache
+.playwright-cli
+*headers_auth*.json
+browser.json
+ytmusic_auth*.json
+.ytmusic_auth*
