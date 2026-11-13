@@ -9,7 +9,7 @@ import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem, PodcastEpisode } from '../types/music';
 import { PLAYBACK_RATE_OPTIONS } from '../utils/audioMath';
-import { formatTime } from '../utils/playerLogic';
+import { formatTime, normalizeRouteId } from '../utils/playerLogic';
 
 function episodeToMediaItem(ep: PodcastEpisode, fallbackAuthor?: string | null): MediaItem {
   return {
@@ -27,12 +27,23 @@ function episodeToMediaItem(ep: PodcastEpisode, fallbackAuthor?: string | null):
   };
 }
 
-export function PodcastDetailPage({ id }: { id: string }) {
+export function PodcastDetailPage({
+  id,
+  fallbackQuery,
+}: {
+  id: string;
+  fallbackQuery?: string;
+}) {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const navigate = useNavigationStore((s) => s.navigate);
+  const cleanId = normalizeRouteId(id);
 
-  const followed = useLibraryStore((s) => s.isPodcastFollowed(id));
+  const followed = useLibraryStore((s) => s.isPodcastFollowed(cleanId || id));
   const toggleFollowPodcast = useLibraryStore((s) => s.toggleFollowPodcast);
+  const libraryPodcastHint = useLibraryStore(
+    (s) => s.savedPodcasts.find((p) => p.id === (cleanId || id))?.item.title,
+  );
+  const resolvedFallback = fallbackQuery?.trim() || libraryPodcastHint;
   const episodeProgress = useLibraryStore((s) => s.episodeProgress);
   const markEpisodeCompleted = useLibraryStore((s) => s.markEpisodeCompleted);
   const episodePlaybackRates = useSettingsStore((s) => s.episodePlaybackRates);
@@ -42,9 +53,19 @@ export function PodcastDetailPage({ id }: { id: string }) {
   const defaultRate = useSettingsStore((s) => s.youtubeSound.defaultPlaybackRate);
 
   const query = useQuery({
-    queryKey: ['podcast', id],
-    queryFn: ({ signal }) => fetchPodcast(id, signal),
+    queryKey: ['podcast', cleanId || '', resolvedFallback || ''],
+    queryFn: ({ signal }) => fetchPodcast(cleanId || '', signal, resolvedFallback),
+    enabled: Boolean(cleanId),
   });
+
+  if (!cleanId) {
+    return (
+      <ErrorBanner
+        message="ID podcast tidak valid atau tidak tersedia."
+        onGoHome={() => navigate({ name: 'home' })}
+      />
+    );
+  }
 
   if (query.isLoading) {
     return (
@@ -66,6 +87,7 @@ export function PodcastDetailPage({ id }: { id: string }) {
       <ErrorBanner
         message={query.error instanceof Error ? query.error.message : 'Gagal memuat podcast.'}
         onRetry={() => void query.refetch()}
+        onGoHome={() => navigate({ name: 'home' })}
       />
     );
   }
@@ -173,7 +195,9 @@ export function PodcastDetailPage({ id }: { id: string }) {
                 >
                   <button
                     type="button"
-                    onClick={() => navigate({ name: 'episode', id: ep.videoId })}
+                    onClick={() =>
+                      navigate({ name: 'episode', id: ep.videoId, fallbackQuery: ep.title })
+                    }
                     className="flex items-start gap-3.5 min-w-0 flex-1 text-left"
                   >
                     <ArtworkImage
@@ -283,21 +307,39 @@ export function PodcastDetailPage({ id }: { id: string }) {
   );
 }
 
-export function EpisodeDetailPage({ id }: { id: string }) {
+export function EpisodeDetailPage({
+  id,
+  fallbackQuery,
+}: {
+  id: string;
+  fallbackQuery?: string;
+}) {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const navigate = useNavigationStore((s) => s.navigate);
-  const prog = useLibraryStore((s) => s.episodeProgress[id]);
+  const cleanId = normalizeRouteId(id);
+  const resolvedFallback = fallbackQuery?.trim() || undefined;
+  const prog = useLibraryStore((s) => s.episodeProgress[cleanId || id]);
   const markEpisodeCompleted = useLibraryStore((s) => s.markEpisodeCompleted);
-  const customEpisodeRate = useSettingsStore((s) => s.episodePlaybackRates[id]);
+  const customEpisodeRate = useSettingsStore((s) => s.episodePlaybackRates[cleanId || id]);
   const setEpisodePlaybackRate = useSettingsStore((s) => s.setEpisodePlaybackRate);
   const defaultRate = useSettingsStore((s) => s.youtubeSound.defaultPlaybackRate);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
 
   const query = useQuery({
-    queryKey: ['episode', id],
-    queryFn: ({ signal }) => fetchEpisode(id, signal),
+    queryKey: ['episode', cleanId || '', resolvedFallback || ''],
+    queryFn: ({ signal }) => fetchEpisode(cleanId || '', signal, resolvedFallback),
+    enabled: Boolean(cleanId),
   });
+
+  if (!cleanId) {
+    return (
+      <ErrorBanner
+        message="ID episode tidak valid atau tidak tersedia."
+        onGoHome={() => navigate({ name: 'home' })}
+      />
+    );
+  }
 
   if (query.isLoading) {
     return <TrackListSkeleton count={4} />;
@@ -308,6 +350,7 @@ export function EpisodeDetailPage({ id }: { id: string }) {
       <ErrorBanner
         message={query.error instanceof Error ? query.error.message : 'Gagal memuat detail episode.'}
         onRetry={() => void query.refetch()}
+        onGoHome={() => navigate({ name: 'home' })}
       />
     );
   }
@@ -419,7 +462,13 @@ export function EpisodeDetailPage({ id }: { id: string }) {
             {ep.podcastId && (
               <button
                 type="button"
-                onClick={() => navigate({ name: 'podcast', id: ep.podcastId! })}
+                onClick={() =>
+                  navigate({
+                    name: 'podcast',
+                    id: ep.podcastId!,
+                    fallbackQuery: ep.podcastTitle || undefined,
+                  })
+                }
                 className="px-4 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-medium text-white"
               >
                 Lihat Semua Episode

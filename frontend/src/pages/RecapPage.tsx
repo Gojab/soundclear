@@ -197,7 +197,9 @@ export function RecapPage() {
                       type="button"
                       disabled={!art.item.id}
                       onClick={() => {
-                        if (art.item.id) navigate({ name: 'artist', id: art.item.id });
+                        if (art.item.id) {
+                          navigate({ name: 'artist', id: art.item.id, fallbackQuery: art.item.name });
+                        }
                       }}
                       className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] disabled:hover:bg-white/[0.03] text-left transition-colors"
                     >

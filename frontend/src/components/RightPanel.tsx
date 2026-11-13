@@ -200,7 +200,9 @@ function SongDetailsAndRelated({
               <button
                 key={art.id}
                 type="button"
-                onClick={() => navigate({ name: 'artist', id: art.browseId || art.id })}
+                onClick={() =>
+                  navigate({ name: 'artist', id: art.browseId || art.id, fallbackQuery: art.title })
+                }
                 className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/[0.08] text-left transition-colors"
               >
                 <ArtworkImage
@@ -329,7 +331,9 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                       {artist.id ? (
                         <button
                           type="button"
-                          onClick={() => navigate({ name: 'artist', id: artist.id! })}
+                          onClick={() =>
+                            navigate({ name: 'artist', id: artist.id!, fallbackQuery: artist.name })
+                          }
                           className="hover:text-white hover:underline text-left"
                         >
                           {artist.name}

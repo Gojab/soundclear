@@ -145,7 +145,9 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                     {artist.id ? (
                       <button
                         type="button"
-                        onClick={() => navigate({ name: 'artist', id: artist.id! })}
+                        onClick={() =>
+                          navigate({ name: 'artist', id: artist.id!, fallbackQuery: artist.name })
+                        }
                         className="hover:text-white hover:underline truncate"
                       >
                         {artist.name}

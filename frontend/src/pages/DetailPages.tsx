@@ -9,21 +9,49 @@ import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import type { MediaItem } from '../types/music';
+import { normalizeRouteId } from '../utils/playerLogic';
 
 interface DetailProps {
   id: string;
+  fallbackQuery?: string;
   onAddToPlaylist: (track: MediaItem) => void;
 }
 
-export function ArtistDetailPage({ id, onAddToPlaylist }: DetailProps) {
+export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailProps) {
   const playTrackList = usePlayerStore((s) => s.playTrackList);
-  const followed = useLibraryStore((s) => s.isArtistFollowed(id));
+  const navigate = useNavigationStore((s) => s.navigate);
+  const cleanId = normalizeRouteId(id);
+  const followed = useLibraryStore((s) => s.isArtistFollowed(cleanId || id));
   const toggleFollowArtist = useLibraryStore((s) => s.toggleFollowArtist);
+  const libraryArtistHint = useLibraryStore((s) => {
+    const saved = s.followedArtists.find((a) => a.id === (cleanId || id));
+    if (saved?.item.title) return saved.item.title;
+    for (const track of s.likedTracks) {
+      const match = track.artists?.find((art) => art.id === (cleanId || id));
+      if (match?.name) return match.name;
+    }
+    for (const rec of s.playHistory) {
+      const match = rec.track.artists?.find((art) => art.id === (cleanId || id));
+      if (match?.name) return match.name;
+    }
+    return undefined;
+  });
+  const resolvedFallback = fallbackQuery?.trim() || libraryArtistHint;
 
   const query = useQuery({
-    queryKey: ['artist', id],
-    queryFn: ({ signal }) => fetchArtist(id, signal),
+    queryKey: ['artist', cleanId || '', resolvedFallback || ''],
+    queryFn: ({ signal }) => fetchArtist(cleanId || '', signal, resolvedFallback),
+    enabled: Boolean(cleanId),
   });
+
+  if (!cleanId) {
+    return (
+      <ErrorBanner
+        message="ID artis tidak valid atau tidak tersedia."
+        onGoHome={() => navigate({ name: 'home' })}
+      />
+    );
+  }
 
   if (query.isLoading) {
     return (
@@ -47,6 +75,7 @@ export function ArtistDetailPage({ id, onAddToPlaylist }: DetailProps) {
           query.error instanceof Error ? query.error.message : 'Gagal memuat profil artis.'
         }
         onRetry={() => void query.refetch()}
+        onGoHome={() => navigate({ name: 'home' })}
       />
     );
   }
@@ -217,16 +246,41 @@ export function ArtistDetailPage({ id, onAddToPlaylist }: DetailProps) {
   );
 }
 
-export function AlbumDetailPage({ id, onAddToPlaylist }: DetailProps) {
+export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailProps) {
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const navigate = useNavigationStore((s) => s.navigate);
-  const saved = useLibraryStore((s) => s.isAlbumSaved(id));
+  const cleanId = normalizeRouteId(id);
+  const saved = useLibraryStore((s) => s.isAlbumSaved(cleanId || id));
   const toggleSaveAlbum = useLibraryStore((s) => s.toggleSaveAlbum);
+  const libraryAlbumHint = useLibraryStore((s) => {
+    const entry = s.savedAlbums.find((a) => a.id === (cleanId || id));
+    if (entry?.item.title) return entry.item.title;
+    for (const track of s.likedTracks) {
+      if (track.album?.id === (cleanId || id) && track.album.name) return track.album.name;
+    }
+    for (const rec of s.playHistory) {
+      if (rec.track.album?.id === (cleanId || id) && rec.track.album.name) {
+        return rec.track.album.name;
+      }
+    }
+    return undefined;
+  });
+  const resolvedFallback = fallbackQuery?.trim() || libraryAlbumHint;
 
   const query = useQuery({
-    queryKey: ['album', id],
-    queryFn: ({ signal }) => fetchAlbum(id, signal),
+    queryKey: ['album', cleanId || '', resolvedFallback || ''],
+    queryFn: ({ signal }) => fetchAlbum(cleanId || '', signal, resolvedFallback),
+    enabled: Boolean(cleanId),
   });
+
+  if (!cleanId) {
+    return (
+      <ErrorBanner
+        message="ID album tidak valid atau tidak tersedia."
+        onGoHome={() => navigate({ name: 'home' })}
+      />
+    );
+  }
 
   if (query.isLoading) {
     return (
@@ -248,6 +302,7 @@ export function AlbumDetailPage({ id, onAddToPlaylist }: DetailProps) {
       <ErrorBanner
         message={query.error instanceof Error ? query.error.message : 'Gagal memuat detail album.'}
         onRetry={() => void query.refetch()}
+        onGoHome={() => navigate({ name: 'home' })}
       />
     );
   }
@@ -287,7 +342,13 @@ export function AlbumDetailPage({ id, onAddToPlaylist }: DetailProps) {
                 {artist.id ? (
                   <button
                     type="button"
-                    onClick={() => navigate({ name: 'artist', id: artist.id! })}
+                    onClick={() =>
+                      navigate({
+                        name: 'artist',
+                        id: artist.id!,
+                        fallbackQuery: artist.name,
+                      })
+                    }
                     className="font-medium text-white hover:underline"
                   >
                     {artist.name}
@@ -394,13 +455,26 @@ export function AlbumDetailPage({ id, onAddToPlaylist }: DetailProps) {
   );
 }
 
-export function PlaylistDetailPage({ id, onAddToPlaylist }: DetailProps) {
+export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailProps) {
   const playTrackList = usePlayerStore((s) => s.playTrackList);
+  const navigate = useNavigationStore((s) => s.navigate);
+  const cleanId = normalizeRouteId(id);
+  const resolvedFallback = fallbackQuery?.trim() || undefined;
 
   const query = useQuery({
-    queryKey: ['playlist', id],
-    queryFn: ({ signal }) => fetchPlaylist(id, signal),
+    queryKey: ['playlist', cleanId || '', resolvedFallback || ''],
+    queryFn: ({ signal }) => fetchPlaylist(cleanId || '', signal, resolvedFallback),
+    enabled: Boolean(cleanId),
   });
+
+  if (!cleanId) {
+    return (
+      <ErrorBanner
+        message="ID playlist tidak valid atau tidak tersedia."
+        onGoHome={() => navigate({ name: 'home' })}
+      />
+    );
+  }
 
   if (query.isLoading) {
     return (
@@ -424,6 +498,7 @@ export function PlaylistDetailPage({ id, onAddToPlaylist }: DetailProps) {
           query.error instanceof Error ? query.error.message : 'Gagal memuat detail playlist.'
         }
         onRetry={() => void query.refetch()}
+        onGoHome={() => navigate({ name: 'home' })}
       />
     );
   }

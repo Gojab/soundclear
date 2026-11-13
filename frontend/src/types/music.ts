@@ -493,11 +493,11 @@ export type RouteView =
   | { name: 'search'; query?: string; filter?: SearchFilter }
   | { name: 'moods' }
   | { name: 'mood-detail'; params: string; title: string }
-  | { name: 'artist'; id: string }
-  | { name: 'album'; id: string }
-  | { name: 'playlist'; id: string }
-  | { name: 'podcast'; id: string }
-  | { name: 'episode'; id: string }
+  | { name: 'artist'; id: string; fallbackQuery?: string }
+  | { name: 'album'; id: string; fallbackQuery?: string }
+  | { name: 'playlist'; id: string; fallbackQuery?: string }
+  | { name: 'podcast'; id: string; fallbackQuery?: string }
+  | { name: 'episode'; id: string; fallbackQuery?: string }
   | { name: 'library' }
   | { name: 'liked' }
   | { name: 'local-playlist'; id: string }

@@ -200,7 +200,11 @@ export function GlobalTrackContextMenu({
                   type="button"
                   role="menuitem"
                   onClick={() => {
-                    navigate({ name: 'artist', id: primaryArtist.id! });
+                    navigate({
+                      name: 'artist',
+                      id: primaryArtist.id!,
+                      fallbackQuery: primaryArtist.name,
+                    });
                     closeMenu();
                   }}
                   className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
@@ -215,7 +219,11 @@ export function GlobalTrackContextMenu({
                   type="button"
                   role="menuitem"
                   onClick={() => {
-                    navigate({ name: 'album', id: primaryAlbum.id! });
+                    navigate({
+                      name: 'album',
+                      id: primaryAlbum.id!,
+                      fallbackQuery: primaryAlbum.name,
+                    });
                     closeMenu();
                   }}
                   className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"

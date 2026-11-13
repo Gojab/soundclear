@@ -364,6 +364,7 @@ export default function App() {
               <ArtistDetailPage
                 key={currentRoute.id}
                 id={currentRoute.id}
+                fallbackQuery={currentRoute.fallbackQuery}
                 onAddToPlaylist={openAddToPlaylistModal}
               />
             )}
@@ -372,6 +373,7 @@ export default function App() {
               <AlbumDetailPage
                 key={currentRoute.id}
                 id={currentRoute.id}
+                fallbackQuery={currentRoute.fallbackQuery}
                 onAddToPlaylist={openAddToPlaylistModal}
               />
             )}
@@ -380,16 +382,25 @@ export default function App() {
               <PlaylistDetailPage
                 key={currentRoute.id}
                 id={currentRoute.id}
+                fallbackQuery={currentRoute.fallbackQuery}
                 onAddToPlaylist={openAddToPlaylistModal}
               />
             )}
 
             {currentRoute.name === 'podcast' && (
-              <PodcastDetailPage key={currentRoute.id} id={currentRoute.id} />
+              <PodcastDetailPage
+                key={currentRoute.id}
+                id={currentRoute.id}
+                fallbackQuery={currentRoute.fallbackQuery}
+              />
             )}
 
             {currentRoute.name === 'episode' && (
-              <EpisodeDetailPage key={currentRoute.id} id={currentRoute.id} />
+              <EpisodeDetailPage
+                key={currentRoute.id}
+                id={currentRoute.id}
+                fallbackQuery={currentRoute.fallbackQuery}
+              />
             )}
 
             {currentRoute.name === 'library' && (

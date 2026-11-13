@@ -177,7 +177,7 @@ export function TrackRow({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate({ name: 'artist', id: artist.id! });
+                      navigate({ name: 'artist', id: artist.id!, fallbackQuery: artist.name });
                     }}
                     className="hover:text-white hover:underline truncate"
                   >
@@ -199,7 +199,9 @@ export function TrackRow({
           {track.album.id ? (
             <button
               type="button"
-              onClick={() => navigate({ name: 'album', id: track.album!.id! })}
+              onClick={() =>
+                navigate({ name: 'album', id: track.album!.id!, fallbackQuery: track.album!.name })
+              }
               className="text-xs text-white/50 hover:text-white hover:underline truncate block max-w-full text-left"
             >
               {track.album.name}

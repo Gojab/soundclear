@@ -32,9 +32,11 @@ export function TrackListSkeleton({ count = 6 }: { count?: number }) {
 export function ErrorBanner({
   message,
   onRetry,
+  onGoHome,
 }: {
   message: string;
   onRetry?: () => void;
+  onGoHome?: () => void;
 }) {
   return (
     <div className="glass-panel rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-red-400/20">
@@ -42,14 +44,27 @@ export function ErrorBanner({
         <h3 className="text-sm font-semibold text-white">Gagal memuat konten</h3>
         <p className="text-xs text-white/65 mt-1">{message}</p>
       </div>
-      {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="px-4 py-2 rounded-xl bg-white/[0.1] hover:bg-white/[0.16] text-xs font-medium text-white transition-colors shrink-0 self-start sm:self-auto"
-        >
-          Coba Lagi
-        </button>
+      {(onRetry || onGoHome) && (
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+          {onGoHome && (
+            <button
+              type="button"
+              onClick={onGoHome}
+              className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-medium text-white/85 transition-colors"
+            >
+              Ke Beranda
+            </button>
+          )}
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="px-4 py-2 rounded-xl bg-white/[0.1] hover:bg-white/[0.16] text-xs font-medium text-white transition-colors"
+            >
+              Coba Lagi
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

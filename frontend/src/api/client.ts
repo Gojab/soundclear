@@ -97,11 +97,27 @@ export function fetchMoodPlaylists(
   params: string,
   signal?: AbortSignal,
 ): Promise<MoodPlaylistsResponse> {
-  return requestJson<MoodPlaylistsResponse>(`/moods/${encodeURIComponent(params)}`, { signal });
+  const clean = params.trim();
+  if (!clean) return Promise.reject(new ApiError('Parameter kategori mood tidak valid.', 400));
+  return requestJson<MoodPlaylistsResponse>(`/moods/${encodeURIComponent(clean)}`, { signal });
 }
 
-export function fetchArtist(id: string, signal?: AbortSignal): Promise<ArtistDetailResponse> {
-  return requestJson<ArtistDetailResponse>(`/artist/${encodeURIComponent(id)}`, { signal });
+function buildDetailQuery(fallbackQuery?: string): string {
+  const clean = fallbackQuery?.trim();
+  return clean ? `?q=${encodeURIComponent(clean)}` : '';
+}
+
+export function fetchArtist(
+  id: string,
+  signal?: AbortSignal,
+  fallbackQuery?: string,
+): Promise<ArtistDetailResponse> {
+  const cleanId = id.trim();
+  if (!cleanId) return Promise.reject(new ApiError('ID artis tidak valid.', 400));
+  return requestJson<ArtistDetailResponse>(
+    `/artist/${encodeURIComponent(cleanId)}${buildDetailQuery(fallbackQuery)}`,
+    { signal },
+  );
 }
 
 export function fetchArtistAlbums(
@@ -109,18 +125,38 @@ export function fetchArtistAlbums(
   params: string,
   signal?: AbortSignal,
 ): Promise<MediaItem[]> {
+  const cleanId = id.trim();
+  if (!cleanId) return Promise.reject(new ApiError('ID artis tidak valid.', 400));
   return requestJson<MediaItem[]>(
-    `/artist/${encodeURIComponent(id)}/albums?params=${encodeURIComponent(params)}`,
+    `/artist/${encodeURIComponent(cleanId)}/albums?params=${encodeURIComponent(params)}`,
     { signal },
   );
 }
 
-export function fetchAlbum(id: string, signal?: AbortSignal): Promise<AlbumDetailResponse> {
-  return requestJson<AlbumDetailResponse>(`/album/${encodeURIComponent(id)}`, { signal });
+export function fetchAlbum(
+  id: string,
+  signal?: AbortSignal,
+  fallbackQuery?: string,
+): Promise<AlbumDetailResponse> {
+  const cleanId = id.trim();
+  if (!cleanId) return Promise.reject(new ApiError('ID album tidak valid.', 400));
+  return requestJson<AlbumDetailResponse>(
+    `/album/${encodeURIComponent(cleanId)}${buildDetailQuery(fallbackQuery)}`,
+    { signal },
+  );
 }
 
-export function fetchPlaylist(id: string, signal?: AbortSignal): Promise<PlaylistDetailResponse> {
-  return requestJson<PlaylistDetailResponse>(`/playlist/${encodeURIComponent(id)}`, { signal });
+export function fetchPlaylist(
+  id: string,
+  signal?: AbortSignal,
+  fallbackQuery?: string,
+): Promise<PlaylistDetailResponse> {
+  const cleanId = id.trim();
+  if (!cleanId) return Promise.reject(new ApiError('ID playlist tidak valid.', 400));
+  return requestJson<PlaylistDetailResponse>(
+    `/playlist/${encodeURIComponent(cleanId)}${buildDetailQuery(fallbackQuery)}`,
+    { signal },
+  );
 }
 
 export function fetchWatchPlaylist(
@@ -166,12 +202,30 @@ export function fetchSongRelated(
   });
 }
 
-export function fetchPodcast(id: string, signal?: AbortSignal): Promise<PodcastDetailResponse> {
-  return requestJson<PodcastDetailResponse>(`/podcast/${encodeURIComponent(id)}`, { signal });
+export function fetchPodcast(
+  id: string,
+  signal?: AbortSignal,
+  fallbackQuery?: string,
+): Promise<PodcastDetailResponse> {
+  const cleanId = id.trim();
+  if (!cleanId) return Promise.reject(new ApiError('ID podcast tidak valid.', 400));
+  return requestJson<PodcastDetailResponse>(
+    `/podcast/${encodeURIComponent(cleanId)}${buildDetailQuery(fallbackQuery)}`,
+    { signal },
+  );
 }
 
-export function fetchEpisode(id: string, signal?: AbortSignal): Promise<EpisodeDetailResponse> {
-  return requestJson<EpisodeDetailResponse>(`/episode/${encodeURIComponent(id)}`, { signal });
+export function fetchEpisode(
+  id: string,
+  signal?: AbortSignal,
+  fallbackQuery?: string,
+): Promise<EpisodeDetailResponse> {
+  const cleanId = id.trim();
+  if (!cleanId) return Promise.reject(new ApiError('ID episode tidak valid.', 400));
+  return requestJson<EpisodeDetailResponse>(
+    `/episode/${encodeURIComponent(cleanId)}${buildDetailQuery(fallbackQuery)}`,
+    { signal },
+  );
 }
 
 export function fetchChannelEpisodes(
@@ -281,9 +335,15 @@ export function resolvePlayableYoutube(
   return req;
 }
 
-export function fetchTrackPreviewUrl(trackId: string): Promise<{ id: string; previewUrl: string }> {
+export function fetchTrackPreviewUrl(
+  trackId: string,
+  itemType?: string,
+): Promise<{ id: string; previewUrl: string }> {
+  const cleanId = trackId.trim();
+  if (!cleanId) return Promise.reject(new ApiError('ID lagu tidak valid.', 400));
+  const qs = itemType ? `?type=${encodeURIComponent(itemType)}` : '';
   return requestJson<{ id: string; previewUrl: string }>(
-    `/play/preview/${encodeURIComponent(trackId)}`,
+    `/play/preview/${encodeURIComponent(cleanId)}${qs}`,
   );
 }
 
@@ -292,20 +352,25 @@ const streamOptionsCache = new Map<string, Promise<StreamOptionsResponse>>();
 export function fetchStreamOptions(
   trackId: string,
   forceRefresh = false,
+  itemType?: string,
 ): Promise<StreamOptionsResponse> {
+  const cleanId = trackId.trim();
+  if (!cleanId) return Promise.reject(new ApiError('ID lagu tidak valid.', 400));
+  const cacheKey = `${cleanId}|${itemType || ''}`;
   if (forceRefresh) {
-    streamOptionsCache.delete(trackId);
+    streamOptionsCache.delete(cacheKey);
   }
-  const hit = streamOptionsCache.get(trackId);
+  const hit = streamOptionsCache.get(cacheKey);
   if (hit) return hit;
 
+  const qs = itemType ? `?type=${encodeURIComponent(itemType)}` : '';
   const req = requestJson<StreamOptionsResponse>(
-    `/stream/options/${encodeURIComponent(trackId)}`,
+    `/stream/options/${encodeURIComponent(cleanId)}${qs}`,
   ).catch((err) => {
-    streamOptionsCache.delete(trackId);
+    streamOptionsCache.delete(cacheKey);
     throw err;
   });
-  streamOptionsCache.set(trackId, req);
+  streamOptionsCache.set(cacheKey, req);
   return req;
 }
 

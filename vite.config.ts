@@ -1,8 +1,11 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+const configDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
   return {
@@ -87,7 +90,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, 'frontend/src'),
+        '@': path.resolve(configDir, 'frontend/src'),
       },
     },
     server: {

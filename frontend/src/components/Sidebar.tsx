@@ -270,7 +270,9 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               <button
                 key={`alb-${entry.id}`}
                 type="button"
-                onClick={() => navigate({ name: 'album', id: entry.id })}
+                onClick={() =>
+                  navigate({ name: 'album', id: entry.id, fallbackQuery: entry.item.title })
+                }
                 className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-colors ${
                   active ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'
                 }`}
@@ -305,7 +307,9 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               <button
                 key={`art-${entry.id}`}
                 type="button"
-                onClick={() => navigate({ name: 'artist', id: entry.id })}
+                onClick={() =>
+                  navigate({ name: 'artist', id: entry.id, fallbackQuery: entry.item.title })
+                }
                 className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-colors ${
                   active ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'
                 }`}
@@ -337,7 +341,9 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
             <button
               key={`pod-${entry.id}`}
               type="button"
-              onClick={() => navigate({ name: 'podcast', id: entry.id })}
+              onClick={() =>
+                navigate({ name: 'podcast', id: entry.id, fallbackQuery: entry.item.title })
+              }
               className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-colors ${
                 active ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'
               }`}

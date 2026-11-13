@@ -105,8 +105,8 @@ def mood_playlists(params: str) -> Dict[str, Any]:
 
 
 @app.get("/api/artist/{artist_id}")
-def artist(artist_id: str) -> Dict[str, Any]:
-    return provider.get_artist(artist_id)
+def artist(artist_id: str, q: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return provider.get_artist(artist_id, fallback_query=q)
 
 
 @app.get("/api/artist/{artist_id}/albums")
@@ -117,13 +117,17 @@ def artist_albums(artist_id: str, params: str = Query(default="")) -> List[Dict[
 
 
 @app.get("/api/album/{album_id}")
-def album(album_id: str) -> Dict[str, Any]:
-    return provider.get_album(album_id)
+def album(album_id: str, q: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return provider.get_album(album_id, fallback_query=q)
 
 
 @app.get("/api/playlist/{playlist_id}")
-def playlist(playlist_id: str, limit: int = Query(default=100, ge=1, le=200)) -> Dict[str, Any]:
-    return provider.get_playlist(playlist_id, limit)
+def playlist(
+    playlist_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    q: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    return provider.get_playlist(playlist_id, limit, fallback_query=q)
 
 
 @app.get("/api/watch/{video_id}")
@@ -156,13 +160,17 @@ def song_related(video_id: str) -> Dict[str, Any]:
 
 
 @app.get("/api/podcast/{podcast_id}")
-def podcast(podcast_id: str, limit: int = Query(default=100, ge=1, le=200)) -> Dict[str, Any]:
-    return provider.get_podcast(podcast_id, limit)
+def podcast(
+    podcast_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    q: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    return provider.get_podcast(podcast_id, limit, fallback_query=q)
 
 
 @app.get("/api/episode/{video_id}")
-def episode(video_id: str) -> Dict[str, Any]:
-    return provider.get_episode(video_id)
+def episode(video_id: str, q: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return provider.get_episode(video_id, fallback_query=q)
 
 
 @app.get("/api/channel/{channel_id}/episodes")
@@ -235,13 +243,13 @@ def resolve_play(
 
 
 @app.get("/api/play/preview/{track_id}")
-def play_preview(track_id: str) -> Dict[str, Any]:
-    return provider.get_track_preview_url(track_id)
+def play_preview(track_id: str, type: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return provider.get_track_preview_url(track_id, item_type=type)
 
 
 @app.get("/api/stream/options/{track_id}")
-def stream_options(track_id: str) -> Dict[str, Any]:
-    return provider.get_stream_options(track_id)
+def stream_options(track_id: str, type: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return provider.get_stream_options(track_id, item_type=type)
 
 
 @app.options("/api/stream/{track_id}")

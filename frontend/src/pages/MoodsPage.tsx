@@ -71,10 +71,23 @@ export function MoodsPage() {
 }
 
 export function MoodDetailPage({ params, title }: { params: string; title: string }) {
+  const navigate = useNavigationStore((s) => s.navigate);
+  const cleanParams = params.trim();
+
   const query = useQuery({
-    queryKey: ['mood-playlists', params],
-    queryFn: ({ signal }) => fetchMoodPlaylists(params, signal),
+    queryKey: ['mood-playlists', cleanParams],
+    queryFn: ({ signal }) => fetchMoodPlaylists(cleanParams, signal),
+    enabled: Boolean(cleanParams),
   });
+
+  if (!cleanParams) {
+    return (
+      <ErrorBanner
+        message="Kategori mood tidak valid."
+        onGoHome={() => navigate({ name: 'moods' })}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -95,6 +108,7 @@ export function MoodDetailPage({ params, title }: { params: string; title: strin
               : 'Gagal memuat playlist untuk kategori ini.'
           }
           onRetry={() => void query.refetch()}
+          onGoHome={() => navigate({ name: 'moods' })}
         />
       ) : query.data && query.data.playlists.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">

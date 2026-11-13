@@ -583,6 +583,41 @@ class MusicProviderTests(unittest.TestCase):
             finally:
                 main_app.provider = orig_provider
 
+    def test_episode_preview_embed_with_mp3_ext_and_legacy_fallback(self) -> None:
+        ep_html = (
+            '<html><body><script id="__NEXT_DATA__" type="application/json">'
+            '{"props":{"audioPreview":{"url":"https://p.scdn.co/mp3-preview/ep999.mp3"}}}'
+            '</script></body></html>'
+        )
+        seen_urls: list[str] = []
+
+        def fake_get(url: str, **_kwargs):
+            seen_urls.append(url)
+            if "/embed/episode/" in url:
+                return type("Resp", (), {"status_code": 200, "text": ep_html})()
+            return type("Resp", (), {"status_code": 404, "text": ""})()
+
+        provider = MusicProvider(gateway=FakeGateway(), http_get_fn=fake_get)  # type: ignore[arg-type]
+        ep_prev = provider.get_track_preview_url("3KcuqQ6TbW8mpFAnMxw3f7", item_type="episode")
+        self.assertEqual(ep_prev["previewUrl"], "https://p.scdn.co/mp3-preview/ep999.mp3")
+        self.assertTrue(seen_urls[0].startswith("https://open.spotify.com/embed/episode/"))
+
+        # Legacy YouTube ID without fallback query raises 404 when NotFound, with fallback query resolves
+        class LegacyGateway(FakeGateway):
+            def get_artist(self, artist_id: str):
+                if artist_id.startswith("UC"):
+                    return {"data": {"artistUnion": {"__typename": "NotFound"}}}
+                return super().get_artist(artist_id)
+
+        p_legacy = MusicProvider(gateway=LegacyGateway(), sleep_fn=lambda _d: None)  # type: ignore[arg-type]
+        with self.assertRaises(MusicProviderError) as ctx:
+            p_legacy.get_artist("UC1234567890123456789012")
+        self.assertEqual(ctx.exception.status_code, 404)
+
+        recovered = p_legacy.get_artist("UC1234567890123456789012", fallback_query="Tulus")
+        self.assertEqual(recovered["name"], "Tulus")
+        self.assertEqual(recovered["id"], "art123")
+
 
 if __name__ == "__main__":
     unittest.main()

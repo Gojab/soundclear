@@ -218,9 +218,9 @@ export function LibraryOverviewPage({
 
   const openEntry = (item: UnifiedLibraryEntry) => {
     if (item.kind === 'playlist') navigate({ name: 'local-playlist', id: item.id });
-    else if (item.kind === 'album') navigate({ name: 'album', id: item.id });
-    else if (item.kind === 'artist') navigate({ name: 'artist', id: item.id });
-    else navigate({ name: 'podcast', id: item.id });
+    else if (item.kind === 'album') navigate({ name: 'album', id: item.id, fallbackQuery: item.title });
+    else if (item.kind === 'artist') navigate({ name: 'artist', id: item.id, fallbackQuery: item.title });
+    else navigate({ name: 'podcast', id: item.id, fallbackQuery: item.title });
   };
 
   const togglePinEntry = (item: UnifiedLibraryEntry) => {

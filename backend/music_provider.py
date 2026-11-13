@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import io
 import json
 import os
@@ -73,6 +74,15 @@ INDIAN_KEYWORD_RE = re.compile(
     re.IGNORECASE,
 )
 YEAR_RE = re.compile(r"(19|20)\d{2}")
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def clean_html_text(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    stripped = HTML_TAG_RE.sub("", value)
+    decoded = html.unescape(stripped).strip()
+    return decoded or None
 
 MOOD_GROUPS: List[Dict[str, Any]] = [
     {
@@ -202,6 +212,55 @@ def extract_spotify_id(uri_or_id: Optional[str]) -> Optional[str]:
     if "/" in raw:
         raw = raw.rstrip("/").split("/")[-1]
     return raw or None
+
+
+_SPOTIFY_BASE62_ID_RE = re.compile(r"^[A-Za-z0-9]{22}$")
+_LEGACY_YT_ID_RE = re.compile(
+    r"^(?:UC[A-Za-z0-9_-]{20,}|MPREb[A-Za-z0-9_-]+|OLAK5uy_[A-Za-z0-9_-]+|"
+    r"MPSP[A-Za-z0-9_-]+|VL[A-Za-z0-9_-]+|PL[A-Za-z0-9_-]+|RDCLAK[A-Za-z0-9_-]+)$"
+)
+
+
+def _looks_like_legacy_yt_id(entity_id: str) -> bool:
+    if not entity_id or _SPOTIFY_BASE62_ID_RE.fullmatch(entity_id):
+        return False
+    return bool(_LEGACY_YT_ID_RE.fullmatch(entity_id))
+
+
+def _extract_preview_url_from_html(html_text: str, *, allow_spotifycdn_audio: bool = False) -> Optional[str]:
+    if not html_text:
+        return None
+    json_match = re.search(
+        r'"audioPreview"\s*:\s*\{\s*"url"\s*:\s*"(https:[^"]+)"',
+        html_text,
+    )
+    if json_match:
+        candidate = (
+            json_match.group(1)
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .strip()
+        )
+        if candidate.startswith("https://"):
+            return candidate
+
+    mp3_match = re.search(
+        r"https://p\.scdn\.co/mp3-preview/[A-Za-z0-9_.-]+(?:\?[^\"'\\< ]*)?",
+        html_text,
+    )
+    if mp3_match:
+        return mp3_match.group(0)
+
+    if allow_spotifycdn_audio:
+        cdn_match = re.search(
+            r"https://audio4-[^\"'\\< ]+\.(?:spotifycdn\.com|scdn\.co)/audio/[^\"'\\< ]+",
+            html_text,
+        )
+        if cdn_match:
+            return cdn_match.group(0).replace("\\u0026", "&")
+
+    return None
+
 
 
 def format_duration_ms(duration_ms: Any) -> Tuple[Optional[str], Optional[int]]:
@@ -524,7 +583,7 @@ def normalize_playlist(raw_playlist: Any) -> Optional[Dict[str, Any]]:
         "durationSeconds": None,
         "thumbnail": cover,
         "type": "playlist",
-        "description": raw_playlist.get("description") or None,
+        "description": clean_html_text(raw_playlist.get("description")),
         "isExplicit": False,
     }
 
@@ -557,7 +616,7 @@ def normalize_podcast(raw_podcast: Any) -> Optional[Dict[str, Any]]:
         "durationSeconds": None,
         "thumbnail": cover,
         "type": "podcast",
-        "description": raw_podcast.get("description") or None,
+        "description": clean_html_text(raw_podcast.get("description")),
         "isExplicit": False,
     }
 
@@ -614,7 +673,7 @@ def normalize_episode(
         "durationSeconds": duration_sec,
         "thumbnail": cover,
         "type": "episode",
-        "description": raw_ep.get("description") or None,
+        "description": clean_html_text(raw_ep.get("description")),
         "published": published if isinstance(published, str) else None,
         "podcastId": resolved_pod_id,
         "isExplicit": str((raw_ep.get("contentRating") or {}).get("label") or "").upper() == "EXPLICIT",
@@ -1520,10 +1579,35 @@ class MusicProvider:
 
         return self._cached(f"mood:{clean}", "playlist mood & genre", _load, ttl_seconds=480)
 
-    def get_artist(self, artist_id: str) -> Dict[str, Any]:
+    def _resolve_fallback_entity_id(
+        self,
+        original_id: str,
+        search_filter: str,
+        fallback_query: Optional[str],
+    ) -> Optional[str]:
+        clean_q = (fallback_query or "").strip()
+        if not clean_q:
+            return None
+        try:
+            matches = self._search_v2_items(clean_q, search_filter, 5)
+            for match in matches:
+                cand_id = extract_spotify_id(match.get("browseId") or match.get("playlistId") or match.get("id"))
+                if cand_id and cand_id != original_id:
+                    return cand_id
+        except Exception:
+            return None
+        return None
+
+    def get_artist(self, artist_id: str, *, fallback_query: Optional[str] = None) -> Dict[str, Any]:
         clean_id = extract_spotify_id(artist_id)
         if not clean_id:
             raise MusicProviderError("ID artis tidak valid.", 400)
+
+        clean_q = (fallback_query or "").strip()
+        if clean_q and _looks_like_legacy_yt_id(clean_id):
+            recovered = self._resolve_fallback_entity_id(clean_id, "artists", clean_q)
+            if recovered:
+                clean_id = recovered
 
         def _load() -> Dict[str, Any]:
             raw = self._gateway.get_artist(clean_id)
@@ -1534,7 +1618,7 @@ class MusicProvider:
             profile = au.get("profile") if isinstance(au.get("profile"), Mapping) else {}
             name = profile.get("name") or "Artis"
             bio_node = profile.get("biography") if isinstance(profile.get("biography"), Mapping) else {}
-            description = bio_node.get("text") or None
+            description = clean_html_text(bio_node.get("text"))
 
             stats = au.get("stats") if isinstance(au.get("stats"), Mapping) else {}
             subscribers = format_compact_count(stats.get("followers"), "")
@@ -1616,7 +1700,14 @@ class MusicProvider:
                 "related": related,
             }
 
-        return self._cached(f"artist:{clean_id}", "detail artis", _load, ttl_seconds=480)
+        try:
+            return self._cached(f"artist:{clean_id}", "detail artis", _load, ttl_seconds=480)
+        except MusicProviderError as exc:
+            if exc.status_code == 404 and clean_q:
+                recovered = self._resolve_fallback_entity_id(clean_id, "artists", clean_q)
+                if recovered:
+                    return self.get_artist(recovered)
+            raise
 
     def get_artist_albums(self, artist_id: str, params: str) -> List[Dict[str, Any]]:
         clean_id = extract_spotify_id(artist_id)
@@ -1636,10 +1727,16 @@ class MusicProvider:
 
         return self._cached(f"artist_albums:{clean_id}:{section}", "diskografi artis", _load, ttl_seconds=480)
 
-    def get_album(self, album_id: str) -> Dict[str, Any]:
+    def get_album(self, album_id: str, *, fallback_query: Optional[str] = None) -> Dict[str, Any]:
         clean_id = extract_spotify_id(album_id)
         if not clean_id:
             raise MusicProviderError("ID album tidak valid.", 400)
+
+        clean_q = (fallback_query or "").strip()
+        if clean_q and _looks_like_legacy_yt_id(clean_id):
+            recovered = self._resolve_fallback_entity_id(clean_id, "albums", clean_q)
+            if recovered:
+                clean_id = recovered
 
         def _load() -> Dict[str, Any]:
             raw = self._gateway.get_album_info(clean_id, limit=50)
@@ -1717,18 +1814,37 @@ class MusicProvider:
                 "tracks": tracks,
             }
 
-        return self._cached(f"album:{clean_id}", "detail album", _load, ttl_seconds=480)
+        try:
+            return self._cached(f"album:{clean_id}", "detail album", _load, ttl_seconds=480)
+        except MusicProviderError as exc:
+            if exc.status_code == 404 and clean_q:
+                recovered = self._resolve_fallback_entity_id(clean_id, "albums", clean_q)
+                if recovered:
+                    return self.get_album(recovered)
+            raise
 
-    def get_playlist(self, playlist_id: str, limit: int = 100) -> Dict[str, Any]:
+    def get_playlist(
+        self,
+        playlist_id: str,
+        limit: int = 100,
+        *,
+        fallback_query: Optional[str] = None,
+    ) -> Dict[str, Any]:
         clean_id = extract_spotify_id(playlist_id)
         if not clean_id:
             raise MusicProviderError("ID playlist tidak valid.", 400)
         safe_limit = max(1, min(200, int(limit)))
 
+        clean_q = (fallback_query or "").strip()
+        if clean_q and _looks_like_legacy_yt_id(clean_id):
+            recovered = self._resolve_fallback_entity_id(clean_id, "playlists", clean_q)
+            if recovered:
+                clean_id = recovered
+
         def _load() -> Dict[str, Any]:
             raw = self._gateway.get_playlist_info(clean_id, limit=min(safe_limit, 100))
             pl = (raw.get("data") or {}).get("playlistV2")
-            if not isinstance(pl, Mapping) or pl.get("__typename") == "NotFound":
+            if not isinstance(pl, Mapping) or pl.get("__typename") in ("NotFound", "GenericError"):
                 raise MusicProviderError("Playlist tidak ditemukan.", 404)
 
             title = str(pl.get("name") or "Playlist")
@@ -1736,7 +1852,7 @@ class MusicProvider:
             owner_node = pl.get("ownerV2") if isinstance(pl.get("ownerV2"), Mapping) else {}
             owner_data = owner_node.get("data") if isinstance(owner_node.get("data"), Mapping) else {}
             author = owner_data.get("name") or owner_data.get("username") or None
-            description = pl.get("description") or None
+            description = clean_html_text(pl.get("description"))
 
             content = pl.get("content") if isinstance(pl.get("content"), Mapping) else {}
             raw_items = list(content.get("items") or [])
@@ -1763,7 +1879,14 @@ class MusicProvider:
                 "tracks": tracks,
             }
 
-        return self._cached(f"playlist:{clean_id}:{safe_limit}", "detail playlist", _load, ttl_seconds=420)
+        try:
+            return self._cached(f"playlist:{clean_id}:{safe_limit}", "detail playlist", _load, ttl_seconds=420)
+        except MusicProviderError as exc:
+            if exc.status_code == 404 and clean_q:
+                recovered = self._resolve_fallback_entity_id(clean_id, "playlists", clean_q)
+                if recovered:
+                    return self.get_playlist(recovered, safe_limit)
+            raise
 
     def get_watch_playlist(
         self,
@@ -1942,23 +2065,35 @@ class MusicProvider:
 
         return self._cached(f"song_related:{clean_id}", "lagu terkait", _load, ttl_seconds=420)
 
-    def get_podcast(self, podcast_id: str, limit: int = 100) -> Dict[str, Any]:
+    def get_podcast(
+        self,
+        podcast_id: str,
+        limit: int = 100,
+        *,
+        fallback_query: Optional[str] = None,
+    ) -> Dict[str, Any]:
         clean_id = extract_spotify_id(podcast_id)
         if not clean_id:
             raise MusicProviderError("ID podcast tidak valid.", 400)
         safe_limit = max(1, min(200, int(limit)))
 
+        clean_q = (fallback_query or "").strip()
+        if clean_q and _looks_like_legacy_yt_id(clean_id):
+            recovered = self._resolve_fallback_entity_id(clean_id, "podcasts", clean_q)
+            if recovered:
+                clean_id = recovered
+
         def _load() -> Dict[str, Any]:
             raw = self._gateway.get_podcast_info(clean_id, limit=min(safe_limit, 100))
             pod = (raw.get("data") or {}).get("podcastUnionV2")
-            if not isinstance(pod, Mapping) or pod.get("__typename") == "NotFound":
+            if not isinstance(pod, Mapping) or pod.get("__typename") in ("NotFound", "GenericError"):
                 raise MusicProviderError("Podcast tidak ditemukan.", 404)
 
             title = str(pod.get("name") or "Podcast")
             pub_node = pod.get("publisher") if isinstance(pod.get("publisher"), Mapping) else {}
             author = pub_node.get("name") or None
             thumbnail = pick_largest_image(pod.get("coverArt"))
-            description = pod.get("description") or None
+            description = clean_html_text(pod.get("description"))
 
             ep_items = ((pod.get("episodesV2") or {}).get("items")) or []
             episodes: List[Dict[str, Any]] = []
@@ -1995,17 +2130,30 @@ class MusicProvider:
                 "episodes": episodes,
             }
 
-        return self._cached(f"podcast:{clean_id}:{safe_limit}", "detail podcast", _load, ttl_seconds=480)
+        try:
+            return self._cached(f"podcast:{clean_id}:{safe_limit}", "detail podcast", _load, ttl_seconds=480)
+        except MusicProviderError as exc:
+            if exc.status_code == 404 and clean_q:
+                recovered = self._resolve_fallback_entity_id(clean_id, "podcasts", clean_q)
+                if recovered:
+                    return self.get_podcast(recovered, safe_limit)
+            raise
 
-    def get_episode(self, episode_id: str) -> Dict[str, Any]:
+    def get_episode(self, episode_id: str, *, fallback_query: Optional[str] = None) -> Dict[str, Any]:
         clean_id = extract_spotify_id(episode_id)
         if not clean_id:
             raise MusicProviderError("ID episode tidak valid.", 400)
 
+        clean_q = (fallback_query or "").strip()
+        if clean_q and _looks_like_legacy_yt_id(clean_id):
+            recovered = self._resolve_fallback_entity_id(clean_id, "episodes", clean_q)
+            if recovered:
+                clean_id = recovered
+
         def _load() -> Dict[str, Any]:
             raw = self._gateway.get_episode(clean_id)
             ep_node = (raw.get("data") or {}).get("episodeUnionV2")
-            if not isinstance(ep_node, Mapping) or ep_node.get("__typename") == "NotFound":
+            if not isinstance(ep_node, Mapping) or ep_node.get("__typename") in ("NotFound", "GenericError"):
                 raise MusicProviderError("Episode tidak ditemukan.", 404)
             ep = normalize_episode(ep_node)
             if not ep:
@@ -2028,7 +2176,14 @@ class MusicProvider:
                 "authorId": ep.get("podcastId"),
             }
 
-        return self._cached(f"episode:{clean_id}", "detail episode", _load, ttl_seconds=480)
+        try:
+            return self._cached(f"episode:{clean_id}", "detail episode", _load, ttl_seconds=480)
+        except MusicProviderError as exc:
+            if exc.status_code == 404 and clean_q:
+                recovered = self._resolve_fallback_entity_id(clean_id, "episodes", clean_q)
+                if recovered:
+                    return self.get_episode(recovered)
+            raise
 
     def get_channel_episodes(self, channel_id: str, params: str) -> List[Dict[str, Any]]:
         clean_id = extract_spotify_id(channel_id)
@@ -2304,13 +2459,14 @@ class MusicProvider:
         def _fetch_candidates(search_q: str) -> List[Tuple[int, str]]:
             resp = self._http_get(
                 "https://www.youtube.com/results",
-                params={"search_query": search_q},
+                params={"search_query": search_q, "ucbcb": "1"},
                 headers={
                     "User-Agent": (
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
                     ),
                     "Accept-Language": "en-US,en;q=0.9",
+                    "Cookie": "CONSENT=YES+cb.20210328-17-p0.en+FX+999",
                 },
                 timeout=10,
             )
@@ -2426,7 +2582,12 @@ class MusicProvider:
         self._cache.set(cache_key, result, ttl_seconds=21600)
         return result
 
-    def get_track_preview_url(self, track_id: str) -> Dict[str, Any]:
+    def get_track_preview_url(
+        self,
+        track_id: str,
+        *,
+        item_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
         clean_id = extract_spotify_id(track_id)
         if not clean_id:
             raise MusicProviderError("ID lagu tidak valid.", 400)
@@ -2436,19 +2597,39 @@ class MusicProvider:
         if cached is not None:
             return cached
 
+        embed_targets = (
+            [
+                ("episode", f"https://open.spotify.com/embed/episode/{clean_id}"),
+                ("track", f"https://open.spotify.com/embed/track/{clean_id}"),
+            ]
+            if (item_type or "").lower() == "episode"
+            else [
+                ("track", f"https://open.spotify.com/embed/track/{clean_id}"),
+                ("episode", f"https://open.spotify.com/embed/episode/{clean_id}"),
+            ]
+        )
+
         preview_url: Optional[str] = None
-        try:
-            resp = self._http_get(
-                f"https://open.spotify.com/embed/track/{clean_id}",
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=8,
-            )
-            html = getattr(resp, "text", "") or ""
-            m = re.search(r"https://p\.scdn\.co/mp3-preview/[A-Za-z0-9_-]+(?:\?[^\"'\\< ]*)?", html)
-            if m:
-                preview_url = m.group(0)
-        except Exception:
-            preview_url = None
+        for kind, embed_url in embed_targets:
+            try:
+                resp = self._http_get(
+                    embed_url,
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=8,
+                )
+                status = int(getattr(resp, "status_code", 200))
+                if status >= 400:
+                    continue
+                html_text = getattr(resp, "text", "") or ""
+                found = _extract_preview_url_from_html(
+                    html_text,
+                    allow_spotifycdn_audio=(kind == "episode"),
+                )
+                if found:
+                    preview_url = found
+                    break
+            except Exception:
+                continue
 
         if not preview_url:
             raise MusicProviderError("Pratinjau audio tidak tersedia untuk lagu ini.", 404)
@@ -2512,7 +2693,12 @@ class MusicProvider:
             }
             return fallback
 
-    def get_stream_options(self, track_id: str) -> Dict[str, Any]:
+    def get_stream_options(
+        self,
+        track_id: str,
+        *,
+        item_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
         clean_id = extract_spotify_id(track_id) or (track_id or "").strip()
         if not clean_id:
             raise MusicProviderError("ID lagu tidak valid.", 400)
@@ -2527,7 +2713,7 @@ class MusicProvider:
         # Discover real preview stream from Spotify embed endpoint if not a bare YouTube video ID
         if not re.fullmatch(r"[A-Za-z0-9_-]{11}", clean_id):
             try:
-                preview_info = self.get_track_preview_url(clean_id)
+                preview_info = self.get_track_preview_url(clean_id, item_type=item_type)
                 preview_url = preview_info.get("previewUrl")
                 if isinstance(preview_url, str) and preview_url:
                     probed = self._probe_direct_stream(preview_url)

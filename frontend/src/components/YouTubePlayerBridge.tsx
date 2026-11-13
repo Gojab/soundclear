@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   fetchStreamOptions,
-  fetchTrackPreviewUrl,
   resolvePlayableYoutube,
 } from '../api/client';
 import { useLibraryStore } from '../store/libraryStore';
@@ -183,92 +182,37 @@ export function YouTubePlayerBridge() {
     });
   };
 
-  const tryFallbackPreview = (trackKey: string, onFail: () => void) => {
+  const tryFallbackPreview = (trackKey: string, onFail: () => void, itemType?: string) => {
     if (isYouTubeVideoId(trackKey)) {
       onFail();
       return;
     }
 
+    const applyStreamOptionOrFail = (opts: ReturnType<typeof usePlayerStore.getState>['streamOptions']) => {
+      const latestStore = usePlayerStore.getState();
+      if (getPlayableVideoId(latestStore.currentTrack) !== trackKey) return;
+      const firstAvailable = opts?.options.find((o) => o.available);
+      if (firstAvailable) {
+        latestStore.setPlayerError(null);
+        latestStore.setSelectedQualityOverride(firstAvailable.tier);
+        return;
+      }
+      onFail();
+    };
+
     // Prefer switching cleanly into our Web Audio CORS-proxied `<audio>` tier if streamOptions discovered one
     const latestStore = usePlayerStore.getState();
-    const firstAvailable = latestStore.streamOptions?.options.find((o) => o.available);
-    if (firstAvailable) {
-      latestStore.setSelectedQualityOverride(firstAvailable.tier);
+    if (latestStore.streamOptions && latestStore.streamOptions.trackId === trackKey) {
+      applyStreamOptionOrFail(latestStore.streamOptions);
       return;
     }
 
-    void fetchTrackPreviewUrl(trackKey)
-      .then(({ previewUrl }) => {
-        const latest = usePlayerStore.getState();
-        if (getPlayableVideoId(latest.currentTrack) !== trackKey) return;
-        if (!fallbackAudioRef.current) {
-          const el = new Audio();
-          el.preload = 'auto';
-          el.onplaying = () => {
-            const s = usePlayerStore.getState();
-            if (!usingFallbackAudioRef.current) return;
-            s.setIsBuffering(false);
-            if (!s.isPlaying) s.setIsPlaying(true);
-            s.setPlayerError(null);
-            s.setWebAudioWarning('Efek suara tidak tersedia untuk lagu ini');
-          };
-          el.onpause = () => {
-            const s = usePlayerStore.getState();
-            if (!usingFallbackAudioRef.current || el.ended) return;
-            s.setIsBuffering(false);
-            if (s.isPlaying) s.setIsPlaying(false);
-          };
-          el.onended = () => {
-            if (!usingFallbackAudioRef.current) return;
-            const s = usePlayerStore.getState();
-            s.setIsBuffering(false);
-            s.handleTrackEnded();
-          };
-          el.onerror = () => {
-            if (!usingFallbackAudioRef.current) return;
-            onFail();
-          };
-          fallbackAudioRef.current = el;
-        }
-
-        const audio = fallbackAudioRef.current;
-        const ytSound = useSettingsStore.getState().youtubeSound;
-        const cappedVol = clampYoutubeVolume(latest.volume, ytSound.maxVolumeLimit, latest.isMuted);
-        usingFallbackAudioRef.current = true;
-        audio.src = previewUrl;
-        audio.volume = cappedVol / 100;
-        audio.muted = latest.isMuted;
-        audio.playbackRate = latest.playbackRate || 1;
-        latest.setPlayerError(null);
-        latest.setWebAudioWarning('Efek suara tidak tersedia untuk lagu ini');
-        latest.setActiveStreamMeta({
-          trackId: trackKey,
-          requestedTier: useSettingsStore.getState().localProfile.wifiQuality,
-          actualTier: 'normal',
-          codec: 'MP3',
-          bitrateKbps: 128,
-          sampleRateHz: 44100,
-          bitDepth: null,
-          lossless: false,
-          hiRes: false,
-          badgeLabel: 'MP3 · 128 kbps (Pratinjau)',
-          sourceMode: 'fallback-no-fx',
-          proxiedViaBackend: false,
-          audiodownloadAllowed: false,
-          replayGainDb: null,
-        });
-        if (latest.isPlaying) {
-          void audio.play().catch((err: unknown) => {
-            const name = err instanceof Error ? err.name : '';
-            if (name === 'NotAllowedError') {
-              const s = usePlayerStore.getState();
-              s.setIsBuffering(false);
-              s.setIsPlaying(false);
-              return;
-            }
-            onFail();
-          });
-        }
+    void fetchStreamOptions(trackKey, false, itemType || latestStore.currentTrack?.type)
+      .then((opts) => {
+        const currentStore = usePlayerStore.getState();
+        if (getPlayableVideoId(currentStore.currentTrack) !== trackKey) return;
+        currentStore.setStreamOptions(opts);
+        applyStreamOptionOrFail(opts);
       })
       .catch(() => {
         onFail();
@@ -294,10 +238,11 @@ export function YouTubePlayerBridge() {
   }, []);
 
   // Fetch stream options metadata for active catalog track
+  const currentTrackType = currentTrack?.type;
   useEffect(() => {
     if (!rawVideoId) return;
     let cancelled = false;
-    void fetchStreamOptions(rawVideoId)
+    void fetchStreamOptions(rawVideoId, false, currentTrackType)
       .then((opts) => {
         if (cancelled) return;
         const latest = usePlayerStore.getState();
@@ -315,7 +260,7 @@ export function YouTubePlayerBridge() {
     return () => {
       cancelled = true;
     };
-  }, [rawVideoId]);
+  }, [rawVideoId, currentTrackType]);
 
   // Initialize single persistent YouTube IFrame player once
   useEffect(() => {
@@ -418,7 +363,7 @@ export function YouTubePlayerBridge() {
                       latest.setIsBuffering(false);
                       latest.setIsPlaying(false);
                       latest.setPlayerError('Gagal menemukan sumber pemutaran audio untuk lagu ini.');
-                    });
+                    }, track.type);
                   });
               }
             }
@@ -496,7 +441,7 @@ export function YouTubePlayerBridge() {
               latest.setPlayerError(msg);
             };
 
-            tryFallbackPreview(trackKey, showYtError);
+            tryFallbackPreview(trackKey, showYtError, store.currentTrack?.type);
           },
         },
       });
@@ -680,7 +625,7 @@ export function YouTubePlayerBridge() {
           latest.setIsBuffering(false);
           latest.setIsPlaying(false);
           latest.setPlayerError('Gagal menemukan sumber pemutaran audio untuk lagu ini.');
-        });
+        }, currentTrack.type);
       });
   }, [hydrated, currentVideoId, currentTrack]);
 

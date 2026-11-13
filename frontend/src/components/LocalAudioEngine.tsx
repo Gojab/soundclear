@@ -370,13 +370,15 @@ export function LocalAudioEngine() {
         if (targetSeek > 0 && Number.isFinite(audio.duration) && targetSeek < audio.duration) {
           audio.currentTime = targetSeek;
         }
-        usePlayerStore.getState().clearPendingSeek();
-        usePlayerStore.getState().setIsBuffering(false);
-        usePlayerStore.getState().setWebAudioWarning(null);
+        const st = usePlayerStore.getState();
+        st.clearPendingSeek();
+        st.setIsBuffering(false);
+        st.setPlayerError(null);
+        st.setWebAudioWarning(null);
         if (metaToReport) {
-          usePlayerStore.getState().setActiveStreamMeta(metaToReport);
+          st.setActiveStreamMeta(metaToReport);
         }
-        if (usePlayerStore.getState().isPlaying) {
+        if (st.isPlaying) {
           void resumeAudioContext();
           void audio.play().catch(() => {});
         }

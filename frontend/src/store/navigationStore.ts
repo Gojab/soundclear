@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { MediaItem, RouteView } from '../types/music';
+import { normalizeRouteId } from '../utils/playerLogic';
 
 interface NavigationState {
   history: RouteView[];
@@ -19,28 +20,48 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
   currentRoute: { name: 'home' },
 
   navigate: (route) => {
+    let normalizedRoute = route;
+    if (
+      route.name === 'artist' ||
+      route.name === 'album' ||
+      route.name === 'playlist' ||
+      route.name === 'podcast' ||
+      route.name === 'episode' ||
+      route.name === 'local-playlist'
+    ) {
+      const cleanId =
+        route.name === 'local-playlist' ? route.id.trim() || null : normalizeRouteId(route.id);
+      if (!cleanId) return;
+      normalizedRoute = { ...route, id: cleanId };
+    } else if (route.name === 'mood-detail') {
+      const cleanParams = route.params.trim();
+      if (!cleanParams) return;
+      normalizedRoute = { ...route, params: cleanParams };
+    }
+
     const { history, historyIndex } = get();
     const sliced = history.slice(0, historyIndex + 1);
-    const nextHistory = [...sliced, route];
+    const nextHistory = [...sliced, normalizedRoute];
     set({
       history: nextHistory,
       historyIndex: nextHistory.length - 1,
-      currentRoute: route,
+      currentRoute: normalizedRoute,
     });
   },
 
   navigateToItem: (item) => {
     const { navigate } = get();
+    const fallbackQuery = item.title?.trim() || undefined;
     if (item.type === 'artist') {
-      navigate({ name: 'artist', id: item.browseId || item.id });
+      navigate({ name: 'artist', id: item.browseId || item.id, fallbackQuery });
     } else if (item.type === 'album') {
-      navigate({ name: 'album', id: item.browseId || item.id });
+      navigate({ name: 'album', id: item.browseId || item.id, fallbackQuery });
     } else if (item.type === 'playlist') {
-      navigate({ name: 'playlist', id: item.playlistId || item.id });
+      navigate({ name: 'playlist', id: item.playlistId || item.id, fallbackQuery });
     } else if (item.type === 'podcast') {
-      navigate({ name: 'podcast', id: item.browseId || item.id });
+      navigate({ name: 'podcast', id: item.browseId || item.id, fallbackQuery });
     } else if (item.type === 'episode') {
-      navigate({ name: 'episode', id: item.videoId || item.id });
+      navigate({ name: 'episode', id: item.videoId || item.id, fallbackQuery });
     }
   },
 

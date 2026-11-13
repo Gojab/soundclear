@@ -29,6 +29,23 @@ export function isYouTubeVideoId(id: string | null | undefined): boolean {
   return Boolean(id && YOUTUBE_VIDEO_ID_RE.test(id));
 }
 
+export function normalizeRouteId(id: string | null | undefined): string | null {
+  if (typeof id !== 'string') return null;
+  let raw = id.trim();
+  if (!raw || raw === 'undefined' || raw === 'null') return null;
+  if (raw.startsWith('spotify:')) {
+    raw = raw.split(':').pop()?.trim() ?? '';
+  } else if (raw.includes('open.spotify.com/')) {
+    const cleanPath = raw.split('?')[0].replace(/\/+$/, '');
+    raw = cleanPath.split('/').pop()?.trim() ?? '';
+  } else {
+    if (raw.includes('?')) raw = raw.split('?')[0];
+    if (raw.includes('/')) raw = raw.replace(/\/+$/, '').split('/').pop()?.trim() ?? '';
+  }
+  if (!raw || raw === 'undefined' || raw === 'null') return null;
+  return raw;
+}
+
 export function getPlayableVideoId(item: MediaItem | null | undefined): string | null {
   if (!item || isLocalTrack(item)) return null;
   if (item.videoId) return item.videoId;

@@ -12,6 +12,7 @@ import {
   isPlayableTrack,
   isYouTubeVideoId,
   mergeWatchTracksIntoQueue,
+  normalizeRouteId,
 } from './playerLogic';
 import type { LyricLine, MediaItem } from '../types/music';
 
@@ -95,4 +96,16 @@ test('isYouTubeVideoId distinguishes 11-char YouTube IDs from Spotify track IDs'
   assert.equal(isYouTubeVideoId('4xoY4lZNoTjEuHsSmhgF1G'), false);
   assert.equal(isYouTubeVideoId(''), false);
   assert.equal(isYouTubeVideoId(null), false);
+});
+
+test('normalizeRouteId sanitizes Spotify URIs, URLs, and rejects empty or nullish IDs', () => {
+  assert.equal(normalizeRouteId('4xoY4lZNoTjEuHsSmhgF1G'), '4xoY4lZNoTjEuHsSmhgF1G');
+  assert.equal(normalizeRouteId('spotify:artist:4tZwfgrHOc3mvqYlEYSvVi'), '4tZwfgrHOc3mvqYlEYSvVi');
+  assert.equal(
+    normalizeRouteId('https://open.spotify.com/album/1ATL5GLyefJaxhQzSPVrLX?si=abc'),
+    '1ATL5GLyefJaxhQzSPVrLX',
+  );
+  assert.equal(normalizeRouteId('  '), null);
+  assert.equal(normalizeRouteId('undefined'), null);
+  assert.equal(normalizeRouteId(null), null);
 });
