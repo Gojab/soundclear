@@ -180,7 +180,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('soundclear:notch-command', (_event, command) => {
-    if (command !== 'skip' && command !== 'stop') return;
+    if (command !== 'prev' && command !== 'toggle' && command !== 'skip' && command !== 'stop') return;
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('soundclear:notch-command', command);
     }

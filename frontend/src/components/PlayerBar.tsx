@@ -22,6 +22,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
@@ -66,7 +67,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const rightPanelTab = usePlayerStore((s) => s.rightPanelTab);
-  const { notchVisible, desktopNotchVisible } = useNotchVisibility();
+  const { desktopNotchVisible } = useNotchVisibility();
   const pipWindow = useExternalPiPWindow();
   const externalNotchOpen = Boolean(pipWindow && !pipWindow.closed);
   const windowsSupport = resolveWindowsExternalNotchSupport({
@@ -74,6 +75,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
     hasDesktopHost: isDesktopNotchHost(),
     hasDocumentPiP: supportsDocumentPictureInPicture(),
   });
+  const showToast = useContextMenuStore((s) => s.showToast);
   const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
   const webAudioWarning = usePlayerStore((s) => s.webAudioWarning);
 
@@ -454,34 +456,58 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
               if (externalNotchOpen) {
                 closeWindowsExternalNotch();
               } else {
-                void openWindowsExternalNotch();
+                void openWindowsExternalNotch().then((res) => {
+                  if (!res.ok) {
+                    showToast(
+                      res.reason === 'windows-only'
+                        ? 'Pemutar mini eksternal hanya tersedia khusus untuk Windows.'
+                        : 'Gagal membuka jendela pemutar mini Windows. Pastikan izin pop-out browser aktif atau buka di tab langsung.',
+                    );
+                  }
+                });
               }
               return;
             }
-            setFloatingMiniOpen(!desktopNotchVisible);
+            if (windowsSupport.mode === 'desktop-ipc') {
+              setFloatingMiniOpen(!desktopNotchVisible);
+              return;
+            }
+            showToast(
+              windowsSupport.reason === 'windows-only'
+                ? 'Pemutar mini eksternal (keluar dari web) hanya tersedia khusus untuk Windows.'
+                : 'Browser Windows ini belum mendukung Picture-in-Picture Dokumen. Gunakan Chrome/Edge terbaru atau SoundClear Desktop Windows.',
+            );
           }}
           disabled={!currentTrack}
           aria-label={
             windowsSupport.mode === 'document-pip'
               ? externalNotchOpen
-                ? 'Kembalikan pemutar mini dari jendela Windows'
+                ? 'Tutup pemutar mini eksternal Windows'
                 : 'Keluarkan pemutar mini ke luar web (Khusus Windows)'
-              : notchVisible
-                ? 'Sembunyikan pemutar mini notch'
-                : 'Tampilkan pemutar mini notch'
+              : windowsSupport.mode === 'desktop-ipc'
+                ? desktopNotchVisible
+                  ? 'Sembunyikan pemutar mini Windows Desktop'
+                  : 'Tampilkan pemutar mini Windows Desktop'
+                : 'Pemutar mini eksternal (Khusus Windows)'
           }
-          aria-pressed={windowsSupport.mode === 'document-pip' ? externalNotchOpen : notchVisible}
-          title={
+          aria-pressed={
             windowsSupport.mode === 'document-pip'
-              ? 'Keluarkan Pemutar Mini (Khusus Windows)'
-              : windowsSupport.reason === 'windows-only'
-                ? 'Pemutar Mini Notch (Keluar jendela khusus Windows)'
-                : 'Pemutar Mini Notch'
+              ? externalNotchOpen
+              : windowsSupport.mode === 'desktop-ipc'
+                ? desktopNotchVisible
+                : false
+          }
+          title={
+            windowsSupport.allowed
+              ? 'Keluarkan Pemutar Mini ke Luar Web (Khusus Windows)'
+              : 'Pemutar Mini Eksternal (Khusus Windows)'
           }
           className={`hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors disabled:opacity-35 ${
-            externalNotchOpen || notchVisible
+            externalNotchOpen || desktopNotchVisible
               ? 'text-[#2EE6A6]'
-              : 'text-white/65 hover:text-white'
+              : windowsSupport.allowed
+                ? 'text-white/65 hover:text-white'
+                : 'text-white/35 hover:text-white/65'
           }`}
         >
           <PictureInPicture2 className="w-4 h-4" strokeWidth={1.85} />

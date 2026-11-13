@@ -45,29 +45,25 @@ export function useNotchVisibility(): {
     };
   }, []);
 
-  const windowsDesktopHost = isDesktopNotchHost() && isWindowsPlatform();
-  const externalNotchActive = externalNotchOpen || windowsDesktopHost;
+  const isWin = isWindowsPlatform();
+  const windowsDesktopHost = isWin && isDesktopNotchHost();
+  const externalNotchActive = (externalNotchOpen && isWin) || windowsDesktopHost;
 
-  const desktopNotchVisible = shouldShowNotchMiniPlayer({
-    hasTrack: Boolean(currentTrack),
-    isPlaying,
-    hasActivePlayback: hasActiveSessionPlayback,
-    manuallyHidden: notchManuallyHidden,
-    displayMode: notchDisplayMode,
-    isAppInBackground,
-    forceOpen: floatingMiniOpen,
-  });
+  const desktopNotchVisible = windowsDesktopHost
+    ? shouldShowNotchMiniPlayer({
+        hasTrack: Boolean(currentTrack),
+        isPlaying,
+        hasActivePlayback: hasActiveSessionPlayback,
+        manuallyHidden: notchManuallyHidden,
+        displayMode: notchDisplayMode,
+        isAppInBackground,
+        forceOpen: floatingMiniOpen,
+        isWindows: true,
+      })
+    : false;
 
-  const notchVisible = shouldShowNotchMiniPlayer({
-    hasTrack: Boolean(currentTrack),
-    isPlaying,
-    hasActivePlayback: hasActiveSessionPlayback,
-    manuallyHidden: notchManuallyHidden,
-    displayMode: notchDisplayMode,
-    isAppInBackground,
-    forceOpen: floatingMiniOpen,
-    externalWindowActive: externalNotchActive,
-  });
+  // Mini player is never rendered inside the web DOM; it only pops out externally on Windows.
+  const notchVisible = false;
 
   return { notchVisible, desktopNotchVisible, externalNotchActive, isAppInBackground };
 }

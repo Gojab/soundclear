@@ -277,3 +277,19 @@ test('resolveWindowsExternalNotchSupport enforces Windows-only external pop-out 
   );
   assert.equal(supportsDocumentPictureInPicture({}), false);
 });
+
+test('shouldShowNotchMiniPlayer stays hidden on non-Windows platforms even when playing or forced', () => {
+  assert.equal(
+    shouldShowNotchMiniPlayer({
+      hasTrack: true,
+      isPlaying: true,
+      hasActivePlayback: true,
+      manuallyHidden: false,
+      displayMode: 'always',
+      isAppInBackground: true,
+      forceOpen: true,
+      isWindows: false,
+    }),
+    false,
+  );
+});

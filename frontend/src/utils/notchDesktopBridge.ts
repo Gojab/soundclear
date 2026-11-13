@@ -4,7 +4,7 @@ import {
   type NotchMonitorOption,
 } from './notchPlayer';
 
-export type NotchDesktopCommand = 'skip' | 'stop';
+export type NotchDesktopCommand = 'prev' | 'toggle' | 'skip' | 'stop';
 
 export interface NotchDesktopPayload {
   visible: boolean;
@@ -13,6 +13,8 @@ export interface NotchDesktopPayload {
   height: number;
   title: string;
   artist: string;
+  isPlaying?: boolean;
+  thumbnail?: string | null;
   prevLine: string | null;
   activeLine: string;
   nextLine: string | null;
@@ -106,14 +108,17 @@ export function subscribeDesktopNotchCommands(
 
   try {
     const directBridge = w.soundclearDesktop || w.electronAPI?.notch;
+    const isCommand = (val: unknown): val is NotchDesktopCommand =>
+      val === 'prev' || val === 'toggle' || val === 'skip' || val === 'stop';
+
     if (directBridge?.onNotchCommand) {
       const unsub = directBridge.onNotchCommand((cmd) => {
-        if (cmd === 'skip' || cmd === 'stop') onCommand(cmd);
+        if (isCommand(cmd)) onCommand(cmd);
       });
       if (typeof unsub === 'function') cleanups.push(unsub);
     } else if (w.electronAPI?.on) {
       const unsub = w.electronAPI.on('soundclear:notch-command', (cmd) => {
-        if (cmd === 'skip' || cmd === 'stop') onCommand(cmd);
+        if (isCommand(cmd)) onCommand(cmd);
       });
       if (typeof unsub === 'function') cleanups.push(unsub);
     }
@@ -124,7 +129,7 @@ export function subscribeDesktopNotchCommands(
       void w.__TAURI__.event
         .listen('soundclear:notch-command', (event) => {
           const cmd = event?.payload;
-          if (cmd === 'skip' || cmd === 'stop') onCommand(cmd);
+          if (isCommand(cmd)) onCommand(cmd);
         })
         .then((fn) => {
           if (cancelled) fn();

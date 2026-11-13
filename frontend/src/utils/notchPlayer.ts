@@ -225,9 +225,11 @@ export interface NotchVisibilityInput {
   isAppInBackground: boolean;
   forceOpen?: boolean;
   externalWindowActive?: boolean;
+  isWindows?: boolean;
 }
 
 export function shouldShowNotchMiniPlayer(input: NotchVisibilityInput): boolean {
+  if (input.isWindows === false) return false;
   if (input.externalWindowActive) return false;
   if (!input.hasTrack) return false;
   if (input.manuallyHidden) return false;

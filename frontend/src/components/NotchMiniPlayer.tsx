@@ -1,26 +1,40 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { SkipForward, Square } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Pause,
+  Play,
+  SkipBack,
+  SkipForward,
+  Square,
+  X,
+} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { fetchLyrics } from '../api/client';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import {
+  isDesktopNotchHost,
   publishDesktopNotchState,
   subscribeDesktopNotchCommands,
 } from '../utils/notchDesktopBridge';
 import {
   closeWindowsExternalNotch,
   resizeWindowsExternalNotch,
+  updateWindowsExternalNotchTitle,
   useExternalPiPWindow,
 } from '../utils/notchExternalPiP';
-import { resolveNotchDisplayLines } from '../utils/notchPlayer';
-import { formatArtists, getPlayableVideoId } from '../utils/playerLogic';
+import { isWindowsPlatform, resolveNotchDisplayLines } from '../utils/notchPlayer';
+import { formatArtists, formatTime, getPlayableVideoId } from '../utils/playerLogic';
 import { useNotchVisibility } from '../utils/useNotchVisibility';
+import { ArtworkImage } from './ArtworkImage';
 
-const COMPACT_WIDTH = 320;
-const EXPANDED_WIDTH = 380;
+const COMPACT_WIDTH = 360;
+const COMPACT_HEIGHT = 116;
+const EXPANDED_WIDTH = 396;
+const EXPANDED_HEIGHT = 160;
 
 export function NotchMiniPlayer() {
   const shouldReduceMotion = useReducedMotion();
@@ -32,19 +46,23 @@ export function NotchMiniPlayer() {
   const titleMeasureRef = useRef<HTMLSpanElement | null>(null);
 
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const lyricsBrowseId = usePlayerStore((s) => s.lyricsBrowseId);
   const currentTime = usePlayerStore((s) => s.currentTime);
+  const duration = usePlayerStore((s) => s.duration);
   const notchManuallyHidden = usePlayerStore((s) => s.notchManuallyHidden);
+  const togglePlayPause = usePlayerStore((s) => s.togglePlayPause);
+  const prevTrack = usePlayerStore((s) => s.prevTrack);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
   const stopPlayback = usePlayerStore((s) => s.stopPlayback);
 
   const notchDisplayMode = useSettingsStore((s) => s.notchDisplayMode);
   const notchMonitor = useSettingsStore((s) => s.notchMonitor);
 
-  const { notchVisible, desktopNotchVisible } = useNotchVisibility();
+  const { desktopNotchVisible } = useNotchVisibility();
   const pipWindow = useExternalPiPWindow();
-  const externalPipOpen = Boolean(pipWindow && !pipWindow.closed && currentTrack);
-  const anyNotchActive = notchVisible || externalPipOpen;
+  const isWindows = isWindowsPlatform();
+  const externalPipOpen = Boolean(isWindows && pipWindow && !pipWindow.closed && currentTrack);
 
   const videoId = getPlayableVideoId(currentTrack);
   const artistName = currentTrack ? formatArtists(currentTrack.artists) : '';
@@ -63,38 +81,50 @@ export function NotchMiniPlayer() {
         },
         signal,
       ),
-    enabled: Boolean(currentTrack && (currentTrack.title || lyricsBrowseId)),
+    enabled: Boolean(
+      currentTrack &&
+        (externalPipOpen || desktopNotchVisible) &&
+        (currentTrack.title || lyricsBrowseId),
+    ),
   });
 
   const displayLines = resolveNotchDisplayLines(currentTrack, lyricsData, currentTime);
   const trackTitle = currentTrack?.title || '';
 
-  // Close external Windows PiP automatically if track clears or playback was stopped
+  // Close external Windows PiP automatically if track clears, stopped, or non-Windows
   useEffect(() => {
-    if (pipWindow && (!currentTrack || notchManuallyHidden)) {
+    if (pipWindow && (!isWindows || !currentTrack || notchManuallyHidden)) {
       closeWindowsExternalNotch();
     }
-  }, [pipWindow, currentTrack, notchManuallyHidden]);
+  }, [pipWindow, isWindows, currentTrack, notchManuallyHidden]);
+
+  // Sync external Windows PiP window document title
+  useEffect(() => {
+    if (!externalPipOpen || !currentTrack) return;
+    updateWindowsExternalNotchTitle(
+      artistName ? `${trackTitle} — ${artistName} | SoundClear` : `${trackTitle} | SoundClear`,
+    );
+  }, [externalPipOpen, currentTrack, trackTitle, artistName]);
 
   // Resize external Windows Document PiP window when compact/expanded changes
   useEffect(() => {
     if (!externalPipOpen) return;
     resizeWindowsExternalNotch(
       expanded ? EXPANDED_WIDTH : COMPACT_WIDTH,
-      expanded ? 92 : 56,
+      expanded ? EXPANDED_HEIGHT : COMPACT_HEIGHT,
     );
   }, [externalPipOpen, expanded]);
 
-  // Reset expanded state when both in-web and external notches are hidden
+  // Reset expanded state when external window closes
   useEffect(() => {
-    if (!anyNotchActive) {
+    if (!externalPipOpen) {
       setExpanded(false);
     }
-  }, [anyNotchActive]);
+  }, [externalPipOpen]);
 
   // Measure title overflow for smooth marquee only when longer than container
   useLayoutEffect(() => {
-    if (!anyNotchActive) {
+    if (!externalPipOpen) {
       setMarqueeShiftPx(0);
       return;
     }
@@ -117,13 +147,11 @@ export function NotchMiniPlayer() {
       ro.observe(titleViewportRef.current);
     }
     return () => ro?.disconnect();
-  }, [anyNotchActive, trackTitle, expanded, externalPipOpen]);
+  }, [externalPipOpen, trackTitle, expanded]);
 
-  // Collapse on Escape or outside pointer tap when expanded
+  // Collapse on Escape inside external PiP window
   useEffect(() => {
-    if (!expanded) return;
-
-    const targetWin = externalPipOpen && pipWindow ? pipWindow : window;
+    if (!expanded || !externalPipOpen || !pipWindow) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -132,46 +160,40 @@ export function NotchMiniPlayer() {
       }
     };
 
-    const handlePointerDown = (e: PointerEvent) => {
-      if (notchRef.current && !notchRef.current.contains(e.target as Node)) {
-        setExpanded(false);
-      }
-    };
-
-    targetWin.addEventListener('keydown', handleKeyDown);
-    if (!externalPipOpen) {
-      window.addEventListener('pointerdown', handlePointerDown);
-    }
+    pipWindow.addEventListener('keydown', handleKeyDown);
     return () => {
-      targetWin.removeEventListener('keydown', handleKeyDown);
-      if (!externalPipOpen) {
-        window.removeEventListener('pointerdown', handlePointerDown);
-      }
+      pipWindow.removeEventListener('keydown', handleKeyDown);
     };
   }, [expanded, externalPipOpen, pipWindow]);
 
-  // Desktop Electron / Tauri IPC bridge subscription for skip/stop
+  // Desktop Electron / Tauri IPC bridge subscription (Windows only)
   useEffect(() => {
+    if (!isWindows) return;
     return subscribeDesktopNotchCommands((cmd) => {
-      if (cmd === 'skip') {
+      if (cmd === 'prev') {
+        usePlayerStore.getState().prevTrack();
+      } else if (cmd === 'toggle') {
+        usePlayerStore.getState().togglePlayPause();
+      } else if (cmd === 'skip') {
         usePlayerStore.getState().nextTrack();
       } else if (cmd === 'stop') {
         usePlayerStore.getState().stopPlayback();
       }
     });
-  }, []);
+  }, [isWindows]);
 
-  // Broadcast live notch payload to optional Windows Electron/Tauri secondary notch window
+  // Broadcast live notch payload exclusively to Windows Desktop secondary window
   useEffect(() => {
-    const targetWidth = expanded ? EXPANDED_WIDTH : COMPACT_WIDTH;
-    const targetHeight = expanded ? 86 : 48;
+    if (!isWindows || !isDesktopNotchHost()) return;
     publishDesktopNotchState({
       visible: desktopNotchVisible,
       expanded,
-      width: targetWidth,
-      height: targetHeight,
+      width: expanded ? 380 : 320,
+      height: expanded ? 86 : 48,
       title: trackTitle,
       artist: artistName,
+      isPlaying,
+      thumbnail: currentTrack?.thumbnail ?? null,
       prevLine: displayLines.prev,
       activeLine: displayLines.active,
       nextLine: displayLines.next,
@@ -181,10 +203,13 @@ export function NotchMiniPlayer() {
       clickThroughTransparent: true,
     });
   }, [
+    isWindows,
     desktopNotchVisible,
     expanded,
     trackTitle,
     artistName,
+    isPlaying,
+    currentTrack?.thumbnail,
     displayLines.prev,
     displayLines.active,
     displayLines.next,
@@ -193,219 +218,224 @@ export function NotchMiniPlayer() {
     notchMonitor,
   ]);
 
-  const springTransition = shouldReduceMotion
-    ? { duration: 0.01 }
-    : { type: 'spring' as const, stiffness: 450, damping: 34, mass: 0.78 };
+  if (!externalPipOpen || !pipWindow || !currentTrack) {
+    return null;
+  }
 
   const lyricFadeTransition = shouldReduceMotion
     ? { duration: 0.01 }
     : { duration: 0.16, ease: 'easeOut' as const };
 
-  const targetWidth = expanded ? EXPANDED_WIDTH : COMPACT_WIDTH;
   const marqueeActive = marqueeShiftPx > 0 && !shouldReduceMotion;
   const marqueeDurationSec = Math.max(6, Math.min(18, Math.round(marqueeShiftPx / 16) + 4));
+  const safeDuration = duration > 0 ? duration : currentTrack.durationSeconds || 0;
+  const progressPct =
+    safeDuration > 0 ? Math.min(100, Math.max(0, (currentTime / safeDuration) * 100)) : 0;
 
-  const renderNotchBody = (isExternal: boolean) => (
+  return createPortal(
     <div
-      className={`flex items-center gap-2.5 px-3.5 ${
-        expanded ? 'py-2.5 min-h-[78px]' : isExternal ? 'min-h-[48px] h-full' : 'h-[48px]'
-      }`}
+      ref={notchRef}
+      role="region"
+      aria-label="Pemutar mini eksternal Windows"
+      data-notch-expanded={expanded ? 'true' : 'false'}
+      className="relative w-full h-full bg-[#090B0E] text-white select-none flex flex-col justify-between overflow-hidden"
     >
-      {/* Left: Track Title (11px gray, marquee if overflowing) + Synced Lyric / Artist (13px white) */}
-      <button
-        type="button"
-        onClick={() => setExpanded((prev) => !prev)}
-        aria-expanded={expanded}
-        aria-label={
-          expanded
-            ? 'Perkecil pemutar mini notch'
-            : 'Perluas pemutar mini notch untuk melihat lirik'
-        }
-        className="flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-white/70 rounded-md"
-      >
-        {/* Track Title Line */}
-        <div ref={titleViewportRef} className="w-full overflow-hidden">
-          <span
-            ref={titleMeasureRef}
-            style={
-              marqueeActive
-                ? ({
-                    '--sc-marquee-shift': `-${marqueeShiftPx}px`,
-                    animationDuration: `${marqueeDurationSec}s`,
-                  } as CSSProperties)
-                : undefined
-            }
-            className={`block whitespace-nowrap text-[11px] leading-[14px] text-[#9CA3AF] font-normal ${
-              marqueeActive ? 'sc-notch-marquee inline-block' : 'truncate'
-            }`}
-          >
-            {trackTitle}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(46,230,166,0.12),transparent_55%)]"
+      />
+
+      {/* Top strip: Windows Mini badge + lyric expand + close back to web */}
+      <div className="relative z-10 flex items-center justify-between gap-2 px-3.5 py-2 border-b border-white/[0.07] bg-white/[0.02]">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-[#2EE6A6] shrink-0" aria-hidden="true" />
+          <span className="text-[10px] font-semibold tracking-wide uppercase text-white/70 truncate">
+            SoundClear Mini • Windows
           </span>
         </div>
 
-        {/* Lyric / Artist Line(s) */}
-        {expanded &&
-        (displayLines.mode === 'synced' || displayLines.mode === 'synced-intro') ? (
-          <div className="mt-1 space-y-0.5">
-            {displayLines.prev && (
-              <p className="text-[11px] leading-[15px] text-white/45 truncate">
-                {displayLines.prev}
-              </p>
-            )}
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.p
-                key={displayLines.lineKey}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={lyricFadeTransition}
-                className="text-[13px] leading-[17px] text-[#FFFFFF] font-medium truncate"
-              >
-                {displayLines.active}
-              </motion.p>
-            </AnimatePresence>
-            {displayLines.next && (
-              <p className="text-[11px] leading-[15px] text-white/45 truncate">
-                {displayLines.next}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="mt-0.5 overflow-hidden">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.p
-                key={displayLines.lineKey}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={lyricFadeTransition}
-                className="text-[13px] leading-[17px] text-[#FFFFFF] font-medium truncate"
-              >
-                {displayLines.active}
-              </motion.p>
-            </AnimatePresence>
-          </div>
-        )}
-      </button>
-
-      {/* Right: ONLY two Lucide controls — Skip and Stop (stroke 1.75, 28px tap area) */}
-      <div className="shrink-0 flex items-center gap-0.5">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            nextTrack();
-          }}
-          aria-label="Lompat ke lagu berikutnya"
-          title="Lagu berikutnya"
-          className="w-7 h-7 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white/80 transition-colors"
-        >
-          <SkipForward className="w-3.5 h-3.5" strokeWidth={1.75} />
-        </button>
-
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            stopPlayback();
-            if (isExternal) {
-              closeWindowsExternalNotch();
-            }
-          }}
-          aria-label="Hentikan pemutaran dan sembunyikan notch"
-          title="Hentikan"
-          className="w-7 h-7 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white/80 transition-colors"
-        >
-          <Square className="w-3.5 h-3.5" strokeWidth={1.75} />
-        </button>
-      </div>
-    </div>
-  );
-
-  if (externalPipOpen && pipWindow && currentTrack) {
-    return createPortal(
-      <div
-        ref={notchRef}
-        role="region"
-        aria-label="Pemutar mini notch eksternal Windows"
-        data-notch-expanded={expanded ? 'true' : 'false'}
-        onPointerEnter={(e) => {
-          if (e.pointerType !== 'touch') {
-            setExpanded(true);
-          }
-        }}
-        onPointerLeave={(e) => {
-          if (e.pointerType !== 'touch') {
-            setExpanded(false);
-          }
-        }}
-        className="w-full h-full min-h-[48px] bg-[#000000] select-none flex flex-col justify-center"
-      >
-        {renderNotchBody(true)}
-      </div>,
-      pipWindow.document.body,
-    );
-  }
-
-  return (
-    <div
-      className="fixed inset-x-0 z-[100] flex justify-center pointer-events-none"
-      style={{ top: 'env(safe-area-inset-top, 0px)' }}
-    >
-      <AnimatePresence initial={false}>
-        {notchVisible && currentTrack && (
-          <motion.div
-            key="soundclear-notch-mini-player"
-            ref={notchRef}
-            role="region"
-            aria-label="Pemutar mini notch"
-            data-notch-expanded={expanded ? 'true' : 'false'}
-            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -16, width: COMPACT_WIDTH }}
-            animate={{
-              opacity: 1,
-              y: 0,
-              width: targetWidth,
-            }}
-            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -16 }}
-            transition={springTransition}
-            onPointerEnter={(e) => {
-              if (e.pointerType !== 'touch') {
-                setExpanded(true);
-              }
-            }}
-            onPointerLeave={(e) => {
-              if (e.pointerType !== 'touch') {
-                setExpanded(false);
-              }
-            }}
-            className="pointer-events-auto relative bg-[#000000] rounded-b-[18px] max-w-[calc(100vw-32px)] select-none"
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[10px] font-mono-num text-white/50 mr-1">
+            {formatTime(currentTime)}
+            {safeDuration > 0 ? ` / ${formatTime(safeDuration)}` : ''}
+          </span>
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Perkecil tampilan lirik' : 'Perluas tampilan lirik'}
+            title={expanded ? 'Perkecil' : 'Lihat Lirik'}
+            className="w-6 h-6 rounded-full flex items-center justify-center text-white/65 hover:text-white hover:bg-white/10 transition-colors"
           >
-            {/* Inverted concave top-left corner fillet merging seamlessly into top screen edge */}
-            <svg
-              aria-hidden="true"
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              className="pointer-events-none absolute top-0 -left-[14px] w-[14px] h-[14px] block"
-            >
-              <path d="M14 0 L14 14 A14 14 0 0 0 0 0 Z" fill="#000000" />
-            </svg>
+            {expanded ? (
+              <ChevronUp className="w-3.5 h-3.5" strokeWidth={2} />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" strokeWidth={2} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => closeWindowsExternalNotch()}
+            aria-label="Tutup jendela mini dan kembali ke web"
+            title="Tutup jendela mini"
+            className="w-6 h-6 rounded-full flex items-center justify-center text-white/65 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" strokeWidth={2} />
+          </button>
+        </div>
+      </div>
 
-            {/* Inverted concave top-right corner fillet merging seamlessly into top screen edge */}
-            <svg
-              aria-hidden="true"
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              className="pointer-events-none absolute top-0 -right-[14px] w-[14px] h-[14px] block"
-            >
-              <path d="M0 0 L0 14 A14 14 0 0 1 14 0 Z" fill="#000000" />
-            </svg>
+      {/* Main row: Artwork + Title & Synced Lyrics + Transport Controls */}
+      <div className="relative z-10 flex-1 flex items-center gap-3 px-3.5 py-2.5 min-h-0">
+        <ArtworkImage
+          src={currentTrack.thumbnail}
+          alt={trackTitle}
+          type={currentTrack.type}
+          className="w-12 h-12 shrink-0 shadow-md"
+          roundedClass="rounded-lg"
+        />
 
-            {renderNotchBody(false)}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          aria-expanded={expanded}
+          aria-label={expanded ? 'Perkecil lirik pemutar mini' : 'Perluas lirik pemutar mini'}
+          className="flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-[#2EE6A6] rounded-md"
+        >
+          <div ref={titleViewportRef} className="w-full overflow-hidden">
+            <span
+              ref={titleMeasureRef}
+              style={
+                marqueeActive
+                  ? ({
+                      '--sc-marquee-shift': `-${marqueeShiftPx}px`,
+                      animationDuration: `${marqueeDurationSec}s`,
+                    } as CSSProperties)
+                  : undefined
+              }
+              className={`block whitespace-nowrap text-xs leading-4 text-white font-semibold ${
+                marqueeActive ? 'sc-notch-marquee inline-block' : 'truncate'
+              }`}
+            >
+              {trackTitle}
+            </span>
+          </div>
+
+          {expanded &&
+          (displayLines.mode === 'synced' || displayLines.mode === 'synced-intro') ? (
+            <div className="mt-1 space-y-0.5">
+              {displayLines.prev && (
+                <p className="text-[11px] leading-[15px] text-white/45 truncate">
+                  {displayLines.prev}
+                </p>
+              )}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.p
+                  key={displayLines.lineKey}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={lyricFadeTransition}
+                  className="text-xs leading-4 text-[#2EE6A6] font-medium truncate"
+                >
+                  {displayLines.active}
+                </motion.p>
+              </AnimatePresence>
+              {displayLines.next && (
+                <p className="text-[11px] leading-[15px] text-white/45 truncate">
+                  {displayLines.next}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="mt-0.5 overflow-hidden">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.p
+                  key={displayLines.lineKey}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={lyricFadeTransition}
+                  className={`text-[11px] leading-4 truncate ${
+                    displayLines.mode === 'synced' ? 'text-[#2EE6A6] font-medium' : 'text-white/65'
+                  }`}
+                >
+                  {displayLines.active}
+                </motion.p>
+              </AnimatePresence>
+            </div>
+          )}
+        </button>
+
+        {/* Transport Controls */}
+        <div className="shrink-0 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              prevTrack();
+            }}
+            aria-label="Lagu sebelumnya"
+            title="Sebelumnya"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white/75 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <SkipBack className="w-3.5 h-3.5 fill-current" strokeWidth={1.75} />
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePlayPause();
+            }}
+            aria-label={isPlaying ? 'Jeda lagu' : 'Putar lagu'}
+            title={isPlaying ? 'Jeda' : 'Putar'}
+            className="w-8 h-8 rounded-full bg-[#2EE6A6] text-[#06130E] flex items-center justify-center hover:brightness-105 active:scale-95 transition-transform"
+          >
+            {isPlaying ? (
+              <Pause className="w-4 h-4 fill-current" strokeWidth={2} />
+            ) : (
+              <Play className="w-4 h-4 fill-current ml-0.5" strokeWidth={2} />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              nextTrack();
+            }}
+            aria-label="Lagu berikutnya"
+            title="Berikutnya"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white/75 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <SkipForward className="w-3.5 h-3.5 fill-current" strokeWidth={1.75} />
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              stopPlayback();
+              closeWindowsExternalNotch();
+            }}
+            aria-label="Hentikan pemutaran"
+            title="Hentikan"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <Square className="w-3 h-3" strokeWidth={2} />
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom progress bar */}
+      <div className="h-[3px] w-full bg-white/10 shrink-0">
+        <div
+          className="h-full bg-[#2EE6A6] transition-[width] duration-200"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+    </div>,
+    pipWindow.document.body,
   );
 }

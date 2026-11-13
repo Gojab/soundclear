@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     // Internal helper methods used exclusively by notch.html
     sendCommand: (cmd) => {
-      if (cmd === 'skip' || cmd === 'stop') {
+      if (cmd === 'prev' || cmd === 'toggle' || cmd === 'skip' || cmd === 'stop') {
         ipcRenderer.send('soundclear:notch-command', cmd);
       }
     },

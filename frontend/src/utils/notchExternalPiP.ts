@@ -99,8 +99,8 @@ export async function openWindowsExternalNotch(options?: {
     return { ok: true, window: activePipWindow };
   }
 
-  const width = options?.width ?? 320;
-  const height = options?.height ?? 60;
+  const width = options?.width ?? 360;
+  const height = options?.height ?? 116;
 
   try {
     const pipWindow = await win.documentPictureInPicture.requestWindow({
@@ -109,12 +109,14 @@ export async function openWindowsExternalNotch(options?: {
       disallowReturnToOpener: false,
     });
 
-    pipWindow.document.title = 'SoundClear Mini Player';
+    pipWindow.document.title = 'SoundClear Mini Player (Windows)';
     pipWindow.document.documentElement.className = 'dark';
-    pipWindow.document.documentElement.style.backgroundColor = '#000000';
+    pipWindow.document.documentElement.style.backgroundColor = '#07090C';
+    pipWindow.document.documentElement.style.height = '100%';
     pipWindow.document.body.style.margin = '0';
     pipWindow.document.body.style.padding = '0';
-    pipWindow.document.body.style.backgroundColor = '#000000';
+    pipWindow.document.body.style.height = '100%';
+    pipWindow.document.body.style.backgroundColor = '#07090C';
     pipWindow.document.body.style.color = '#ffffff';
     pipWindow.document.body.style.overflow = 'hidden';
     pipWindow.document.body.style.userSelect = 'none';
@@ -139,6 +141,15 @@ export async function openWindowsExternalNotch(options?: {
     return { ok: true, window: pipWindow };
   } catch {
     return { ok: false, reason: 'failed' };
+  }
+}
+
+export function updateWindowsExternalNotchTitle(title: string): void {
+  if (!activePipWindow || activePipWindow.closed) return;
+  try {
+    activePipWindow.document.title = title;
+  } catch {
+    // Ignore title assignment restrictions
   }
 }
 

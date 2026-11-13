@@ -50,7 +50,6 @@ import { usePlayerStore } from './store/playerStore';
 import { useSettingsStore } from './store/settingsStore';
 import { hasActiveCustomBackground } from './utils/backgroundTheme';
 import { isExcludedRegionalText } from './utils/playerLogic';
-import { useNotchVisibility } from './utils/useNotchVisibility';
 import type { LocalPlaylist, MediaItem, SearchFilter } from './types/music';
 
 export default function App() {
@@ -80,7 +79,6 @@ export default function App() {
   const customBackground = useSettingsStore((s) => s.customBackground);
   const bgActive = hasActiveCustomBackground(customBackground);
   const glassPanels = bgActive && customBackground.panelGlass;
-  const { notchVisible } = useNotchVisibility();
 
   useEffect(() => {
     const boot = async () => {
@@ -197,18 +195,14 @@ export default function App() {
     >
       <CustomBackgroundLayer />
 
-      {/* Windows Desktop Top Bar — reserves clearance when Notch Mini Player is visible */}
+      {/* Desktop Top Bar */}
       <header
-        className={`relative hidden md:flex items-center justify-between gap-4 px-3 shrink-0 z-20 transition-[background-color,padding,height] duration-300 ${
-          notchVisible ? 'pt-[54px] h-[114px]' : 'h-15'
-        } ${
+        className={`relative hidden md:flex items-center justify-between gap-4 px-3 h-15 shrink-0 z-20 transition-[background-color,padding,height] duration-300 ${
           glassPanels
             ? 'bg-black/40 backdrop-blur-md border-b border-white/[0.06]'
             : bgActive
               ? 'bg-black/75 backdrop-blur-sm'
-              : notchVisible
-                ? 'bg-[#111114]'
-                : 'bg-black'
+              : 'bg-black'
         }`}
       >
         {/* Left: Brand & History Navigation */}
@@ -491,22 +485,9 @@ export default function App() {
             }}
           />
 
-          {/* Mobile Notch safe-area clearance spacer */}
-          {notchVisible && (
-            <div
-              aria-hidden="true"
-              className="md:hidden shrink-0"
-              style={{ height: 'calc(env(safe-area-inset-top, 0px) + 52px)' }}
-            />
-          )}
-
           {/* Compact Mobile Header (hidden on Windows/desktop) */}
           <header
-            style={
-              notchVisible
-                ? { top: 'calc(env(safe-area-inset-top, 0px) + 52px)' }
-                : { top: 'env(safe-area-inset-top, 0px)' }
-            }
+            style={{ top: 'env(safe-area-inset-top, 0px)' }}
             className={`md:hidden sticky z-20 flex items-center justify-between gap-4 px-4 py-3 backdrop-blur-xl border-b border-white/[0.06] shrink-0 ${
               glassPanels ? 'bg-[#121212]/62' : 'bg-[#121212]/85'
             }`}
