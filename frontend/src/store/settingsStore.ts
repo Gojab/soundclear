@@ -29,6 +29,8 @@ import {
   clampEqGainDb,
   clampNumber,
   clampPlaybackRate,
+  computeNextCrossfadeState,
+  resolveEffectiveCrossfadeSeconds,
 } from '../utils/audioMath';
 import {
   DEFAULT_CUSTOM_BACKGROUND,
@@ -63,6 +65,8 @@ interface SettingsState extends UserSettings {
   ) => void;
   setEpisodePlaybackRate: (episodeId: string, rate: number | null) => void;
   updateLocalProfile: (patch: Partial<LocalAudioProfile>) => void;
+  toggleCrossfade: (enabled?: boolean) => void;
+  setCrossfadeDuration: (seconds: number) => void;
   applyEqPreset: (presetId: string) => void;
   setEqBandGain: (index: number, dbGain: number) => void;
   setEqPreamp: (dbGain: number) => void;
@@ -181,6 +185,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             gaplessPlayback: true,
             fadeOnPlayPause: true,
             skipSilence: true,
+            crossfadeEnabled: true,
             crossfadeSeconds:
               accountProfile.crossfadeSeconds > 0 ? accountProfile.crossfadeSeconds : 3,
             directMode: false,
@@ -335,15 +340,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     // Keep overlapping YouTube sound playback mirror flags synchronized
     if (
       typeof patch.crossfadeSeconds === 'number' ||
+      typeof patch.crossfadeEnabled === 'boolean' ||
+      typeof patch.directMode === 'boolean' ||
       typeof patch.fadeOnPlayPause === 'boolean'
     ) {
+      const effectiveCrossfade = resolveEffectiveCrossfadeSeconds(next);
       set((state) => ({
         youtubeSound: {
           ...state.youtubeSound,
-          trackFadeSeconds:
-            typeof patch.crossfadeSeconds === 'number'
-              ? patch.crossfadeSeconds
-              : state.youtubeSound.trackFadeSeconds,
+          trackFadeSeconds: effectiveCrossfade,
           fadeOnPauseResume:
             typeof patch.fadeOnPlayPause === 'boolean'
               ? patch.fadeOnPlayPause
@@ -354,6 +359,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
 
     scheduleBackendAudioSettingsSync(get());
+  },
+
+  toggleCrossfade: (enabled) => {
+    const nextCrossfade = computeNextCrossfadeState(get().localProfile, {
+      type: 'toggle',
+      enabled,
+    });
+    get().updateLocalProfile({
+      crossfadeEnabled: nextCrossfade.crossfadeEnabled,
+      crossfadeSeconds: nextCrossfade.crossfadeSeconds,
+    });
+  },
+
+  setCrossfadeDuration: (seconds) => {
+    const nextCrossfade = computeNextCrossfadeState(get().localProfile, {
+      type: 'set-duration',
+      seconds,
+    });
+    get().updateLocalProfile({
+      crossfadeEnabled: nextCrossfade.crossfadeEnabled,
+      crossfadeSeconds: nextCrossfade.crossfadeSeconds,
+    });
   },
 
   applyEqPreset: (presetId) => {
@@ -470,6 +497,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
     if (section === 'playback') {
       get().updateLocalProfile({
+        crossfadeEnabled: def.crossfadeEnabled,
         crossfadeSeconds: def.crossfadeSeconds,
         gaplessPlayback: def.gaplessPlayback,
         fadeOnPlayPause: def.fadeOnPlayPause,
@@ -532,6 +560,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       gaplessPlayback: true,
       fadeOnPlayPause: true,
       skipSilence: true,
+      crossfadeEnabled: true,
       crossfadeSeconds: current.crossfadeSeconds > 0 ? current.crossfadeSeconds : 3,
       directMode: false,
     });

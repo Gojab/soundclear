@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   ChevronRight,
@@ -65,6 +65,7 @@ export function SearchPage({
   const [filter, setFilter] = useState<SearchFilter>(initialFilter);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [resolvingTopPlay, setResolvingTopPlay] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
 
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -107,6 +108,24 @@ export function SearchPage({
     }, 200);
     return () => window.clearTimeout(timer);
   }, [inputValue]);
+
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowSuggestions(false);
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showSuggestions]);
 
   const suggestQuery = useQuery({
     queryKey: ['suggest', debouncedInput],
@@ -258,7 +277,7 @@ export function SearchPage({
       <div className="space-y-4">
         <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">Cari Musik & Podcast</h1>
 
-        <div className="relative max-w-2xl">
+        <div ref={searchBoxRef} className="relative max-w-2xl">
           <form onSubmit={handleSubmit} className="relative flex items-center">
             <Search
               className="w-4 h-4 text-white/45 absolute left-3.5 pointer-events-none"
@@ -282,8 +301,10 @@ export function SearchPage({
                 type="button"
                 onClick={() => {
                   setInputValue('');
+                  setDebouncedInput('');
                   setSubmittedQuery('');
                   setShowSuggestions(false);
+                  navigate({ name: 'search', query: '', filter });
                 }}
                 aria-label="Bersihkan pencarian"
                 className="absolute right-16 w-7 h-7 rounded-lg flex items-center justify-center text-white/50 hover:text-white"
@@ -338,7 +359,12 @@ export function SearchPage({
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setFilter(tab.id)}
+                onClick={() => {
+                  setFilter(tab.id);
+                  if (submittedQuery && tab.id !== filter) {
+                    navigate({ name: 'search', query: submittedQuery, filter: tab.id });
+                  }
+                }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
                   active
                     ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'

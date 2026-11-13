@@ -453,3 +453,49 @@ export function buildSearchFollowUps(
 
   return out.slice(0, 10);
 }
+
+export type HomeCategoryFilter = 'all' | 'music' | 'podcast' | 'local';
+
+export function filterHomeMediaItems<T extends Pick<MediaItem, 'type'>>(
+  items: T[],
+  category: HomeCategoryFilter,
+): T[] {
+  if (category === 'music') {
+    return items.filter((item) => item.type !== 'podcast' && item.type !== 'episode');
+  }
+  if (category === 'podcast') {
+    return items.filter((item) => item.type === 'podcast' || item.type === 'episode');
+  }
+  if (category === 'local') {
+    return items.filter((item) => item.type === 'local');
+  }
+  return items;
+}
+
+export type DeepLinkTarget =
+  | { kind: 'play'; videoId: string }
+  | { kind: 'open'; itemType: 'album' | 'artist' | 'playlist' | 'podcast' | 'episode'; id: string };
+
+const DEEP_LINK_OPEN_TYPES = new Set(['album', 'artist', 'playlist', 'podcast', 'episode']);
+
+export function parseDeepLinkSearch(search: string): DeepLinkTarget | null {
+  if (!search || typeof search !== 'string') return null;
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const playId = normalizeRouteId(params.get('play'));
+  if (playId) {
+    return { kind: 'play', videoId: playId };
+  }
+  const openRaw = params.get('open')?.trim();
+  if (!openRaw) return null;
+  const sepIdx = openRaw.indexOf(':');
+  if (sepIdx <= 0) return null;
+  const itemType = openRaw.slice(0, sepIdx).trim().toLowerCase();
+  const id = normalizeRouteId(openRaw.slice(sepIdx + 1));
+  if (!id || !DEEP_LINK_OPEN_TYPES.has(itemType)) return null;
+  return {
+    kind: 'open',
+    itemType: itemType as DeepLinkTarget & { kind: 'open' } extends { itemType: infer U } ? U : never,
+    id,
+  };
+}
+

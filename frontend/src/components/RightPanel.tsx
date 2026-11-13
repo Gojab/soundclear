@@ -385,11 +385,17 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                       void deleteOfflineDownload(trackKey);
                       showToast(`"${currentTrack.title}" dihapus dari penyimpanan offline`);
                     } else {
-                      void downloadTrackOffline(currentTrack, downloadQuality).then((res) => {
-                        if (res.ok) {
-                          showToast(`"${currentTrack.title}" tersimpan offline`);
-                        }
-                      });
+                      void downloadTrackOffline(currentTrack, downloadQuality)
+                        .then((res) => {
+                          if (res.ok) {
+                            showToast(`"${currentTrack.title}" tersimpan offline`);
+                          } else {
+                            showToast(res.reason || 'Gagal menyimpan lagu offline');
+                          }
+                        })
+                        .catch(() => {
+                          showToast('Gagal menyimpan lagu offline');
+                        });
                     }
                   }}
                   aria-label={isOffline ? 'Hapus dari offline' : 'Simpan lagu offline'}

@@ -13,6 +13,7 @@ import {
 import { fetchAccountLibrary, fetchAccountStatus } from '../api/client';
 import { AudioSettingsTab } from '../components/AudioSettingsTab';
 import { BackgroundSettingsSection } from '../components/BackgroundSettingsSection';
+import { CrossfadeControl } from '../components/CrossfadeControl';
 import { exportAllSoundClearData, importAllSoundClearData } from '../db/soundclearDb';
 import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
@@ -303,6 +304,8 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   />
                 </button>
               </div>
+
+              <CrossfadeControl variant="general" />
 
               <div className="flex items-center justify-between gap-4 py-3.5">
                 <div className="min-w-0">

@@ -19,6 +19,7 @@ import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { HomeSectionId, MediaItem } from '../types/music';
 import {
+  filterHomeMediaItems,
   getPlayableVideoId,
   isExcludedRegionalItem,
   isExcludedRegionalText,
@@ -82,13 +83,14 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
 
   const filterList = (list: MediaItem[]) => {
     const hiddenSet = new Set(hiddenTrackIds);
-    return list.filter((item) => {
+    const safe = list.filter((item) => {
       const key = getPlayableVideoId(item) || item.id;
       if (hiddenSet.has(key)) return false;
       if (hideExplicit && item.isExplicit) return false;
       if (isExcludedRegionalItem(item)) return false;
       return true;
     });
+    return filterHomeMediaItems(safe, categoryTab);
   };
 
   // Lanjutkan (recently played unique tracks)
@@ -109,7 +111,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
       if (out.length >= 10) break;
     }
     return filterList(out);
-  }, [playHistory, currentTrack, hiddenTrackIds, hideExplicit]);
+  }, [playHistory, currentTrack, hiddenTrackIds, hideExplicit, categoryTab]);
 
   // Sering diputar & Putar ulang
   const frequentTracks = useMemo(() => {
@@ -127,7 +129,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
       .sort((a, b) => b.count - a.count)
       .map((x) => x.track);
     return filterList(sorted).slice(0, 10);
-  }, [playHistory, hiddenTrackIds, hideExplicit]);
+  }, [playHistory, hiddenTrackIds, hideExplicit, categoryTab]);
 
   const seedTrack = continueTracks[0] || likedTracks[0] || chartsQuery.data?.songs[0] || null;
   const seedVideoId = seedTrack ? getPlayableVideoId(seedTrack) : null;
@@ -187,7 +189,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
       }
     }
     return filterList(items).slice(0, 10);
-  }, [followedArtistQueries, hiddenTrackIds, hideExplicit]);
+  }, [followedArtistQueries, hiddenTrackIds, hideExplicit, categoryTab]);
 
   const { greeting, moodLabel } = getGreetingByHour(new Date().getHours());
   const chartSongs = filterList(chartsQuery.data?.songs ?? []);

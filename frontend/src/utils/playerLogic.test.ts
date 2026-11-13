@@ -5,6 +5,7 @@ import {
   computeNextIndex,
   computePrevIndex,
   extractTracksFromArtistDetail,
+  filterHomeMediaItems,
   findActiveLyricIndex,
   formatArtists,
   formatTime,
@@ -19,6 +20,7 @@ import {
   isYouTubeVideoId,
   mergeWatchTracksIntoQueue,
   normalizeRouteId,
+  parseDeepLinkSearch,
   podcastEpisodesToMediaItems,
 } from './playerLogic';
 import type { ArtistDetailResponse, LyricLine, MediaItem, PodcastEpisode } from '../types/music';
@@ -272,4 +274,40 @@ test('buildSearchFollowUps produces deduplicated, regionally safe follow-up quer
     followUps.some((f) => /yoasobi|arijit/i.test(f.query)),
     false,
   );
+});
+
+test('filterHomeMediaItems excludes podcasts/episodes in music mode and keeps all in all mode', () => {
+  const mixed: MediaItem[] = [
+    makeTrack('song1', 'Lagu Pop'),
+    { id: 'alb1', title: 'Album Pop', artists: [], type: 'album' },
+    { id: 'pod1', title: 'Podcast Cerita', artists: [], type: 'podcast' },
+    { id: 'ep1', title: 'Episode 1', artists: [], type: 'episode' },
+  ];
+  assert.deepEqual(
+    filterHomeMediaItems(mixed, 'all').map((i) => i.id),
+    ['song1', 'alb1', 'pod1', 'ep1'],
+  );
+  assert.deepEqual(
+    filterHomeMediaItems(mixed, 'music').map((i) => i.id),
+    ['song1', 'alb1'],
+  );
+  assert.deepEqual(
+    filterHomeMediaItems(mixed, 'podcast').map((i) => i.id),
+    ['pod1', 'ep1'],
+  );
+});
+
+test('parseDeepLinkSearch parses play and open deep links safely', () => {
+  assert.deepEqual(parseDeepLinkSearch('?play=5F28ye50-Kc'), {
+    kind: 'play',
+    videoId: '5F28ye50-Kc',
+  });
+  assert.deepEqual(parseDeepLinkSearch('?open=album:MPREb_RVAbNZdUasD'), {
+    kind: 'open',
+    itemType: 'album',
+    id: 'MPREb_RVAbNZdUasD',
+  });
+  assert.equal(parseDeepLinkSearch('?open=unknown:123'), null);
+  assert.equal(parseDeepLinkSearch('?play=undefined'), null);
+  assert.equal(parseDeepLinkSearch(''), null);
 });

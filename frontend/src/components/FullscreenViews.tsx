@@ -174,11 +174,12 @@ export function FullscreenKaraokeModal() {
               max={safeDuration || 100}
               step={0.5}
               value={Math.min(currentTime, safeDuration || 100)}
+              disabled={!currentTrack || safeDuration <= 0}
               onChange={(e) => requestSeek(Number(e.target.value))}
               style={{
                 background: `linear-gradient(to right, #2EE6A6 ${progressPct}%, rgba(255,255,255,0.18) ${progressPct}%)`,
               }}
-              className="sc-range flex-1 h-1 rounded-full"
+              className="sc-range flex-1 h-1 rounded-full disabled:opacity-40"
             />
             <span className="w-10 text-xs text-white/50 tabular-nums">
               {formatTime(safeDuration)}
@@ -337,11 +338,12 @@ export function FullscreenNowPlayingModal() {
             max={safeDuration || 100}
             step={0.5}
             value={Math.min(currentTime, safeDuration || 100)}
+            disabled={!currentTrack || safeDuration <= 0}
             onChange={(e) => requestSeek(Number(e.target.value))}
             style={{
               background: `linear-gradient(to right, #2EE6A6 ${progressPct}%, rgba(255,255,255,0.18) ${progressPct}%)`,
             }}
-            className="sc-range w-full h-1 rounded-full"
+            className="sc-range w-full h-1 rounded-full disabled:opacity-40"
           />
           <div className="flex justify-between text-xs text-white/50 tabular-nums">
             <span>{formatTime(currentTime)}</span>

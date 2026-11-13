@@ -26,6 +26,7 @@ import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
+import { getNextPlaybackRate } from '../utils/audioMath';
 import { hasActiveCustomBackground } from '../utils/backgroundTheme';
 import {
   formatArtists,
@@ -305,11 +306,12 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     max={safeDuration || 100}
                     step={0.5}
                     value={Math.min(currentTime, safeDuration || 100)}
+                    disabled={!currentTrack || safeDuration <= 0}
                     onChange={(e) => requestSeek(Number(e.target.value))}
                     style={{
                       background: `linear-gradient(to right, #2EE6A6 ${progressPct}%, rgba(255,255,255,0.18) ${progressPct}%)`,
                     }}
-                    className="sc-range w-full h-1 rounded-full"
+                    className="sc-range w-full h-1 rounded-full disabled:opacity-40"
                   />
                   <div className="flex justify-between text-xs text-white/50 tabular-nums">
                     <span>{formatTime(currentTime)}</span>
@@ -396,7 +398,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
 
                   <button
                     type="button"
-                    onClick={() => setPlaybackRate(playbackRate === 1 ? 1.25 : playbackRate === 1.25 ? 1.5 : 1)}
+                    onClick={() => setPlaybackRate(getNextPlaybackRate(playbackRate))}
                     className="px-3 py-2 rounded-xl bg-white/[0.06] text-white/80 tabular-nums"
                   >
                     {playbackRate}x

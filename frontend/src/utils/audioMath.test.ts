@@ -3,18 +3,23 @@ import test from 'node:test';
 import {
   bassBoostLevelToDb,
   BUILTIN_EQ_PRESETS,
+  clampCrossfadeSeconds,
   clampEqGainDb,
   clampPlaybackRate,
   clampYoutubeVolume,
   classifyStreamQualityBadge,
   computeEqFrequencyResponseCurve,
   computeEqualPowerCrossfade,
+  computeNextCrossfadeState,
   computeNonOverlappingFadeMultiplier,
   computeNormalizationGain,
+  computeUnmutedVolume,
   EQ_FREQUENCIES,
   estimateLoudnessFromRms,
+  getNextPlaybackRate,
   NORMALIZATION_TARGETS_LUFS,
   preampDbToLinear,
+  resolveEffectiveCrossfadeSeconds,
   resolveTargetStreamQuality,
   selectEffectiveStreamOption,
   stereoWidenerLevelToSideGain,
@@ -71,6 +76,22 @@ test('clampYoutubeVolume respects maxVolumeLimit and mute state', () => {
   assert.equal(clampYoutubeVolume(-10, 80, false), 0);
 });
 
+test('getNextPlaybackRate cycles across all PLAYBACK_RATE_OPTIONS without losing presets', () => {
+  assert.equal(getNextPlaybackRate(1), 1.25);
+  assert.equal(getNextPlaybackRate(1.5), 1.75);
+  assert.equal(getNextPlaybackRate(1.75), 2);
+  assert.equal(getNextPlaybackRate(2), 0.5);
+  assert.equal(getNextPlaybackRate(0.5), 0.75);
+  assert.equal(getNextPlaybackRate(1.1), 1.25);
+});
+
+test('computeUnmutedVolume restores non-zero volume and respects maxVolumeCap', () => {
+  assert.equal(computeUnmutedVolume(0, 72, 100), 72);
+  assert.equal(computeUnmutedVolume(0, 0, 100), 50);
+  assert.equal(computeUnmutedVolume(0, 90, 65), 65);
+  assert.equal(computeUnmutedVolume(45, 80, 100), 45);
+});
+
 test('computeNonOverlappingFadeMultiplier fades in and out smoothly', () => {
   assert.equal(computeNonOverlappingFadeMultiplier(15, 60, 0), 1);
   assert.equal(computeNonOverlappingFadeMultiplier(30, 60, 6), 1);
@@ -90,6 +111,45 @@ test('computeEqualPowerCrossfade preserves constant power across transition', ()
   const end = computeEqualPowerCrossfade(1);
   assert.ok(Math.abs(end.outGain - 0) < 1e-6);
   assert.ok(Math.abs(end.inGain - 1) < 1e-6);
+});
+
+test('crossfade state helpers clamp duration, preserve duration across toggle, and respect directMode', () => {
+  assert.equal(clampCrossfadeSeconds(-3), 0);
+  assert.equal(clampCrossfadeSeconds(5.6), 6);
+  assert.equal(clampCrossfadeSeconds(20), 12);
+
+  assert.equal(
+    resolveEffectiveCrossfadeSeconds({ crossfadeEnabled: true, crossfadeSeconds: 6, directMode: false }),
+    6,
+  );
+  assert.equal(
+    resolveEffectiveCrossfadeSeconds({ crossfadeEnabled: false, crossfadeSeconds: 6, directMode: false }),
+    0,
+  );
+  assert.equal(
+    resolveEffectiveCrossfadeSeconds({ crossfadeEnabled: true, crossfadeSeconds: 6, directMode: true }),
+    0,
+  );
+
+  // Toggling off remembers previous duration and toggling back on restores it
+  const turnedOff = computeNextCrossfadeState(
+    { crossfadeEnabled: true, crossfadeSeconds: 7 },
+    { type: 'toggle', enabled: false },
+  );
+  assert.deepEqual(turnedOff, { crossfadeEnabled: false, crossfadeSeconds: 7, effectiveSeconds: 0 });
+
+  const turnedOn = computeNextCrossfadeState(turnedOff, { type: 'toggle', enabled: true });
+  assert.deepEqual(turnedOn, { crossfadeEnabled: true, crossfadeSeconds: 7, effectiveSeconds: 7 });
+
+  // Setting duration to 0 disables crossfade; toggling on restores default 3s
+  const draggedZero = computeNextCrossfadeState(
+    { crossfadeEnabled: true, crossfadeSeconds: 7 },
+    { type: 'set-duration', seconds: 0 },
+  );
+  assert.deepEqual(draggedZero, { crossfadeEnabled: false, crossfadeSeconds: 0, effectiveSeconds: 0 });
+
+  const restoredDefault = computeNextCrossfadeState(draggedZero, { type: 'toggle', enabled: true });
+  assert.deepEqual(restoredDefault, { crossfadeEnabled: true, crossfadeSeconds: 3, effectiveSeconds: 3 });
 });
 
 test('loudness estimation, LUFS targets (-19/-14/-11), and ReplayGain work without clipping', () => {

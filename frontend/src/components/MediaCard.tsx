@@ -78,7 +78,7 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
   return (
     <div
       onContextMenu={(e) => {
-        if (playableId || item.type === 'album' || item.type === 'playlist') {
+        if (playableId || isLocalTrack(item) || item.type === 'album' || item.type === 'playlist') {
           e.preventDefault();
           openMenu(e.clientX, e.clientY, item, { onAddToPlaylist });
         }
@@ -89,7 +89,7 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
         <button
           type="button"
           onClick={handleCardClick}
-          aria-label={`${(playableId || isLocalTrack(item)) && item.type !== 'episode' ? 'Putar' : 'Buka'} ${item.title}`}
+          aria-label={`Buka ${item.title}`}
           className="block w-full h-full focus-visible:outline-2 focus-visible:outline-[#2EE6A6]"
         >
           <ArtworkImage
@@ -107,7 +107,7 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
             disabled={resolvingPlay}
             onClick={(e) => void handlePlayButtonClick(e)}
             aria-label={`Putar ${item.title}`}
-            className={`absolute bottom-2 right-2 w-11 h-11 rounded-full bg-[#2EE6A6] text-[#06130E] shadow-lg shadow-black/50 flex items-center justify-center transition-all duration-150 hover:scale-105 focus-visible:opacity-100 ${
+            className={`absolute bottom-2 right-2 z-10 w-11 h-11 rounded-full bg-[#2EE6A6] text-[#06130E] shadow-lg shadow-black/50 flex items-center justify-center transition-all duration-150 hover:scale-105 focus-visible:opacity-100 ${
               resolvingPlay
                 ? 'opacity-100 translate-y-0'
                 : 'opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0'

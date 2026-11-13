@@ -421,6 +421,7 @@ export interface LocalAudioProfile {
   balance: number; // -1 (kiri penuh) s.d. +1 (kanan penuh)
   outputDeviceId: string;
   directMode: boolean;
+  crossfadeEnabled?: boolean;
   crossfadeSeconds: number; // 0-12 detik
   gaplessPlayback: boolean;
   fadeOnPlayPause: boolean;

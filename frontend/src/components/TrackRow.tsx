@@ -16,7 +16,7 @@ import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
-import { getTrackUniqueId } from '../utils/playerLogic';
+import { getTrackUniqueId, isPlayableTrack } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 
 interface TrackRowProps {
@@ -237,11 +237,17 @@ export function TrackRow({
               void deleteOfflineDownload(trackKey);
               showToast(`"${track.title}" dihapus dari penyimpanan offline`);
             } else {
-              void downloadTrackOffline(track, downloadQuality).then((res) => {
-                if (res.ok) {
-                  showToast(`"${track.title}" tersimpan offline`);
-                }
-              });
+              void downloadTrackOffline(track, downloadQuality)
+                .then((res) => {
+                  if (res.ok) {
+                    showToast(`"${track.title}" tersimpan offline`);
+                  } else {
+                    showToast(res.reason || 'Gagal mengunduh lagu untuk offline');
+                  }
+                })
+                .catch(() => {
+                  showToast('Gagal mengunduh lagu untuk offline');
+                });
             }
           }}
           aria-label={isOffline ? `Hapus ${track.title} dari offline` : `Unduh ${track.title} offline`}
@@ -274,7 +280,14 @@ export function TrackRow({
 
         <button
           type="button"
-          onClick={() => addToQueue(track)}
+          onClick={() => {
+            if (!isPlayableTrack(track)) {
+              showToast('Item ini tidak dapat ditambahkan ke antrean');
+              return;
+            }
+            addToQueue(track);
+            showToast(`"${track.title}" ditambahkan ke antrean`);
+          }}
           aria-label={`Tambahkan ${track.title} ke antrean`}
           title="Tambahkan ke antrean"
           className="hidden sm:group-hover:flex w-8 h-8 rounded-lg items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] transition-colors"

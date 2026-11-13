@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AlertTriangle, Check, ListPlus, Plus, X } from 'lucide-react';
 import { postAccountAddPlaylistItems, postAccountCreatePlaylist } from '../api/client';
+import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import type { LocalPlaylist, MediaItem } from '../types/music';
 import { getPlayableVideoId } from '../utils/playerLogic';
@@ -30,6 +31,7 @@ export function PlaylistModal({
   const updatePlaylist = useLibraryStore((s) => s.updatePlaylist);
   const hasTrackInPlaylist = useLibraryStore((s) => s.hasTrackInPlaylist);
   const addTrackToPlaylist = useLibraryStore((s) => s.addTrackToPlaylist);
+  const showToast = useContextMenuStore((s) => s.showToast);
 
   useEffect(() => {
     if (!open) return;
@@ -66,13 +68,14 @@ export function PlaylistModal({
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    if (editingPlaylist) {
+      if (editingPlaylist) {
       updatePlaylist(editingPlaylist.id, {
         name: trimmed,
         description: description.trim(),
         coverUrl: coverUrl.trim() || null,
         folderId: folderId || null,
       });
+      showToast(`Playlist "${trimmed}" diperbarui`);
       onClose();
       return;
     }
@@ -83,6 +86,11 @@ export function PlaylistModal({
     });
     const vid = trackToAdd ? getPlayableVideoId(trackToAdd) : null;
     void postAccountCreatePlaylist(trimmed, description.trim(), vid ? [vid] : []).catch(() => {});
+    showToast(
+      trackToAdd
+        ? `"${trackToAdd.title}" disimpan ke playlist baru "${trimmed}"`
+        : `Playlist "${trimmed}" dibuat`,
+    );
     onClose();
   };
 
@@ -97,11 +105,15 @@ export function PlaylistModal({
     addTrackToPlaylist(pl.id, trackToAdd, false);
     const vid = getPlayableVideoId(trackToAdd);
     if (vid) void postAccountAddPlaylistItems(pl.id, [vid]).catch(() => {});
+    showToast(`"${trackToAdd.title}" ditambahkan ke "${pl.name}"`);
     onClose();
   };
 
   return (
     <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
@@ -159,6 +171,13 @@ export function PlaylistModal({
                 type="button"
                 onClick={() => {
                   addTrackToPlaylist(duplicatePromptPlaylist.id, trackToAdd, true);
+                  const vid = getPlayableVideoId(trackToAdd);
+                  if (vid) {
+                    void postAccountAddPlaylistItems(duplicatePromptPlaylist.id, [vid]).catch(
+                      () => {},
+                    );
+                  }
+                  showToast(`"${trackToAdd.title}" ditambahkan ke "${duplicatePromptPlaylist.name}"`);
                   setDuplicatePromptPlaylist(null);
                   onClose();
                 }}

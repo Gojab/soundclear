@@ -136,6 +136,29 @@ export function clampYoutubeVolume(
   return Math.round(clampNumber(rawVolume, 0, safeMax));
 }
 
+export function getNextPlaybackRate(currentRate: number): number {
+  const idx = PLAYBACK_RATE_OPTIONS.findIndex((r) => Math.abs(r - currentRate) < 0.01);
+  if (idx >= 0) {
+    return PLAYBACK_RATE_OPTIONS[(idx + 1) % PLAYBACK_RATE_OPTIONS.length];
+  }
+  const nextHigher = PLAYBACK_RATE_OPTIONS.find((r) => r > currentRate + 0.01);
+  return nextHigher ?? PLAYBACK_RATE_OPTIONS[0];
+}
+
+export function computeUnmutedVolume(
+  currentVolume: number,
+  lastNonZeroVolume: number,
+  maxVolumeCap = 100,
+): number {
+  const safeCap = clampNumber(Math.round(maxVolumeCap), 10, 100);
+  if (Number.isFinite(currentVolume) && currentVolume > 0) {
+    return Math.round(clampNumber(currentVolume, 1, safeCap));
+  }
+  const fallback =
+    Number.isFinite(lastNonZeroVolume) && lastNonZeroVolume > 0 ? lastNonZeroVolume : 50;
+  return Math.round(clampNumber(fallback, 1, safeCap));
+}
+
 export function computeNonOverlappingFadeMultiplier(
   currentSec: number,
   durationSec: number,
@@ -155,6 +178,65 @@ export function computeNonOverlappingFadeMultiplier(
     return clampNumber(remaining / effectiveFade, 0.02, 1);
   }
   return 1;
+}
+
+export const DEFAULT_CROSSFADE_SECONDS = 3;
+export const MAX_CROSSFADE_SECONDS = 12;
+
+export function clampCrossfadeSeconds(seconds: number): number {
+  return Math.round(clampNumber(seconds, 0, MAX_CROSSFADE_SECONDS));
+}
+
+export function resolveEffectiveCrossfadeSeconds(profile: {
+  crossfadeEnabled?: boolean;
+  crossfadeSeconds: number;
+  directMode?: boolean;
+}): number {
+  if (profile.directMode) return 0;
+  if (profile.crossfadeEnabled === false) return 0;
+  return clampCrossfadeSeconds(profile.crossfadeSeconds);
+}
+
+export function computeNextCrossfadeState(
+  current: { crossfadeEnabled?: boolean; crossfadeSeconds: number },
+  action:
+    | { type: 'toggle'; enabled?: boolean }
+    | { type: 'set-duration'; seconds: number },
+): { crossfadeEnabled: boolean; crossfadeSeconds: number; effectiveSeconds: number } {
+  const curSecs = clampCrossfadeSeconds(current.crossfadeSeconds);
+  const curEnabled =
+    current.crossfadeEnabled !== undefined ? current.crossfadeEnabled : curSecs > 0;
+
+  if (action.type === 'toggle') {
+    const nextEnabled = action.enabled !== undefined ? action.enabled : !curEnabled;
+    if (!nextEnabled) {
+      return {
+        crossfadeEnabled: false,
+        crossfadeSeconds: curSecs,
+        effectiveSeconds: 0,
+      };
+    }
+    const restoredSecs = curSecs > 0 ? curSecs : DEFAULT_CROSSFADE_SECONDS;
+    return {
+      crossfadeEnabled: true,
+      crossfadeSeconds: restoredSecs,
+      effectiveSeconds: restoredSecs,
+    };
+  }
+
+  const nextSecs = clampCrossfadeSeconds(action.seconds);
+  if (nextSecs <= 0) {
+    return {
+      crossfadeEnabled: false,
+      crossfadeSeconds: 0,
+      effectiveSeconds: 0,
+    };
+  }
+  return {
+    crossfadeEnabled: true,
+    crossfadeSeconds: nextSecs,
+    effectiveSeconds: nextSecs,
+  };
 }
 
 export function computeEqualPowerCrossfade(progress01: number): {

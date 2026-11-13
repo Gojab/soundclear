@@ -855,9 +855,21 @@ export function LikedTracksPage({
               <button
                 type="button"
                 onClick={() => {
-                  void downloadTracksOffline(likedTracks, downloadQuality).then(({ savedCount }) => {
-                    showToast(`${savedCount} lagu disukai tersimpan offline`);
-                  });
+                  void downloadTracksOffline(likedTracks, downloadQuality)
+                    .then(({ savedCount, failedCount }) => {
+                      if (savedCount === 0) {
+                        showToast('Gagal menyimpan lagu disukai untuk offline');
+                      } else if (failedCount > 0) {
+                        showToast(
+                          `${savedCount} lagu disukai tersimpan offline (${failedCount} gagal)`,
+                        );
+                      } else {
+                        showToast(`${savedCount} lagu disukai tersimpan offline`);
+                      }
+                    })
+                    .catch(() => {
+                      showToast('Gagal menyimpan lagu disukai untuk offline');
+                    });
                 }}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white transition-colors"
               >
@@ -892,7 +904,10 @@ export function LikedTracksPage({
               index={idx}
               onPlay={() => playTrackList(likedTracks, idx, 'Lagu Disukai')}
               onAddToPlaylist={onAddToPlaylist}
-              onRemove={() => toggleLike(track)}
+              onRemove={() => {
+                toggleLike(track);
+                showToast(`"${track.title}" dihapus dari Lagu Disukai`);
+              }}
             />
           ))}
         </div>
@@ -1009,11 +1024,21 @@ export function LocalPlaylistPage({
                 <button
                   type="button"
                   onClick={() => {
-                    void downloadTracksOffline(playlist.tracks, downloadQuality).then(
-                      ({ savedCount }) => {
-                        showToast(`${savedCount} lagu di playlist tersimpan offline`);
-                      },
-                    );
+                    void downloadTracksOffline(playlist.tracks, downloadQuality)
+                      .then(({ savedCount, failedCount }) => {
+                        if (savedCount === 0) {
+                          showToast('Gagal menyimpan lagu di playlist untuk offline');
+                        } else if (failedCount > 0) {
+                          showToast(
+                            `${savedCount} lagu di playlist tersimpan offline (${failedCount} gagal)`,
+                          );
+                        } else {
+                          showToast(`${savedCount} lagu di playlist tersimpan offline`);
+                        }
+                      })
+                      .catch(() => {
+                        showToast('Gagal menyimpan lagu di playlist untuk offline');
+                      });
                   }}
                   className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-medium text-white transition-colors"
                 >

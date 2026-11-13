@@ -14,7 +14,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { fetchAccountStatus, fetchSuggest } from './api/client';
+import { fetchAccountStatus, fetchSuggest, fetchWatchPlaylist } from './api/client';
 import { CustomBackgroundLayer } from './components/CustomBackgroundLayer';
 import {
   FullscreenKaraokeModal,
@@ -49,7 +49,7 @@ import { useNavigationStore } from './store/navigationStore';
 import { usePlayerStore } from './store/playerStore';
 import { useSettingsStore } from './store/settingsStore';
 import { hasActiveCustomBackground } from './utils/backgroundTheme';
-import { isExcludedRegionalText } from './utils/playerLogic';
+import { isExcludedRegionalText, parseDeepLinkSearch } from './utils/playerLogic';
 import type { LocalPlaylist, MediaItem, SearchFilter } from './types/music';
 
 export default function App() {
@@ -82,9 +82,43 @@ export default function App() {
 
   useEffect(() => {
     const boot = async () => {
+      const deepLink = parseDeepLinkSearch(window.location.search);
+      if (deepLink) {
+        window.history.replaceState({}, '', window.location.pathname || '/');
+      }
       await useSettingsStore.getState().hydrate();
       await useLibraryStore.getState().hydrate();
       await usePlayerStore.getState().hydrate();
+      if (deepLink?.kind === 'open') {
+        useNavigationStore.getState().navigate({
+          name: deepLink.itemType,
+          id: deepLink.id,
+        });
+      } else if (deepLink?.kind === 'play') {
+        fetchWatchPlaylist(deepLink.videoId, true)
+          .then((watch) => {
+            const matched =
+              watch.tracks.find((t) => (t.videoId || t.id) === deepLink.videoId) ??
+              watch.tracks[0];
+            const track: MediaItem = matched ?? {
+              id: deepLink.videoId,
+              videoId: deepLink.videoId,
+              title: 'Lagu dibagikan',
+              artists: [{ id: null, name: 'YouTube Music' }],
+              type: 'song',
+            };
+            usePlayerStore.getState().playTrack(track);
+          })
+          .catch(() => {
+            usePlayerStore.getState().playTrack({
+              id: deepLink.videoId,
+              videoId: deepLink.videoId,
+              title: 'Lagu dibagikan',
+              artists: [{ id: null, name: 'YouTube Music' }],
+              type: 'song',
+            });
+          });
+      }
       fetchAccountStatus()
         .then((status) => {
           void useSettingsStore

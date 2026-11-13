@@ -17,7 +17,11 @@ import type {
   UserSettings,
   YouTubeSoundSettings,
 } from '../types/music';
-import { BUILTIN_EQ_PRESETS } from '../utils/audioMath';
+import {
+  BUILTIN_EQ_PRESETS,
+  clampCrossfadeSeconds,
+  DEFAULT_CROSSFADE_SECONDS,
+} from '../utils/audioMath';
 import {
   DEFAULT_CUSTOM_BACKGROUND,
   isSafeBackgroundImageUrl,
@@ -81,7 +85,7 @@ export const DEFAULT_YOUTUBE_SOUND: YouTubeSoundSettings = {
   startupVolumeMode: 'last',
   startupFixedVolume: 75,
   defaultPlaybackRate: 1,
-  trackFadeSeconds: 0,
+  trackFadeSeconds: DEFAULT_CROSSFADE_SECONDS,
   fadeOnPauseResume: true,
   fadeOutOnSleepTimer: true,
   resumeLastPosition: true,
@@ -109,7 +113,8 @@ export const DEFAULT_LOCAL_AUDIO_PROFILE: LocalAudioProfile = {
   balance: 0,
   outputDeviceId: '',
   directMode: false,
-  crossfadeSeconds: 3,
+  crossfadeEnabled: true,
+  crossfadeSeconds: DEFAULT_CROSSFADE_SECONDS,
   gaplessPlayback: true,
   fadeOnPlayPause: true,
   skipSilence: true,
@@ -200,9 +205,20 @@ export function getLocalAudioProfileKey(accountKey: string): string {
 
 export function normalizeLocalAudioProfile(raw?: Partial<LocalAudioProfile> | null): LocalAudioProfile {
   const safe = raw && typeof raw === 'object' ? raw : {};
+  const crossfadeSeconds = clampCrossfadeSeconds(
+    typeof safe.crossfadeSeconds === 'number'
+      ? safe.crossfadeSeconds
+      : DEFAULT_LOCAL_AUDIO_PROFILE.crossfadeSeconds,
+  );
+  const crossfadeEnabled =
+    typeof safe.crossfadeEnabled === 'boolean'
+      ? safe.crossfadeEnabled
+      : crossfadeSeconds > 0;
   return {
     ...DEFAULT_LOCAL_AUDIO_PROFILE,
     ...safe,
+    crossfadeEnabled,
+    crossfadeSeconds,
     bands:
       Array.isArray(safe.bands) && safe.bands.length === 10
         ? safe.bands

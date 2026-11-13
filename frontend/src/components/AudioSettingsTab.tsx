@@ -46,6 +46,7 @@ import {
   STREAM_QUALITY_TIERS,
 } from '../utils/audioMath';
 import { getTrackUniqueId, hasPlayableOfflineAudio, isLocalTrack } from '../utils/playerLogic';
+import { CrossfadeControl } from './CrossfadeControl';
 import { SpectrumAnalyzer } from './SpectrumAnalyzer';
 
 function EqResponseCurveSvg({
@@ -215,6 +216,7 @@ export function AudioSettingsTab() {
   const isMuted = usePlayerStore((s) => s.isMuted);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
   const sleepTimerMode = usePlayerStore((s) => s.sleepTimerMode);
+  const sleepTimerMinutes = usePlayerStore((s) => s.sleepTimerMinutes);
   const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
   const activeStreamMeta = usePlayerStore((s) => s.activeStreamMeta);
   const networkEffectiveType = usePlayerStore((s) => s.networkEffectiveType);
@@ -710,6 +712,18 @@ export function AudioSettingsTab() {
                       aria-label={`Ubah nama preset ${preset.name}`}
                       value={renameDraft}
                       onChange={(e) => setRenameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (renameCustomPreset(preset.id, renameDraft)) {
+                            showToast('Nama preset diperbarui');
+                          }
+                          setRenamingPresetId(null);
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setRenamingPresetId(null);
+                        }
+                      }}
                       className="w-28 px-1.5 py-0.5 rounded bg-black/50 text-white text-xs focus:outline-none"
                     />
                     <button
@@ -773,6 +787,16 @@ export function AudioSettingsTab() {
               type="text"
               value={presetNameInput}
               onChange={(e) => setPresetNameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && presetNameInput.trim()) {
+                  e.preventDefault();
+                  const created = saveCustomPreset(presetNameInput);
+                  if (created) {
+                    setPresetNameInput('');
+                    showToast(`Preset "${created.name}" disimpan`);
+                  }
+                }
+              }}
               placeholder="Nama preset kustom baru..."
               className="flex-1 h-9 px-3 rounded-xl bg-white/[0.06] border border-white/[0.1] text-xs text-white placeholder:text-white/35 focus:outline-none focus:border-[#2EE6A6]"
             />
@@ -1084,32 +1108,7 @@ export function AudioSettingsTab() {
         />
 
         {/* Crossfade */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-white">Crossfade Equal-Power</p>
-              <p className="text-xs text-white/50">
-                Dua deck audio bergantian (0–12 detik). Dinonaktifkan otomatis saat Mode Direct aktif.
-              </p>
-            </div>
-            <span className="text-xs text-[#2EE6A6] tabular-nums">
-              {localProfile.crossfadeSeconds} detik
-            </span>
-          </div>
-          <input
-            type="range"
-            aria-label="Durasi crossfade 0 sampai 12 detik"
-            min={0}
-            max={12}
-            step={1}
-            value={localProfile.crossfadeSeconds}
-            onChange={(e) => updateLocalProfile({ crossfadeSeconds: Number(e.target.value) })}
-            style={{
-              background: `linear-gradient(to right, #2EE6A6 ${(localProfile.crossfadeSeconds / 12) * 100}%, rgba(255,255,255,0.16) ${(localProfile.crossfadeSeconds / 12) * 100}%)`,
-            }}
-            className="sc-range-visible w-full"
-          />
-        </div>
+        <CrossfadeControl variant="audio-tab" />
 
         <div className="space-y-3 pt-3 border-t border-white/[0.07]">
           <label className="flex items-center justify-between gap-4 cursor-pointer">
@@ -1228,6 +1227,7 @@ export function AudioSettingsTab() {
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
             <button
               type="button"
+              aria-pressed={sleepTimerMode === 'off'}
               onClick={() => setSleepTimer('off')}
               className={`py-1.5 rounded-xl text-xs font-medium ${
                 sleepTimerMode === 'off'
@@ -1237,18 +1237,27 @@ export function AudioSettingsTab() {
             >
               Mati
             </button>
-            {[15, 30, 45, 60].map((min) => (
-              <button
-                key={min}
-                type="button"
-                onClick={() => setSleepTimer('minutes', min)}
-                className="py-1.5 rounded-xl text-xs font-medium bg-white/[0.06] text-white/75 hover:text-white tabular-nums"
-              >
-                {min} mnt
-              </button>
-            ))}
+            {[15, 30, 45, 60].map((min) => {
+              const active = sleepTimerMode === 'minutes' && sleepTimerMinutes === min;
+              return (
+                <button
+                  key={min}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setSleepTimer('minutes', min)}
+                  className={`py-1.5 rounded-xl text-xs font-medium tabular-nums ${
+                    active
+                      ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'
+                      : 'bg-white/[0.06] text-white/75 hover:text-white'
+                  }`}
+                >
+                  {min} mnt
+                </button>
+              );
+            })}
             <button
               type="button"
+              aria-pressed={sleepTimerMode === 'end_of_track'}
               onClick={() => setSleepTimer('end_of_track')}
               className={`py-1.5 rounded-xl text-xs font-medium ${
                 sleepTimerMode === 'end_of_track'

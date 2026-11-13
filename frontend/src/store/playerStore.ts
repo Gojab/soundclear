@@ -8,7 +8,12 @@ import type {
   RepeatMode,
   StreamOptionsResponse,
 } from '../types/music';
-import { clampPlaybackRate } from '../utils/audioMath';
+import {
+  clampCrossfadeSeconds,
+  clampPlaybackRate,
+  computeUnmutedVolume,
+  resolveEffectiveCrossfadeSeconds,
+} from '../utils/audioMath';
 import {
   getPlayableVideoId,
   getTrackUniqueId,
@@ -42,6 +47,7 @@ interface PlayerState {
   currentTime: number;
   duration: number;
   volume: number;
+  lastNonZeroVolume: number;
   isMuted: boolean;
   shuffle: boolean;
   smartShuffle: boolean;
@@ -51,6 +57,7 @@ interface PlayerState {
 
   sleepTimerMode: SleepTimerMode;
   sleepTimerEndsAt: number | null;
+  sleepTimerMinutes: number | null;
 
   lyricsBrowseId: string | null;
   ambientColor: AmbientColor;
@@ -271,6 +278,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTime: 0,
   duration: 0,
   volume: 80,
+  lastNonZeroVolume: 80,
   isMuted: false,
   shuffle: false,
   smartShuffle: false,
@@ -280,6 +288,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   sleepTimerMode: 'off',
   sleepTimerEndsAt: null,
+  sleepTimerMinutes: null,
 
   lyricsBrowseId: null,
   ambientColor: DEFAULT_AMBIENT,
@@ -334,12 +343,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           currentTime: resumedTime,
           duration: typeof s.duration === 'number' ? s.duration : 0,
           volume: effectiveVol,
+          lastNonZeroVolume: effectiveVol > 0 ? effectiveVol : 80,
           isMuted: Boolean(s.isMuted),
           shuffle: Boolean(s.shuffle),
           smartShuffle: Boolean(s.smartShuffle),
           repeat: s.repeat ?? 'off',
           playbackRate: resolvePlaybackRateForTrack(s.currentTrack),
-          crossfadeSeconds: ytSound.trackFadeSeconds ?? 0,
+          crossfadeSeconds: resolveEffectiveCrossfadeSeconds(settingsState.localProfile),
           pendingSeekSeconds: s.currentTrack && resumedTime > 2 ? resumedTime : null,
           rightPanelOpen: settingsRightPanel,
           isPlaying: Boolean(s.currentTrack && ytSound.autoStartOnOpen),
@@ -358,8 +368,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         set({
           hydrated: true,
           volume: initialVol,
+          lastNonZeroVolume: initialVol > 0 ? initialVol : 80,
           playbackRate: ytSound.defaultPlaybackRate || 1,
-          crossfadeSeconds: ytSound.trackFadeSeconds ?? 0,
+          crossfadeSeconds: resolveEffectiveCrossfadeSeconds(settingsState.localProfile),
           rightPanelOpen: settingsRightPanel,
         });
       }
@@ -653,7 +664,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     // Check sleep timer minute countdown
     if (state.sleepTimerMode === 'minutes' && state.sleepTimerEndsAt && Date.now() >= state.sleepTimerEndsAt) {
-      set({ isPlaying: false, sleepTimerMode: 'off', sleepTimerEndsAt: null });
+      set({ isPlaying: false, sleepTimerMode: 'off', sleepTimerEndsAt: null, sleepTimerMinutes: null });
     }
 
     persistPlayerSession(get(), false);
@@ -672,12 +683,33 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   setVolume: (volume) => {
     const clamped = Math.max(0, Math.min(100, Math.round(volume)));
-    set({ volume: clamped, isMuted: clamped === 0 });
+    set((state) => ({
+      volume: clamped,
+      lastNonZeroVolume: clamped > 0 ? clamped : state.lastNonZeroVolume,
+      isMuted: clamped === 0,
+    }));
     persistPlayerSession(get(), false);
   },
 
   toggleMute: () => {
-    set((state) => ({ isMuted: !state.isMuted }));
+    set((state) => {
+      if (state.isMuted || state.volume === 0) {
+        const maxCap = isLocalTrack(state.currentTrack)
+          ? 100
+          : useSettingsStore.getState().youtubeSound.maxVolumeLimit;
+        const restoredVolume = computeUnmutedVolume(
+          state.volume,
+          state.lastNonZeroVolume,
+          maxCap,
+        );
+        return {
+          isMuted: false,
+          volume: restoredVolume,
+          lastNonZeroVolume: restoredVolume,
+        };
+      }
+      return { isMuted: true };
+    });
     persistPlayerSession(get(), false);
   },
 
@@ -725,21 +757,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   setCrossfadeSeconds: (seconds) => {
-    const clamped = Math.max(0, Math.min(12, Math.round(seconds)));
-    useSettingsStore.getState().updateLocalProfile({ crossfadeSeconds: clamped });
+    const clamped = clampCrossfadeSeconds(seconds);
+    useSettingsStore.getState().setCrossfadeDuration(clamped);
     set({ crossfadeSeconds: clamped });
     persistPlayerSession(get(), true);
   },
 
   setSleepTimer: (mode, minutes = 30) => {
     if (mode === 'off') {
-      set({ sleepTimerMode: 'off', sleepTimerEndsAt: null });
+      set({ sleepTimerMode: 'off', sleepTimerEndsAt: null, sleepTimerMinutes: null });
     } else if (mode === 'end_of_track') {
-      set({ sleepTimerMode: 'end_of_track', sleepTimerEndsAt: null });
+      set({ sleepTimerMode: 'end_of_track', sleepTimerEndsAt: null, sleepTimerMinutes: null });
     } else {
       set({
         sleepTimerMode: 'minutes',
         sleepTimerEndsAt: Date.now() + minutes * 60 * 1000,
+        sleepTimerMinutes: minutes,
       });
     }
   },
@@ -806,6 +839,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   prevTrack: () => {
     const state = get();
+    if (!state.currentTrack) return;
     if (state.currentTime > 3 || state.historyStack.length === 0) {
       get().requestSeek(0);
       set({ isPlaying: true });
@@ -856,7 +890,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     if (state.sleepTimerMode === 'end_of_track') {
-      set({ isPlaying: false, sleepTimerMode: 'off', sleepTimerEndsAt: null });
+      set({ isPlaying: false, sleepTimerMode: 'off', sleepTimerEndsAt: null, sleepTimerMinutes: null });
       return;
     }
 

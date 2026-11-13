@@ -419,11 +419,21 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
               <button
                 type="button"
                 onClick={() => {
-                  void downloadTracksOffline(album.tracks, downloadQuality).then(
-                    ({ savedCount }) => {
-                      showToast(`${savedCount} lagu dari "${album.title}" tersimpan offline`);
-                    },
-                  );
+                  void downloadTracksOffline(album.tracks, downloadQuality)
+                    .then(({ savedCount, failedCount }) => {
+                      if (savedCount === 0) {
+                        showToast(`Gagal menyimpan lagu dari "${album.title}" untuk offline`);
+                      } else if (failedCount > 0) {
+                        showToast(
+                          `${savedCount} lagu dari "${album.title}" tersimpan offline (${failedCount} gagal)`,
+                        );
+                      } else {
+                        showToast(`${savedCount} lagu dari "${album.title}" tersimpan offline`);
+                      }
+                    })
+                    .catch(() => {
+                      showToast(`Gagal menyimpan lagu dari "${album.title}" untuk offline`);
+                    });
                 }}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-semibold text-white transition-colors"
               >
@@ -569,9 +579,19 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
               <button
                 type="button"
                 onClick={() => {
-                  void downloadTracksOffline(pl.tracks, downloadQuality).then(({ savedCount }) => {
-                    showToast(`${savedCount} lagu dari "${pl.title}" tersimpan offline`);
-                  });
+                  void downloadTracksOffline(pl.tracks, downloadQuality)
+                    .then(({ savedCount, failedCount }) => {
+                      if (savedCount > 0 && failedCount === 0) {
+                        showToast(`${savedCount} lagu dari "${pl.title}" tersimpan offline`);
+                      } else if (savedCount > 0) {
+                        showToast(`${savedCount} lagu tersimpan, ${failedCount} gagal diunduh`);
+                      } else {
+                        showToast(`Gagal mengunduh lagu dari "${pl.title}"`);
+                      }
+                    })
+                    .catch(() => {
+                      showToast(`Gagal mengunduh lagu dari "${pl.title}"`);
+                    });
                 }}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-semibold text-white transition-colors"
               >

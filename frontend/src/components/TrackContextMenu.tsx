@@ -209,11 +209,17 @@ export function GlobalTrackContextMenu({
                     void deleteOfflineDownload(trackKey);
                     showToast(`"${track.title}" dihapus dari Unduhan Offline`);
                   } else {
-                    void downloadTrackOffline(track, downloadQuality).then((res) => {
-                      if (res.ok) {
-                        showToast(`"${track.title}" tersimpan untuk akses offline`);
-                      }
-                    });
+                    void downloadTrackOffline(track, downloadQuality)
+                      .then((res) => {
+                        if (res.ok) {
+                          showToast(`"${track.title}" tersimpan untuk akses offline`);
+                        } else {
+                          showToast(res.reason || 'Gagal mengunduh lagu untuk offline');
+                        }
+                      })
+                      .catch(() => {
+                        showToast('Gagal mengunduh lagu untuk offline');
+                      });
                   }
                   closeMenu();
                 }}
@@ -403,6 +409,9 @@ function SongCreditsModal({
       role="dialog"
       aria-modal="true"
       aria-label="Kredit lagu"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
     >
       <div className="w-full max-w-md glass-panel rounded-2xl p-5 bg-[#121215]/95 space-y-4">

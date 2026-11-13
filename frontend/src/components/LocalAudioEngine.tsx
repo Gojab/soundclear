@@ -23,6 +23,7 @@ import {
   clampYoutubeVolume,
   classifyStreamQualityBadge,
   computeEqualPowerCrossfade,
+  resolveEffectiveCrossfadeSeconds,
   resolveTargetStreamQuality,
 } from '../utils/audioMath';
 import {
@@ -699,6 +700,21 @@ export function LocalAudioEngine() {
         standby.playbackRate = usePlayerStore.getState().playbackRate;
         standby.load();
       } else {
+        const offlineBlobRec = useLibraryStore
+          .getState()
+          .offlineDownloads.find((d) => d.id === nextInfo.key);
+        if (hasPlayableOfflineAudio(offlineBlobRec) && offlineBlobRec) {
+          revokeDeckUrl(graph.objectUrls, standbyIdx);
+          const url = URL.createObjectURL(offlineBlobRec.blob);
+          graph.objectUrls[standbyIdx] = url;
+          graph.trackIds[standbyIdx] = nextInfo.key;
+          const standby = graph.decks[standbyIdx];
+          standby.crossOrigin = null;
+          standby.src = url;
+          standby.playbackRate = usePlayerStore.getState().playbackRate;
+          standby.load();
+          return;
+        }
         revokeDeckUrl(graph.objectUrls, standbyIdx);
         const streamUrl = buildStreamAudioUrl(nextInfo.key, {
           title: nextInfo.track.title,
@@ -800,8 +816,14 @@ export function LocalAudioEngine() {
 
       const upcoming = store.manualQueue[0] ?? store.sourceQueue[0] ?? null;
       const nextInfo = store.repeat !== 'one' ? resolveStandbyInfo(upcoming) : null;
-      const effectiveCrossfade =
-        profile.crossfadeSeconds > 0 ? profile.crossfadeSeconds : ytSound.trackFadeSeconds || 0;
+      const effectiveCrossfade = resolveEffectiveCrossfadeSeconds(profile);
+
+      if (transitionInProgressRef.current && effectiveCrossfade <= 0) {
+        transitionInProgressRef.current = false;
+        graph.decks[standbyIdx].pause();
+        graph.deckGains[standbyIdx].gain.setTargetAtTime(0, graph.ctx.currentTime, 0.03);
+        graph.deckGains[activeIdx].gain.setTargetAtTime(1, graph.ctx.currentTime, 0.03);
+      }
 
       if (
         nextInfo &&

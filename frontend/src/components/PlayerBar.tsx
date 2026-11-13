@@ -67,6 +67,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const playbackRate = usePlayerStore((s) => s.playbackRate);
   const sleepTimerMode = usePlayerStore((s) => s.sleepTimerMode);
   const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
+  const sleepTimerMinutes = usePlayerStore((s) => s.sleepTimerMinutes);
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const rightPanelTab = usePlayerStore((s) => s.rightPanelTab);
   const { desktopNotchVisible } = useNotchVisibility();
@@ -627,16 +628,24 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                 >
                   Mati
                 </button>
-                {[15, 30, 45, 60].map((min) => (
-                  <button
-                    key={min}
-                    type="button"
-                    onClick={() => setSleepTimer('minutes', min)}
-                    className="py-1 rounded-lg text-[11px] font-medium bg-white/[0.07] text-white/80 hover:text-white font-mono-num"
-                  >
-                    {min}m
-                  </button>
-                ))}
+                {[15, 30, 45, 60].map((min) => {
+                  const active = sleepTimerMode === 'minutes' && sleepTimerMinutes === min;
+                  return (
+                    <button
+                      key={min}
+                      type="button"
+                      onClick={() => setSleepTimer('minutes', min)}
+                      aria-pressed={active}
+                      className={`py-1 rounded-lg text-[11px] font-medium font-mono-num ${
+                        active
+                          ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'
+                          : 'bg-white/[0.07] text-white/80 hover:text-white'
+                      }`}
+                    >
+                      {min}m
+                    </button>
+                  );
+                })}
                 <button
                   type="button"
                   onClick={() => setSleepTimer('end_of_track')}
