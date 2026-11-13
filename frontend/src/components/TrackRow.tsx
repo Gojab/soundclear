@@ -4,7 +4,7 @@ import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import type { MediaItem } from '../types/music';
-import { getPlayableVideoId } from '../utils/playerLogic';
+import { getTrackUniqueId } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 
 interface TrackRowProps {
@@ -40,8 +40,8 @@ export function TrackRow({
   const navigate = useNavigationStore((s) => s.navigate);
   const openMenu = useContextMenuStore((s) => s.openMenu);
 
-  const trackKey = getPlayableVideoId(track) || track.id;
-  const activeKey = currentTrack ? getPlayableVideoId(currentTrack) || currentTrack.id : null;
+  const trackKey = getTrackUniqueId(track) || track.id;
+  const activeKey = currentTrack ? getTrackUniqueId(currentTrack) || currentTrack.id : null;
   const isCurrent = Boolean(activeKey && activeKey === trackKey);
 
   const liked = useLibraryStore((s) => s.isLiked(trackKey));

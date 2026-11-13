@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
+import {
+  clampYoutubeVolume,
+  computeNonOverlappingFadeMultiplier,
+} from '../utils/audioMath';
 import { formatArtists, getPlayableVideoId } from '../utils/playerLogic';
 
 interface YTPlayer {
@@ -87,7 +92,7 @@ export function YouTubePlayerBridge() {
   const playerRef = useRef<YTPlayer | null>(null);
   const readyRef = useRef(false);
   const loadedVideoIdRef = useRef<string | null>(null);
-  const initialCuedRef = useRef(false);
+  const microFadeTimerRef = useRef<number | null>(null);
 
   const hydrated = usePlayerStore((s) => s.hydrated);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -95,12 +100,13 @@ export function YouTubePlayerBridge() {
   const volume = usePlayerStore((s) => s.volume);
   const isMuted = usePlayerStore((s) => s.isMuted);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
-  const crossfadeSeconds = usePlayerStore((s) => s.crossfadeSeconds);
   const seekVersion = usePlayerStore((s) => s.seekVersion);
   const pendingSeekSeconds = usePlayerStore((s) => s.pendingSeekSeconds);
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const karaokeOpen = usePlayerStore((s) => s.karaokeOpen);
   const fullscreenNowPlaying = usePlayerStore((s) => s.fullscreenNowPlaying);
+
+  const youtubeSound = useSettingsStore((s) => s.youtubeSound);
 
   const currentVideoId = getPlayableVideoId(currentTrack);
 
@@ -130,7 +136,10 @@ export function YouTubePlayerBridge() {
           onReady: (event) => {
             readyRef.current = true;
             const state = usePlayerStore.getState();
-            event.target.setVolume(state.volume);
+            const ytSound = useSettingsStore.getState().youtubeSound;
+            const cappedVol = clampYoutubeVolume(state.volume, ytSound.maxVolumeLimit, state.isMuted);
+
+            event.target.setVolume(cappedVol);
             try {
               event.target.setPlaybackRate(state.playbackRate);
             } catch {
@@ -145,11 +154,12 @@ export function YouTubePlayerBridge() {
             const vid = getPlayableVideoId(state.currentTrack);
             if (vid && loadedVideoIdRef.current !== vid) {
               loadedVideoIdRef.current = vid;
-              const startSec = Math.floor(state.pendingSeekSeconds ?? state.currentTime ?? 0);
+              const startSec = ytSound.resumeLastPosition
+                ? Math.floor(state.pendingSeekSeconds ?? state.currentTime ?? 0)
+                : 0;
               if (state.isPlaying) {
                 event.target.loadVideoById({ videoId: vid, startSeconds: startSec });
               } else {
-                initialCuedRef.current = true;
                 event.target.cueVideoById({ videoId: vid, startSeconds: startSec });
               }
               state.clearPendingSeek();
@@ -159,6 +169,8 @@ export function YouTubePlayerBridge() {
             const YTState = window.YT?.PlayerState;
             if (!YTState) return;
             const store = usePlayerStore.getState();
+            // Ignore YT events if a local file is now active
+            if (!getPlayableVideoId(store.currentTrack)) return;
 
             if (event.data === YTState.PLAYING) {
               store.setIsBuffering(false);
@@ -181,6 +193,7 @@ export function YouTubePlayerBridge() {
           },
           onError: (event) => {
             const store = usePlayerStore.getState();
+            if (!getPlayableVideoId(store.currentTrack)) return;
             store.setIsBuffering(false);
             store.setIsPlaying(false);
             const code = event.data;
@@ -202,11 +215,14 @@ export function YouTubePlayerBridge() {
 
     return () => {
       cancelled = true;
+      if (microFadeTimerRef.current) {
+        window.clearInterval(microFadeTimerRef.current);
+      }
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
         } catch {
-          // Ignore teardown errors
+          // Ignore
         }
         playerRef.current = null;
         readyRef.current = false;
@@ -214,7 +230,7 @@ export function YouTubePlayerBridge() {
     };
   }, []);
 
-  // Overlay visible YouTube player inside RightPanel [data-yt-visible-slot] without reparenting DOM node
+  // Overlay visible YouTube player inside RightPanel [data-yt-visible-slot]
   useEffect(() => {
     const syncSlotPosition = () => {
       const wrapper = wrapperRef.current;
@@ -271,33 +287,91 @@ export function YouTubePlayerBridge() {
     };
   }, [currentVideoId, rightPanelOpen, karaokeOpen, fullscreenNowPlaying]);
 
-  // Load or cue videoId when hydrated track changes
+  // Load/cue YouTube video OR pause immediately if switching to a Local file
   useEffect(() => {
-    if (!hydrated || !currentVideoId || !readyRef.current || !playerRef.current) return;
+    if (!hydrated || !readyRef.current || !playerRef.current) return;
+    if (!currentVideoId) {
+      loadedVideoIdRef.current = null;
+      try {
+        playerRef.current.pauseVideo();
+      } catch {
+        // Ignore
+      }
+      return;
+    }
+
     if (loadedVideoIdRef.current === currentVideoId) return;
     loadedVideoIdRef.current = currentVideoId;
     const state = usePlayerStore.getState();
-    const startSec = Math.floor(state.pendingSeekSeconds ?? state.currentTime ?? 0);
+    const ytSound = useSettingsStore.getState().youtubeSound;
+    const startSec = ytSound.resumeLastPosition
+      ? Math.floor(state.pendingSeekSeconds ?? state.currentTime ?? 0)
+      : 0;
     try {
       if (state.isPlaying) {
         playerRef.current.loadVideoById({ videoId: currentVideoId, startSeconds: startSec });
       } else {
-        initialCuedRef.current = true;
         playerRef.current.cueVideoById({ videoId: currentVideoId, startSeconds: startSec });
       }
       state.clearPendingSeek();
     } catch {
-      // Ignore transient errors
+      // Ignore
     }
   }, [hydrated, currentVideoId]);
 
-  // Sync play / pause state
+  // Sync play / pause with optional short fade-in / fade-out
   useEffect(() => {
     if (!readyRef.current || !playerRef.current || !currentVideoId) return;
+    if (microFadeTimerRef.current) {
+      window.clearInterval(microFadeTimerRef.current);
+      microFadeTimerRef.current = null;
+    }
+
+    const ytSound = useSettingsStore.getState().youtubeSound;
+    const state = usePlayerStore.getState();
+    const targetVol = clampYoutubeVolume(state.volume, ytSound.maxVolumeLimit, state.isMuted);
+
     try {
       if (isPlaying) {
-        initialCuedRef.current = false;
-        playerRef.current.playVideo();
+        if (ytSound.fadeOnPauseResume && !state.isMuted && targetVol > 0) {
+          let step = 0;
+          const steps = 6;
+          playerRef.current.setVolume(Math.round(targetVol * 0.15));
+          playerRef.current.playVideo();
+          microFadeTimerRef.current = window.setInterval(() => {
+            step += 1;
+            if (!playerRef.current || step >= steps) {
+              if (playerRef.current) playerRef.current.setVolume(targetVol);
+              if (microFadeTimerRef.current) {
+                window.clearInterval(microFadeTimerRef.current);
+                microFadeTimerRef.current = null;
+              }
+              return;
+            }
+            playerRef.current.setVolume(Math.round(targetVol * (0.15 + 0.85 * (step / steps))));
+          }, 40);
+        } else {
+          playerRef.current.setVolume(targetVol);
+          playerRef.current.playVideo();
+        }
+      } else if (ytSound.fadeOnPauseResume && !state.isMuted && targetVol > 0) {
+        let step = 0;
+        const steps = 5;
+        microFadeTimerRef.current = window.setInterval(() => {
+          step += 1;
+          if (!playerRef.current || step >= steps) {
+            if (playerRef.current) {
+              playerRef.current.pauseVideo();
+              playerRef.current.setVolume(targetVol);
+            }
+            if (microFadeTimerRef.current) {
+              window.clearInterval(microFadeTimerRef.current);
+              microFadeTimerRef.current = null;
+            }
+            return;
+          }
+          playerRef.current.setVolume(Math.round(targetVol * (1 - step / steps)));
+        }, 40);
       } else {
         playerRef.current.pauseVideo();
       }
@@ -306,11 +380,12 @@ export function YouTubePlayerBridge() {
     }
   }, [isPlaying, currentVideoId]);
 
-  // Sync volume & mute
+  // Enforce maxVolumeLimit, volume & mute
   useEffect(() => {
-    if (!readyRef.current || !playerRef.current) return;
+    if (!readyRef.current || !playerRef.current || !currentVideoId) return;
+    const cappedVol = clampYoutubeVolume(volume, youtubeSound.maxVolumeLimit, isMuted);
     try {
-      playerRef.current.setVolume(volume);
+      playerRef.current.setVolume(cappedVol);
       if (isMuted) {
         playerRef.current.mute();
       } else {
@@ -319,30 +394,30 @@ export function YouTubePlayerBridge() {
     } catch {
       // Ignore
     }
-  }, [volume, isMuted]);
+  }, [volume, isMuted, youtubeSound.maxVolumeLimit, currentVideoId]);
 
   // Sync playback rate
   useEffect(() => {
-    if (!readyRef.current || !playerRef.current) return;
+    if (!readyRef.current || !playerRef.current || !currentVideoId) return;
     try {
       playerRef.current.setPlaybackRate(playbackRate);
     } catch {
       // Ignore
     }
-  }, [playbackRate]);
+  }, [playbackRate, currentVideoId]);
 
   // Handle explicit seek requests
   useEffect(() => {
-    if (pendingSeekSeconds === null || !readyRef.current || !playerRef.current) return;
+    if (pendingSeekSeconds === null || !readyRef.current || !playerRef.current || !currentVideoId) return;
     try {
       playerRef.current.seekTo(pendingSeekSeconds, true);
     } catch {
       // Ignore
     }
     usePlayerStore.getState().clearPendingSeek();
-  }, [seekVersion, pendingSeekSeconds]);
+  }, [seekVersion, pendingSeekSeconds, currentVideoId]);
 
-  // Poll playback progress + crossfade volume tapering + media session position
+  // Poll progress + non-overlapping track fade (0-12s) + sleep timer fade-out + Media Session position
   useEffect(() => {
     if (!isPlaying || !currentVideoId) return;
     const interval = window.setInterval(() => {
@@ -352,18 +427,29 @@ export function YouTubePlayerBridge() {
         const dur = playerRef.current.getDuration();
         if (Number.isFinite(cur)) {
           const store = usePlayerStore.getState();
+          const ytSound = useSettingsStore.getState().youtubeSound;
           store.setProgress(cur, Number.isFinite(dur) && dur > 0 ? dur : undefined);
 
-          // Crossfade volume envelope (0-12s)
-          if (crossfadeSeconds > 0 && !store.isMuted && dur > crossfadeSeconds * 2) {
-            const fadeInDur = Math.min(crossfadeSeconds, 4);
-            let factor = 1;
-            if (cur < fadeInDur) {
-              factor = Math.max(0.15, cur / fadeInDur);
-            } else if (dur - cur < crossfadeSeconds) {
-              factor = Math.max(0.08, (dur - cur) / crossfadeSeconds);
+          const baseVol = clampYoutubeVolume(store.volume, ytSound.maxVolumeLimit, store.isMuted);
+          if (!store.isMuted && baseVol > 0) {
+            let factor = computeNonOverlappingFadeMultiplier(
+              cur,
+              dur,
+              ytSound.trackFadeSeconds,
+            );
+
+            if (
+              ytSound.fadeOutOnSleepTimer &&
+              store.sleepTimerMode === 'minutes' &&
+              store.sleepTimerEndsAt
+            ) {
+              const remainingMs = store.sleepTimerEndsAt - Date.now();
+              if (remainingMs > 0 && remainingMs <= 1800) {
+                factor = Math.min(factor, Math.max(0.05, remainingMs / 1800));
+              }
             }
-            playerRef.current.setVolume(Math.round(store.volume * factor));
+
+            playerRef.current.setVolume(Math.round(baseVol * factor));
           }
 
           if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession && dur > 0) {
@@ -374,7 +460,7 @@ export function YouTubePlayerBridge() {
                 position: Math.min(cur, dur),
               });
             } catch {
-              // Ignore unsupported position states
+              // Ignore
             }
           }
         }
@@ -384,7 +470,7 @@ export function YouTubePlayerBridge() {
     }, 250);
 
     return () => window.clearInterval(interval);
-  }, [isPlaying, currentVideoId, crossfadeSeconds]);
+  }, [isPlaying, currentVideoId]);
 
   // Media Session API (lock screen & media keys)
   useEffect(() => {
@@ -400,7 +486,7 @@ export function YouTubePlayerBridge() {
           : [],
       });
     } catch {
-      // Ignore metadata failures
+      // Ignore
     }
 
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
@@ -429,7 +515,7 @@ export function YouTubePlayerBridge() {
     }
   }, [currentTrack, isPlaying]);
 
-  // Global keyboard shortcuts (Space, Arrows, M, L, S, R, ?, Esc)
+  // Global keyboard shortcuts (Space, Arrows, M, L, S, R, ?)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;

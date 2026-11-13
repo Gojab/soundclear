@@ -19,7 +19,7 @@ import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
-import { formatArtists, getPlayableVideoId } from '../utils/playerLogic';
+import { formatArtists, getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 
 export function GlobalTrackContextMenu({
   onAddToPlaylist,
@@ -63,7 +63,8 @@ export function GlobalTrackContextMenu({
     };
   }, [open, closeMenu]);
 
-  const trackKey = track ? getPlayableVideoId(track) || track.id : null;
+  const trackKey = getTrackUniqueId(track);
+  const localFile = isLocalTrack(track);
   const liked = isLiked(trackKey);
   const hidden = isTrackHidden(trackKey);
   const primaryArtist = track?.artists.find((a) => Boolean(a.id));
@@ -172,91 +173,93 @@ export function GlobalTrackContextMenu({
             <span>Tambah ke playlist</span>
           </button>
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              toggleLike(track);
-              if (trackKey) {
-                void postAccountRate(trackKey, liked ? 'INDIFFERENT' : 'LIKE').catch(() => {});
-              }
-              showToast(liked ? 'Dihapus dari Lagu Disukai' : 'Ditambahkan ke Lagu Disukai');
-              closeMenu();
-            }}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
-          >
-            <Heart
-              className={`w-3.5 h-3.5 ${liked ? 'text-[#2EE6A6] fill-[#2EE6A6]' : 'text-white/60'}`}
-              strokeWidth={1.75}
-            />
-            <span>{liked ? 'Batal sukai' : 'Sukai lagu'}</span>
-          </button>
-
-          <div className="my-1 border-t border-white/[0.08]" />
-
-          {primaryArtist?.id && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                navigate({ name: 'artist', id: primaryArtist.id! });
-                closeMenu();
-              }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
-            >
-              <User className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
-              <span>Ke Artis</span>
-            </button>
-          )}
-
-          {primaryAlbum?.id && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                navigate({ name: 'album', id: primaryAlbum.id! });
-                closeMenu();
-              }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
-            >
-              <Disc3 className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
-              <span>Ke Album</span>
-            </button>
-          )}
-
-          {getPlayableVideoId(track) && (
-            <>
               <button
                 type="button"
                 role="menuitem"
-                onClick={() => void handleStartRadio()}
+                onClick={() => {
+                  toggleLike(track);
+                  if (trackKey && !localFile) {
+                    void postAccountRate(trackKey, liked ? 'INDIFFERENT' : 'LIKE').catch(() => {});
+                  }
+                  showToast(liked ? 'Dihapus dari Lagu Disukai' : 'Ditambahkan ke Lagu Disukai');
+                  closeMenu();
+                }}
                 className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
               >
-                <Radio className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
-                <span>Radio lagu</span>
+                <Heart
+                  className={`w-3.5 h-3.5 ${liked ? 'text-[#2EE6A6] fill-[#2EE6A6]' : 'text-white/60'}`}
+                  strokeWidth={1.75}
+                />
+                <span>{liked ? 'Batal sukai' : 'Sukai lagu'}</span>
               </button>
 
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => openCredits(track)}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
-              >
-                <FileText className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
-                <span>Kredit lagu</span>
-              </button>
-            </>
-          )}
+              {!localFile && <div className="my-1 border-t border-white/[0.08]" />}
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => void handleCopyLink()}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
-          >
-            <Copy className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
-            <span>Salin tautan</span>
-          </button>
+              {primaryArtist?.id && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    navigate({ name: 'artist', id: primaryArtist.id! });
+                    closeMenu();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                >
+                  <User className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                  <span>Ke Artis</span>
+                </button>
+              )}
+
+              {primaryAlbum?.id && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    navigate({ name: 'album', id: primaryAlbum.id! });
+                    closeMenu();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                >
+                  <Disc3 className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                  <span>Ke Album</span>
+                </button>
+              )}
+
+              {getPlayableVideoId(track) && (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void handleStartRadio()}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                    <span>Radio lagu</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => openCredits(track)}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                    <span>Kredit lagu</span>
+                  </button>
+                </>
+              )}
+
+              {!localFile && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void handleCopyLink()}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                  <span>Salin tautan</span>
+                </button>
+              )}
 
           {trackKey && (
             <button

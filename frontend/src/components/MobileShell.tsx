@@ -24,7 +24,12 @@ import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import type { MediaItem } from '../types/music';
-import { formatArtists, formatTime, getPlayableVideoId } from '../utils/playerLogic';
+import {
+  formatArtists,
+  formatTime,
+  getTrackUniqueId,
+  isLocalTrack,
+} from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 import { LyricsView } from './LyricsView';
 import { QueueView } from './QueueView';
@@ -64,9 +69,10 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
   const setMobileExpanded = usePlayerStore((s) => s.setMobileExpanded);
   const setKaraokeOpen = usePlayerStore((s) => s.setKaraokeOpen);
 
-  const trackKey = currentTrack ? getPlayableVideoId(currentTrack) || currentTrack.id : null;
+  const trackKey = getTrackUniqueId(currentTrack);
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
   const toggleLike = useLibraryStore((s) => s.toggleLike);
+  const localPlaying = isLocalTrack(currentTrack);
 
   const safeDuration = duration > 0 ? duration : currentTrack?.durationSeconds || 0;
   const progressPct =
@@ -343,7 +349,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                 </div>
 
                 {/* Extra quick toggles */}
-                <div className="flex items-center justify-between pt-2 border-t border-white/[0.08] text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/[0.08] text-xs">
                   <button
                     type="button"
                     onClick={toggleSmartShuffle}
@@ -375,6 +381,19 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                   >
                     {playbackRate}x
                   </button>
+
+                  {localPlaying && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileExpanded(false);
+                        navigate({ name: 'settings', tab: 'sound', focusEq: true });
+                      }}
+                      className="px-3 py-2 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 text-[#2EE6A6] font-medium"
+                    >
+                      EQ Lokal
+                    </button>
+                  )}
 
                   <button
                     type="button"

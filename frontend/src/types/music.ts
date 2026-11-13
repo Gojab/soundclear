@@ -8,7 +8,15 @@ export interface AlbumRef {
   name: string;
 }
 
-export type MediaItemType = 'song' | 'video' | 'album' | 'artist' | 'playlist' | 'podcast' | 'episode';
+export type MediaItemType =
+  | 'song'
+  | 'video'
+  | 'album'
+  | 'artist'
+  | 'playlist'
+  | 'podcast'
+  | 'episode'
+  | 'local';
 
 export interface MediaItem {
   id: string;
@@ -30,6 +38,7 @@ export interface MediaItem {
   podcastId?: string | null;
   creditsBrowseId?: string | null;
   genre?: string | null;
+  localFileId?: string | null;
 }
 
 export interface HomeSection {
@@ -304,12 +313,67 @@ export interface RecentSearchEntry {
   searchedAt: number;
 }
 
+export type StartupVolumeMode = 'last' | 'fixed';
+
+export interface YouTubeSoundSettings {
+  maxVolumeLimit: number;
+  startupVolumeMode: StartupVolumeMode;
+  startupFixedVolume: number;
+  defaultPlaybackRate: number;
+  trackFadeSeconds: number;
+  fadeOnPauseResume: boolean;
+  fadeOutOnSleepTimer: boolean;
+  resumeLastPosition: boolean;
+  autoStartOnOpen: boolean;
+}
+
+export type NormalizationTarget = 'off' | 'quiet' | 'normal' | 'loud';
+
+export interface EqPreset {
+  id: string;
+  name: string;
+  preampDb: number;
+  bands: number[];
+  isCustom?: boolean;
+}
+
+export interface LocalAudioProfile {
+  eqEnabled: boolean;
+  presetId: string;
+  preampDb: number;
+  bands: number[];
+  customPresets: EqPreset[];
+  normalizationTarget: NormalizationTarget;
+  monoAudio: boolean;
+  balance: number; // -1 (kiri penuh) s.d. +1 (kanan penuh)
+  crossfadeSeconds: number; // 0-12 detik
+  gaplessPlayback: boolean;
+}
+
+export interface LocalAudioFileRecord {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  title: string;
+  artist: string;
+  album: string;
+  durationSeconds: number;
+  coverDataUrl?: string | null;
+  estimatedLufs: number;
+  peakLinear: number;
+  addedAt: number;
+  blob: Blob;
+}
+
 export interface UserSettings {
   hideExplicit: boolean;
   autoplay: boolean;
   dataSaver: boolean;
   showRightPanel: boolean;
   homeSectionOrder: string[];
+  youtubeSound: YouTubeSoundSettings;
+  episodePlaybackRates: Record<string, number>;
 }
 
 export type HomeSectionId =
@@ -336,5 +400,5 @@ export type RouteView =
   | { name: 'liked' }
   | { name: 'local-playlist'; id: string }
   | { name: 'recap' }
-  | { name: 'settings' }
+  | { name: 'settings'; tab?: 'general' | 'sound'; focusEq?: boolean }
   | { name: 'shortcuts' };

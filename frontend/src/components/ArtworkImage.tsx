@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Disc3, Music, Podcast, User } from 'lucide-react';
+import { Disc3, Headphones, Music, Podcast, User } from 'lucide-react';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItemType } from '../types/music';
 import { getEffectiveThumbnail } from '../utils/playerLogic';
@@ -31,7 +31,9 @@ export function ArtworkImage({
           ? Disc3
           : type === 'podcast' || type === 'episode'
             ? Podcast
-            : Music;
+            : type === 'local'
+              ? Headphones
+              : Music;
     return (
       <div
         className={`${className} ${roundedClass} flex items-center justify-center bg-white/[0.06] border border-white/[0.08] text-white/40 shrink-0`}

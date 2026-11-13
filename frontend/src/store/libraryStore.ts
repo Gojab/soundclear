@@ -3,6 +3,7 @@ import { db, migrateLegacyLocalStorage } from '../db/soundclearDb';
 import type {
   EpisodeProgressEntry,
   FollowedArtistEntry,
+  LocalAudioFileRecord,
   LocalPlaylist,
   MediaItem,
   PlayHistoryEntry,
@@ -11,10 +12,11 @@ import type {
   SavedAlbumEntry,
   SavedPodcastEntry,
 } from '../types/music';
-import { getPlayableVideoId } from '../utils/playerLogic';
+import { isSupportedLocalAudioFile, parseLocalAudioFile } from '../utils/localAudioImport';
+import { getTrackUniqueId } from '../utils/playerLogic';
 
 export type LibrarySortMode = 'newest' | 'alpha' | 'last_played';
-export type LibraryFilterType = 'all' | 'playlists' | 'albums' | 'artists' | 'podcasts';
+export type LibraryFilterType = 'all' | 'playlists' | 'albums' | 'artists' | 'podcasts' | 'local';
 export type LibraryViewMode = 'list' | 'grid' | 'compact';
 
 interface LibraryState {
@@ -29,6 +31,7 @@ interface LibraryState {
   playHistory: PlayHistoryEntry[];
   recentSearches: RecentSearchEntry[];
   hiddenTrackIds: string[];
+  localFiles: LocalAudioFileRecord[];
 
   sortMode: LibrarySortMode;
   filterType: LibraryFilterType;
@@ -99,10 +102,13 @@ interface LibraryState {
   hideTrack: (trackId: string) => void;
   unhideTrack: (trackId: string) => void;
   isTrackHidden: (trackId: string | null | undefined) => boolean;
+
+  importLocalFiles: (files: FileList | File[]) => Promise<{ imported: number; skipped: number }>;
+  deleteLocalFile: (id: string) => Promise<void>;
 }
 
 function normalizeTrackId(track: MediaItem): string {
-  return getPlayableVideoId(track) || track.id;
+  return getTrackUniqueId(track) || track.id;
 }
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
@@ -117,6 +123,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   playHistory: [],
   recentSearches: [],
   hiddenTrackIds: [],
+  localFiles: [],
 
   sortMode: 'newest',
   filterType: 'all',
@@ -136,6 +143,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       playHistory,
       recentSearches,
       hiddenRecs,
+      localFiles,
     ] = await Promise.all([
       db.likedTracks.orderBy('addedAt').reverse().toArray(),
       db.playlists.orderBy('createdAt').reverse().toArray(),
@@ -147,6 +155,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       db.playHistory.orderBy('playedAt').reverse().toArray(),
       db.recentSearches.orderBy('searchedAt').reverse().toArray(),
       db.hiddenTracks.toArray(),
+      db.localFiles.orderBy('addedAt').reverse().toArray(),
     ]);
 
     const episodeProgress: Record<string, EpisodeProgressEntry> = {};
@@ -166,6 +175,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       playHistory,
       recentSearches,
       hiddenTrackIds: hiddenRecs.map((r) => r.id),
+      localFiles,
     });
   },
 
@@ -582,5 +592,42 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   isTrackHidden: (trackId) => {
     if (!trackId) return false;
     return get().hiddenTrackIds.includes(trackId);
+  },
+
+  importLocalFiles: async (fileList) => {
+    const files = Array.from(fileList);
+    let imported = 0;
+    let skipped = 0;
+    const addedRecords: LocalAudioFileRecord[] = [];
+
+    for (const file of files) {
+      if (!isSupportedLocalAudioFile(file)) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        const record = await parseLocalAudioFile(file);
+        await db.localFiles.put(record);
+        addedRecords.push(record);
+        imported += 1;
+      } catch {
+        skipped += 1;
+      }
+    }
+
+    if (addedRecords.length > 0) {
+      set((state) => ({
+        localFiles: [...addedRecords.reverse(), ...state.localFiles],
+      }));
+    }
+
+    return { imported, skipped };
+  },
+
+  deleteLocalFile: async (id) => {
+    set((state) => ({
+      localFiles: state.localFiles.filter((f) => f.id !== id),
+    }));
+    await db.localFiles.delete(id).catch(() => {});
   },
 }));

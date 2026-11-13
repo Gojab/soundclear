@@ -1,9 +1,10 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
   Edit3,
   Folder,
   FolderPlus,
+  HardDrive,
   Heart,
   LayoutGrid,
   List,
@@ -13,9 +14,11 @@ import {
   Plus,
   Rows3,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { ArtworkImage } from '../components/ArtworkImage';
 import { TrackRow } from '../components/TrackRow';
+import { useContextMenuStore } from '../store/contextMenuStore';
 import {
   useLibraryStore,
   type LibraryFilterType,
@@ -25,7 +28,8 @@ import {
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import type { LocalPlaylist, MediaItem } from '../types/music';
-import { findDuplicateTrackIndices, getPlayableVideoId } from '../utils/playerLogic';
+import { localFileToMediaItem } from '../utils/localAudioImport';
+import { findDuplicateTrackIndices, getTrackUniqueId } from '../utils/playerLogic';
 
 interface LibraryPagesProps {
   onAddToPlaylist: (track: MediaItem) => void;
@@ -34,12 +38,16 @@ interface LibraryPagesProps {
 }
 
 export function LibraryOverviewPage({
+  onAddToPlaylist,
   onOpenCreatePlaylist,
   onEditPlaylist,
 }: LibraryPagesProps) {
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
+  const [isDraggingAudio, setIsDraggingAudio] = useState(false);
+  const [importingLocal, setImportingLocal] = useState(false);
+  const localFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const likedCount = useLibraryStore((s) => s.likedTracks.length);
   const playlists = useLibraryStore((s) => s.playlists);
@@ -47,6 +55,7 @@ export function LibraryOverviewPage({
   const savedAlbums = useLibraryStore((s) => s.savedAlbums);
   const followedArtists = useLibraryStore((s) => s.followedArtists);
   const savedPodcasts = useLibraryStore((s) => s.savedPodcasts);
+  const localFiles = useLibraryStore((s) => s.localFiles);
 
   const sortMode = useLibraryStore((s) => s.sortMode);
   const filterType = useLibraryStore((s) => s.filterType);
@@ -61,8 +70,36 @@ export function LibraryOverviewPage({
   const togglePinAlbum = useLibraryStore((s) => s.togglePinAlbum);
   const togglePinArtist = useLibraryStore((s) => s.togglePinArtist);
   const togglePinPodcast = useLibraryStore((s) => s.togglePinPodcast);
+  const importLocalFiles = useLibraryStore((s) => s.importLocalFiles);
+  const deleteLocalFile = useLibraryStore((s) => s.deleteLocalFile);
 
+  const playTrackList = usePlayerStore((s) => s.playTrackList);
+  const showToast = useContextMenuStore((s) => s.showToast);
   const navigate = useNavigationStore((s) => s.navigate);
+
+  const handleLocalImport = async (files: FileList | File[]) => {
+    if (!files || files.length === 0) return;
+    setImportingLocal(true);
+    try {
+      const result = await importLocalFiles(files);
+      if (result.imported > 0) {
+        showToast(`${result.imported} file lokal berhasil diimpor`);
+        setFilterType('local');
+      } else {
+        showToast('Format file tidak didukung (gunakan MP3, M4A, FLAC, OGG, atau WAV)');
+      }
+    } finally {
+      setImportingLocal(false);
+    }
+  };
+
+  const localMediaItems = useMemo(() => {
+    const items = localFiles.map((f) => localFileToMediaItem(f));
+    if (sortMode === 'alpha') {
+      return [...items].sort((a, b) => a.title.localeCompare(b.title, 'id'));
+    }
+    return items;
+  }, [localFiles, sortMode]);
 
   const handleCreateFolder = (e: FormEvent) => {
     e.preventDefault();
@@ -173,6 +210,10 @@ export function LibraryOverviewPage({
     { id: 'albums', label: 'Album' },
     { id: 'artists', label: 'Artis' },
     { id: 'podcasts', label: 'Podcast' },
+    {
+      id: 'local',
+      label: localFiles.length > 0 ? `File Lokal (${localFiles.length})` : 'File Lokal',
+    },
   ];
 
   const openEntry = (item: UnifiedLibraryEntry) => {
@@ -190,18 +231,57 @@ export function LibraryOverviewPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6"
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
+          setIsDraggingAudio(true);
+        }
+      }}
+      onDragLeave={() => setIsDraggingAudio(false)}
+      onDrop={(e) => {
+        if (e.dataTransfer.files?.length) {
+          e.preventDefault();
+          setIsDraggingAudio(false);
+          void handleLocalImport(e.dataTransfer.files);
+        }
+      }}
+    >
+      <input
+        ref={localFileInputRef}
+        type="file"
+        multiple
+        accept=".mp3,.m4a,.flac,.ogg,.oga,.wav,.aac,audio/*"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) {
+            void handleLocalImport(e.target.files);
+          }
+          e.target.value = '';
+        }}
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">
             Koleksi Anda
           </h1>
           <p className="text-xs text-white/55 mt-0.5">
-            Playlist, folder, lagu disukai, album, artis, dan podcast tersimpan lokal
+            Playlist, folder, lagu disukai, album, artis, podcast, dan file audio lokal Anda
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={importingLocal}
+            onClick={() => localFileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-medium text-white transition-colors"
+          >
+            <Upload className="w-3.5 h-3.5" strokeWidth={1.75} />
+            {importingLocal ? 'Mengimpor...' : 'Impor File Lokal'}
+          </button>
           <button
             type="button"
             onClick={() => setCreatingFolder((v) => !v)}
@@ -222,7 +302,10 @@ export function LibraryOverviewPage({
       </div>
 
       {creatingFolder && (
-        <form onSubmit={handleCreateFolder} className="glass-card rounded-xl p-3 flex items-center gap-2 max-w-md">
+        <form
+          onSubmit={handleCreateFolder}
+          className="glass-card rounded-xl p-3 flex items-center gap-2 max-w-md"
+        >
           <input
             type="text"
             value={folderName}
@@ -243,7 +326,7 @@ export function LibraryOverviewPage({
 
       {/* Controls toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {filterChips.map((chip) => (
             <button
               key={chip.id}
@@ -292,7 +375,9 @@ export function LibraryOverviewPage({
                   aria-label={mode.label}
                   aria-pressed={viewMode === mode.id}
                   className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-                    viewMode === mode.id ? 'bg-white/[0.12] text-[#2EE6A6]' : 'text-white/55 hover:text-white'
+                    viewMode === mode.id
+                      ? 'bg-white/[0.12] text-[#2EE6A6]'
+                      : 'text-white/55 hover:text-white'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -303,185 +388,323 @@ export function LibraryOverviewPage({
         </div>
       </div>
 
-      {/* Folders strip */}
-      {folders.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSelectedFolderId('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium ${
-              selectedFolderId === 'all'
-                ? 'bg-white/[0.14] text-white'
-                : 'bg-white/[0.05] text-white/60 hover:text-white'
+      {/* File Lokal Dropzone + Section */}
+      {filterType === 'local' ? (
+        <section className="space-y-4">
+          <div
+            className={`glass-card rounded-2xl p-5 border transition-colors ${
+              isDraggingAudio
+                ? 'border-[#2EE6A6] bg-[#2EE6A6]/10'
+                : 'border-white/[0.08]'
             }`}
           >
-            Semua Folder
-          </button>
-          {folders.map((fld) => (
-            <div
-              key={fld.id}
-              className={`inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-xl text-xs ${
-                selectedFolderId === fld.id
-                  ? 'bg-[#2EE6A6]/15 text-[#2EE6A6] border border-[#2EE6A6]/35'
-                  : 'bg-white/[0.05] text-white/75'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setSelectedFolderId(fld.id)}
-                className="inline-flex items-center gap-1.5 py-0.5"
-              >
-                <Folder className="w-3.5 h-3.5" strokeWidth={1.75} />
-                <span>{fld.name}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedFolderId === fld.id) setSelectedFolderId('all');
-                  deleteFolder(fld.id);
-                }}
-                aria-label={`Hapus folder ${fld.name}`}
-                className="w-5 h-5 rounded flex items-center justify-center text-white/40 hover:text-red-300"
-              >
-                <Trash2 className="w-3 h-3" strokeWidth={1.75} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Lagu Disukai Spotlight */}
-      {selectedFolderId === 'all' && (filterType === 'all' || filterType === 'playlists') && (
-        <button
-          type="button"
-          onClick={() => navigate({ name: 'liked' })}
-          className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.08] transition-colors"
-        >
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-12 h-12 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 flex items-center justify-center text-[#2EE6A6] shrink-0">
-              <Heart className="w-5 h-5 fill-[#2EE6A6]" strokeWidth={1.75} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white">Lagu Disukai</p>
-              <p className="text-xs text-white/55 tabular-nums mt-0.5">{likedCount} lagu tersimpan</p>
-            </div>
-          </div>
-          <span className="text-xs font-medium text-[#2EE6A6] shrink-0 pr-1">Buka</span>
-        </button>
-      )}
-
-      {/* Entries Rendering */}
-      {entries.length === 0 ? (
-        <div className="glass-card rounded-2xl p-8 text-center">
-          <p className="text-sm text-white/75">Belum ada item di filter koleksi ini.</p>
-        </div>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {entries.map((entry) => (
-            <div key={`${entry.kind}-${entry.id}`} className="glass-card group rounded-2xl p-3 flex flex-col">
-              <div className="relative aspect-square w-full mb-3 overflow-hidden rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => openEntry(entry)}
-                  className="w-full h-full block"
-                >
-                  <ArtworkImage
-                    src={entry.thumbnail}
-                    alt={entry.title}
-                    type={entry.kind === 'artist' ? 'artist' : entry.kind === 'podcast' ? 'podcast' : 'playlist'}
-                    className="w-full h-full"
-                    roundedClass={entry.kind === 'artist' ? 'rounded-full' : 'rounded-xl'}
-                  />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => togglePinEntry(entry)}
-                  aria-label={entry.pinned ? `Lepas sematan ${entry.title}` : `Sematkan ${entry.title}`}
-                  className={`absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center backdrop-blur-md transition-opacity ${
-                    entry.pinned
-                      ? 'bg-[#2EE6A6] text-[#06130E] opacity-100'
-                      : 'bg-black/60 text-white/75 opacity-0 group-hover:opacity-100'
-                  }`}
-                >
-                  <Pin className="w-3.5 h-3.5" strokeWidth={1.75} />
-                </button>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 flex items-center justify-center text-[#2EE6A6] shrink-0">
+                  <HardDrive className="w-5 h-5" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-white">File Lokal</h2>
+                  <p className="text-xs text-white/55 mt-0.5 max-w-xl">
+                    Seret &amp; lepas file audio (MP3, M4A, FLAC, OGG, WAV) untuk diputar dengan EQ
+                    10-band, normalisasi, dan crossfade. Hanya untuk file milik Anda sendiri.
+                  </p>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => openEntry(entry)}
-                className="text-left text-sm font-semibold text-white truncate hover:underline"
-              >
-                {entry.title}
-              </button>
-              <p className="text-xs text-white/55 truncate mt-0.5">{entry.subtitle}</p>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {entries.map((entry) => (
-            <div
-              key={`${entry.kind}-${entry.id}`}
-              className="track-row group flex items-center gap-3 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05]"
-            >
-              {viewMode === 'list' && (
-                <button
-                  type="button"
-                  onClick={() => openEntry(entry)}
-                  className="w-11 h-11 rounded-lg overflow-hidden shrink-0"
-                >
-                  {entry.thumbnail ? (
-                    <ArtworkImage
-                      src={entry.thumbnail}
-                      alt={entry.title}
-                      type={entry.kind === 'artist' ? 'artist' : 'playlist'}
-                      className="w-full h-full"
-                      roundedClass={entry.kind === 'artist' ? 'rounded-full' : 'rounded-lg'}
-                    />
-                  ) : (
-                    <div className="w-full h-full rounded-lg bg-white/[0.06] flex items-center justify-center text-white/45">
-                      <ListMusic className="w-5 h-5" strokeWidth={1.75} />
-                    </div>
-                  )}
-                </button>
-              )}
 
-              <button
-                type="button"
-                onClick={() => openEntry(entry)}
-                className="min-w-0 flex-1 text-left"
-              >
-                <p className="text-sm font-medium text-white truncate">{entry.title}</p>
-                <p className="text-xs text-white/50 truncate">{entry.subtitle}</p>
-              </button>
-
-              <div className="flex items-center gap-1 shrink-0">
-                {entry.playlistObj && onEditPlaylist && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {localMediaItems.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => onEditPlaylist(entry.playlistObj!)}
-                    aria-label={`Edit ${entry.title}`}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.08]"
+                    onClick={() => playTrackList(localMediaItems, 0, 'File Lokal')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105"
                   >
-                    <Edit3 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
+                    Putar Semua
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => togglePinEntry(entry)}
-                  aria-label={entry.pinned ? `Lepas sematan ${entry.title}` : `Sematkan ${entry.title}`}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                    entry.pinned
-                      ? 'text-[#2EE6A6]'
-                      : 'text-white/40 hover:text-white hover:bg-white/[0.08]'
-                  }`}
+                  onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: true })}
+                  className="px-3.5 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-medium text-white"
                 >
-                  <Pin className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  Atur EQ &amp; Suara
                 </button>
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+
+          {localMediaItems.length === 0 ? (
+            <div className="glass-card rounded-2xl p-8 text-center space-y-3">
+              <p className="text-sm text-white/80">Belum ada file audio lokal yang diimpor.</p>
+              <button
+                type="button"
+                onClick={() => localFileInputRef.current?.click()}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105"
+              >
+                <Upload className="w-4 h-4" strokeWidth={2} />
+                Pilih File Audio
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {localMediaItems.map((track, idx) => (
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  index={idx}
+                  compact={viewMode === 'compact'}
+                  onPlay={() => playTrackList(localMediaItems, idx, 'File Lokal')}
+                  onAddToPlaylist={onAddToPlaylist}
+                  onRemove={() => {
+                    void deleteLocalFile(track.id);
+                    showToast(`${track.title} dihapus dari File Lokal`);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <>
+          {/* Folders strip */}
+          {folders.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedFolderId('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium ${
+                  selectedFolderId === 'all'
+                    ? 'bg-white/[0.14] text-white'
+                    : 'bg-white/[0.05] text-white/60 hover:text-white'
+                }`}
+              >
+                Semua Folder
+              </button>
+              {folders.map((fld) => (
+                <div
+                  key={fld.id}
+                  className={`inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-xl text-xs ${
+                    selectedFolderId === fld.id
+                      ? 'bg-[#2EE6A6]/15 text-[#2EE6A6] border border-[#2EE6A6]/35'
+                      : 'bg-white/[0.05] text-white/75'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFolderId(fld.id)}
+                    className="inline-flex items-center gap-1.5 py-0.5"
+                  >
+                    <Folder className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>{fld.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedFolderId === fld.id) setSelectedFolderId('all');
+                      deleteFolder(fld.id);
+                    }}
+                    aria-label={`Hapus folder ${fld.name}`}
+                    className="w-5 h-5 rounded flex items-center justify-center text-white/40 hover:text-red-300"
+                  >
+                    <Trash2 className="w-3 h-3" strokeWidth={1.75} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Quick Spotlight Cards in 'Semua' */}
+          {selectedFolderId === 'all' && filterType === 'all' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => navigate({ name: 'liked' })}
+                className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.08] transition-colors"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 flex items-center justify-center text-[#2EE6A6] shrink-0">
+                    <Heart className="w-5 h-5 fill-[#2EE6A6]" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-white">Lagu Disukai</p>
+                    <p className="text-xs text-white/55 tabular-nums mt-0.5">
+                      {likedCount} lagu tersimpan
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-medium text-[#2EE6A6] shrink-0 pr-1">Buka</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterType('local')}
+                className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.08] transition-colors"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-white/[0.07] border border-white/[0.1] flex items-center justify-center text-[#2EE6A6] shrink-0">
+                    <HardDrive className="w-5 h-5" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-white">File Lokal</p>
+                    <p className="text-xs text-white/55 tabular-nums mt-0.5">
+                      {localFiles.length} file audio (EQ &amp; normalisasi)
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-medium text-[#2EE6A6] shrink-0 pr-1">Buka</span>
+              </button>
+            </div>
+          )}
+
+          {selectedFolderId === 'all' && filterType === 'playlists' && (
+            <button
+              type="button"
+              onClick={() => navigate({ name: 'liked' })}
+              className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.08] transition-colors"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 flex items-center justify-center text-[#2EE6A6] shrink-0">
+                  <Heart className="w-5 h-5 fill-[#2EE6A6]" strokeWidth={1.75} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-white">Lagu Disukai</p>
+                  <p className="text-xs text-white/55 tabular-nums mt-0.5">
+                    {likedCount} lagu tersimpan
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-medium text-[#2EE6A6] shrink-0 pr-1">Buka</span>
+            </button>
+          )}
+
+          {/* Entries Rendering */}
+          {entries.length === 0 ? (
+            <div className="glass-card rounded-2xl p-8 text-center">
+              <p className="text-sm text-white/75">Belum ada item di filter koleksi ini.</p>
+            </div>
+          ) : viewMode === 'grid' ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {entries.map((entry) => (
+                <div
+                  key={`${entry.kind}-${entry.id}`}
+                  className="glass-card group rounded-2xl p-3 flex flex-col"
+                >
+                  <div className="relative aspect-square w-full mb-3 overflow-hidden rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => openEntry(entry)}
+                      className="w-full h-full block"
+                    >
+                      <ArtworkImage
+                        src={entry.thumbnail}
+                        alt={entry.title}
+                        type={
+                          entry.kind === 'artist'
+                            ? 'artist'
+                            : entry.kind === 'podcast'
+                              ? 'podcast'
+                              : 'playlist'
+                        }
+                        className="w-full h-full"
+                        roundedClass={entry.kind === 'artist' ? 'rounded-full' : 'rounded-xl'}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => togglePinEntry(entry)}
+                      aria-label={
+                        entry.pinned ? `Lepas sematan ${entry.title}` : `Sematkan ${entry.title}`
+                      }
+                      className={`absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center backdrop-blur-md transition-opacity ${
+                        entry.pinned
+                          ? 'bg-[#2EE6A6] text-[#06130E] opacity-100'
+                          : 'bg-black/60 text-white/75 opacity-0 group-hover:opacity-100'
+                      }`}
+                    >
+                      <Pin className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openEntry(entry)}
+                    className="text-left text-sm font-semibold text-white truncate hover:underline"
+                  >
+                    {entry.title}
+                  </button>
+                  <p className="text-xs text-white/55 truncate mt-0.5">{entry.subtitle}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {entries.map((entry) => (
+                <div
+                  key={`${entry.kind}-${entry.id}`}
+                  className="track-row group flex items-center gap-3 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05]"
+                >
+                  {viewMode === 'list' && (
+                    <button
+                      type="button"
+                      onClick={() => openEntry(entry)}
+                      className="w-11 h-11 rounded-lg overflow-hidden shrink-0"
+                    >
+                      {entry.thumbnail ? (
+                        <ArtworkImage
+                          src={entry.thumbnail}
+                          alt={entry.title}
+                          type={entry.kind === 'artist' ? 'artist' : 'playlist'}
+                          className="w-full h-full"
+                          roundedClass={entry.kind === 'artist' ? 'rounded-full' : 'rounded-lg'}
+                        />
+                      ) : (
+                        <div className="w-full h-full rounded-lg bg-white/[0.06] flex items-center justify-center text-white/45">
+                          <ListMusic className="w-5 h-5" strokeWidth={1.75} />
+                        </div>
+                      )}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => openEntry(entry)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <p className="text-sm font-medium text-white truncate">{entry.title}</p>
+                    <p className="text-xs text-white/50 truncate">{entry.subtitle}</p>
+                  </button>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {entry.playlistObj && onEditPlaylist && (
+                      <button
+                        type="button"
+                        onClick={() => onEditPlaylist(entry.playlistObj!)}
+                        aria-label={`Edit ${entry.title}`}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.08]"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => togglePinEntry(entry)}
+                      aria-label={
+                        entry.pinned ? `Lepas sematan ${entry.title}` : `Sematkan ${entry.title}`
+                      }
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                        entry.pinned
+                          ? 'text-[#2EE6A6]'
+                          : 'text-white/40 hover:text-white hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      <Pin className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -757,7 +980,7 @@ export function LocalPlaylistPage({
               onRemove={() =>
                 removeTrackFromPlaylist(
                   playlist.id,
-                  getPlayableVideoId(track) || track.id,
+                  getTrackUniqueId(track) || track.id,
                   idx,
                 )
               }

@@ -3,6 +3,8 @@ import type {
   EpisodeProgressEntry,
   FollowedArtistEntry,
   HomeSectionId,
+  LocalAudioFileRecord,
+  LocalAudioProfile,
   LocalPlaylist,
   MediaItem,
   PlayHistoryEntry,
@@ -12,7 +14,9 @@ import type {
   SavedAlbumEntry,
   SavedPodcastEntry,
   UserSettings,
+  YouTubeSoundSettings,
 } from '../types/music';
+import { BUILTIN_EQ_PRESETS } from '../utils/audioMath';
 
 export interface LikedTrackRecord {
   id: string;
@@ -58,12 +62,39 @@ export const DEFAULT_HOME_SECTION_ORDER: HomeSectionId[] = [
   'moods',
 ];
 
+export const DEFAULT_YOUTUBE_SOUND: YouTubeSoundSettings = {
+  maxVolumeLimit: 100,
+  startupVolumeMode: 'last',
+  startupFixedVolume: 75,
+  defaultPlaybackRate: 1,
+  trackFadeSeconds: 0,
+  fadeOnPauseResume: true,
+  fadeOutOnSleepTimer: true,
+  resumeLastPosition: true,
+  autoStartOnOpen: false,
+};
+
+export const DEFAULT_LOCAL_AUDIO_PROFILE: LocalAudioProfile = {
+  eqEnabled: true,
+  presetId: 'flat',
+  preampDb: 0,
+  bands: [...BUILTIN_EQ_PRESETS[0].bands],
+  customPresets: [],
+  normalizationTarget: 'off',
+  monoAudio: false,
+  balance: 0,
+  crossfadeSeconds: 0,
+  gaplessPlayback: true,
+};
+
 export const DEFAULT_SETTINGS: UserSettings = {
   hideExplicit: false,
   autoplay: true,
   dataSaver: false,
   showRightPanel: true,
   homeSectionOrder: DEFAULT_HOME_SECTION_ORDER,
+  youtubeSound: DEFAULT_YOUTUBE_SOUND,
+  episodePlaybackRates: {},
 };
 
 export class SoundClearDatabase extends Dexie {
@@ -77,6 +108,7 @@ export class SoundClearDatabase extends Dexie {
   playHistory!: Table<PlayHistoryEntry, number>;
   recentSearches!: Table<RecentSearchEntry, number>;
   hiddenTracks!: Table<HiddenTrackRecord, string>;
+  localFiles!: Table<LocalAudioFileRecord, string>;
   kvState!: Table<KvRecord, string>;
 
   constructor() {
@@ -94,10 +126,64 @@ export class SoundClearDatabase extends Dexie {
       hiddenTracks: 'id, hiddenAt',
       kvState: 'key',
     });
+
+    this.version(2).stores({
+      likedTracks: 'id, addedAt',
+      playlists: 'id, folderId, pinned, createdAt, lastPlayedAt',
+      playlistFolders: 'id, createdAt',
+      savedAlbums: 'id, pinned, savedAt, lastPlayedAt',
+      followedArtists: 'id, pinned, followedAt, lastPlayedAt',
+      savedPodcasts: 'id, pinned, savedAt, lastPlayedAt',
+      episodeProgress: 'episodeId, podcastId, updatedAt',
+      playHistory: '++uid, trackId, playedAt, sourceType',
+      recentSearches: '++uid, query, searchedAt',
+      hiddenTracks: 'id, hiddenAt',
+      localFiles: 'id, addedAt, title, artist',
+      kvState: 'key',
+    });
   }
 }
 
 export const db = new SoundClearDatabase();
+
+export function getLocalAudioProfileKey(accountKey: string): string {
+  return `local_audio_profile_${accountKey || 'local'}`;
+}
+
+export async function loadLocalAudioProfile(accountKey: string): Promise<LocalAudioProfile> {
+  try {
+    const rec = await db.kvState.get(getLocalAudioProfileKey(accountKey));
+    if (rec?.value && typeof rec.value === 'object') {
+      const raw = rec.value as Partial<LocalAudioProfile>;
+      return {
+        ...DEFAULT_LOCAL_AUDIO_PROFILE,
+        ...raw,
+        bands:
+          Array.isArray(raw.bands) && raw.bands.length === 10
+            ? raw.bands
+            : [...DEFAULT_LOCAL_AUDIO_PROFILE.bands],
+        customPresets: Array.isArray(raw.customPresets) ? raw.customPresets : [],
+      };
+    }
+  } catch {
+    // Fallback to default
+  }
+  return {
+    ...DEFAULT_LOCAL_AUDIO_PROFILE,
+    bands: [...DEFAULT_LOCAL_AUDIO_PROFILE.bands],
+    customPresets: [],
+  };
+}
+
+export async function saveLocalAudioProfile(
+  accountKey: string,
+  profile: LocalAudioProfile,
+): Promise<void> {
+  await db.kvState.put({
+    key: getLocalAudioProfileKey(accountKey),
+    value: profile,
+  });
+}
 
 export async function migrateLegacyLocalStorage(): Promise<void> {
   try {
@@ -161,6 +247,7 @@ export interface SoundClearBackupPayload {
   hiddenTracks: HiddenTrackRecord[];
   settings: UserSettings;
   playerSession?: PersistedPlayerSession | null;
+  localAudioProfiles?: Record<string, LocalAudioProfile>;
 }
 
 export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload> {
@@ -177,6 +264,7 @@ export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload
     hiddenTracks,
     settingsRec,
     sessionRec,
+    allKv,
   ] = await Promise.all([
     db.likedTracks.toArray(),
     db.playlists.toArray(),
@@ -190,10 +278,18 @@ export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload
     db.hiddenTracks.toArray(),
     db.kvState.get('settings'),
     db.kvState.get('player_session'),
+    db.kvState.toArray(),
   ]);
 
+  const localAudioProfiles: Record<string, LocalAudioProfile> = {};
+  for (const kv of allKv) {
+    if (kv.key.startsWith('local_audio_profile_') && kv.value && typeof kv.value === 'object') {
+      localAudioProfiles[kv.key] = kv.value as LocalAudioProfile;
+    }
+  }
+
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     likedTracks,
     playlists,
@@ -207,6 +303,7 @@ export async function exportAllSoundClearData(): Promise<SoundClearBackupPayload
     hiddenTracks,
     settings: (settingsRec?.value as UserSettings) || DEFAULT_SETTINGS,
     playerSession: (sessionRec?.value as PersistedPlayerSession) || null,
+    localAudioProfiles,
   };
 }
 
@@ -283,7 +380,14 @@ export async function importAllSoundClearData(payload: unknown): Promise<void> {
       if (data.settings) {
         await db.kvState.put({
           key: 'settings',
-          value: { ...DEFAULT_SETTINGS, ...data.settings },
+          value: {
+            ...DEFAULT_SETTINGS,
+            ...data.settings,
+            youtubeSound: {
+              ...DEFAULT_YOUTUBE_SOUND,
+              ...(data.settings.youtubeSound || {}),
+            },
+          },
         });
       }
       if (data.playerSession) {
@@ -291,6 +395,13 @@ export async function importAllSoundClearData(payload: unknown): Promise<void> {
           key: 'player_session',
           value: data.playerSession,
         });
+      }
+      if (data.localAudioProfiles && typeof data.localAudioProfiles === 'object') {
+        for (const [k, v] of Object.entries(data.localAudioProfiles)) {
+          if (k.startsWith('local_audio_profile_') && v) {
+            await db.kvState.put({ key: k, value: v });
+          }
+        }
       }
     },
   );

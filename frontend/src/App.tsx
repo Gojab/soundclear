@@ -7,11 +7,13 @@ import {
   Search,
   Settings,
 } from 'lucide-react';
+import { fetchAccountStatus } from './api/client';
 import {
   FloatingMiniPlayerController,
   FullscreenKaraokeModal,
   FullscreenNowPlayingModal,
 } from './components/FullscreenViews';
+import { LocalAudioEngine } from './components/LocalAudioEngine';
 import { MobileShell } from './components/MobileShell';
 import { PlayerBar } from './components/PlayerBar';
 import { PlaylistModal } from './components/PlaylistModal';
@@ -60,6 +62,13 @@ export default function App() {
       await useSettingsStore.getState().hydrate();
       await useLibraryStore.getState().hydrate();
       await usePlayerStore.getState().hydrate();
+      fetchAccountStatus()
+        .then((status) => {
+          void useSettingsStore
+            .getState()
+            .setAccountKey(status.authenticated ? 'ytmusic' : 'local');
+        })
+        .catch(() => {});
     };
     void boot();
   }, []);
@@ -249,7 +258,12 @@ export default function App() {
             )}
 
             {currentRoute.name === 'recap' && <RecapPage />}
-            {currentRoute.name === 'settings' && <SettingsPage />}
+            {currentRoute.name === 'settings' && (
+              <SettingsPage
+                initialTab={currentRoute.tab ?? 'general'}
+                focusEq={Boolean(currentRoute.focusEq)}
+              />
+            )}
             {currentRoute.name === 'shortcuts' && <ShortcutsPage />}
           </div>
         </main>
@@ -279,8 +293,9 @@ export default function App() {
       <FullscreenNowPlayingModal />
       <FloatingMiniPlayerController />
 
-      {/* Persistent YouTube IFrame Player API bridge */}
+      {/* Persistent YouTube IFrame Player API bridge + Web Audio API Local Engine */}
       <YouTubePlayerBridge />
+      <LocalAudioEngine />
     </div>
   );
 }

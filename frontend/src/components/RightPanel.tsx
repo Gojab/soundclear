@@ -1,18 +1,59 @@
 import { useQuery } from '@tanstack/react-query';
-import { Heart, Info, ListMusic, ListPlus, Mic2, MoreHorizontal, X } from 'lucide-react';
+import { Headphones, Heart, Info, ListMusic, ListPlus, Mic2, MoreHorizontal, Sliders, X } from 'lucide-react';
 import { fetchSongCredits, fetchSongRelated } from '../api/client';
 import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import type { MediaItem } from '../types/music';
-import { formatArtists, getPlayableVideoId } from '../utils/playerLogic';
+import { formatArtists, getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 import { LyricsView } from './LyricsView';
 import { QueueView } from './QueueView';
 
 interface RightPanelProps {
   onAddToPlaylist: (track: MediaItem) => void;
+}
+
+function LocalFileDetails({ track }: { track: MediaItem }) {
+  const localFiles = useLibraryStore((s) => s.localFiles);
+  const navigate = useNavigationStore((s) => s.navigate);
+  const localId = getTrackUniqueId(track);
+  const record = localFiles.find((f) => f.id === localId);
+
+  return (
+    <div className="space-y-3 text-xs">
+      <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-3.5 space-y-2">
+        <p className="font-semibold text-white/80">Informasi File Lokal</p>
+        <div className="space-y-1 text-white/60">
+          <p>Judul: <span className="text-white/90">{track.title}</span></p>
+          <p>Artis: <span className="text-white/90">{formatArtists(track.artists)}</span></p>
+          {track.album?.name && (
+            <p>Album: <span className="text-white/90">{track.album.name}</span></p>
+          )}
+          {record && (
+            <>
+              <p className="tabular-nums">
+                Perkiraan Loudness: <span className="text-[#2EE6A6]">{record.estimatedLufs.toFixed(1)} LUFS</span>
+              </p>
+              <p className="tabular-nums">
+                Ukuran: <span className="text-white/85">{(record.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: true })}
+        className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 text-[#2EE6A6] font-medium hover:bg-[#2EE6A6]/20 transition-colors"
+      >
+        <Sliders className="w-3.5 h-3.5" strokeWidth={1.75} />
+        Buka Equalizer & Efek Lokal
+      </button>
+    </div>
+  );
 }
 
 function SongDetailsAndRelated({
@@ -22,7 +63,7 @@ function SongDetailsAndRelated({
   track: MediaItem;
   onAddToPlaylist: (track: MediaItem) => void;
 }) {
-  const videoId = getPlayableVideoId(track) || track.id;
+  const videoId = getPlayableVideoId(track) || '';
   const playTrackList = usePlayerStore((s) => s.playTrackList);
   const navigate = useNavigationStore((s) => s.navigate);
 
@@ -152,7 +193,8 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
   const navigate = useNavigationStore((s) => s.navigate);
   const openMenu = useContextMenuStore((s) => s.openMenu);
 
-  const trackKey = currentTrack ? getPlayableVideoId(currentTrack) || currentTrack.id : null;
+  const trackKey = getTrackUniqueId(currentTrack);
+  const localPlaying = isLocalTrack(currentTrack);
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
   const toggleLike = useLibraryStore((s) => s.toggleLike);
 
@@ -178,19 +220,37 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {currentTrack ? (
           <div className="space-y-3">
-            {/* Visible YouTube IFrame slot */}
-            <div
-              data-yt-visible-slot="true"
-              className="relative aspect-video w-full overflow-hidden rounded-xl bg-black border border-white/[0.08]"
-            >
-              <ArtworkImage
-                src={currentTrack.thumbnail}
-                alt={currentTrack.title}
-                type={currentTrack.type}
-                className="w-full h-full opacity-35"
-                roundedClass="rounded-xl"
-              />
-            </div>
+            {localPlaying ? (
+              <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                {currentTrack.thumbnail ? (
+                  <ArtworkImage
+                    src={currentTrack.thumbnail}
+                    alt={currentTrack.title}
+                    type="local"
+                    className="w-full h-full"
+                    roundedClass="rounded-xl"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/45">
+                    <Headphones className="w-10 h-10 text-[#2EE6A6]/75" strokeWidth={1.6} />
+                    <span className="text-xs">Audio File Lokal</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                data-yt-visible-slot="true"
+                className="relative aspect-video w-full overflow-hidden rounded-xl bg-black border border-white/[0.08]"
+              >
+                <ArtworkImage
+                  src={currentTrack.thumbnail}
+                  alt={currentTrack.title}
+                  type={currentTrack.type}
+                  className="w-full h-full opacity-35"
+                  roundedClass="rounded-xl"
+                />
+              </div>
+            )}
 
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -310,7 +370,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             }`}
           >
             <Info className="w-3.5 h-3.5" strokeWidth={1.75} />
-            Kredit
+            {localPlaying ? 'Info' : 'Kredit'}
           </button>
         </div>
 
@@ -320,7 +380,11 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
           ) : rightPanelTab === 'lyrics' ? (
             <LyricsView />
           ) : currentTrack ? (
-            <SongDetailsAndRelated track={currentTrack} onAddToPlaylist={onAddToPlaylist} />
+            localPlaying ? (
+              <LocalFileDetails track={currentTrack} />
+            ) : (
+              <SongDetailsAndRelated track={currentTrack} onAddToPlaylist={onAddToPlaylist} />
+            )
           ) : (
             <p className="text-xs text-white/45 py-8 text-center">
               Putar lagu untuk melihat kredit dan lagu terkait.

@@ -6,6 +6,10 @@ import {
   findActiveLyricIndex,
   formatArtists,
   formatTime,
+  getPlayableVideoId,
+  getTrackUniqueId,
+  isLocalTrack,
+  isPlayableTrack,
   mergeWatchTracksIntoQueue,
 } from './playerLogic';
 import type { LyricLine, MediaItem } from '../types/music';
@@ -68,4 +72,18 @@ test('mergeWatchTracksIntoQueue deduplicates while preserving manual upcoming', 
     merged.map((t) => t.id),
     ['v1', 'v2', 'v3'],
   );
+});
+
+test('local audio tracks stay isolated from YouTube videoId resolution', () => {
+  const localItem: MediaItem = {
+    id: 'local_123',
+    localFileId: 'local_123',
+    title: 'Rekaman Demo',
+    artists: [{ id: null, name: 'Artis Lokal' }],
+    type: 'local',
+  };
+  assert.equal(isLocalTrack(localItem), true);
+  assert.equal(getPlayableVideoId(localItem), null);
+  assert.equal(getTrackUniqueId(localItem), 'local_123');
+  assert.equal(isPlayableTrack(localItem), true);
 });

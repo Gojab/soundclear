@@ -19,11 +19,27 @@ export function formatArtists(artists: ArtistRef[] | undefined | null): string {
   return artists.map((a) => a.name).filter(Boolean).join(', ') || 'Artis tidak diketahui';
 }
 
+export function isLocalTrack(item: MediaItem | null | undefined): boolean {
+  return Boolean(item && (item.type === 'local' || item.localFileId));
+}
+
 export function getPlayableVideoId(item: MediaItem | null | undefined): string | null {
-  if (!item) return null;
+  if (!item || isLocalTrack(item)) return null;
   if (item.videoId) return item.videoId;
-  if (item.type === 'song' || item.type === 'video') return item.id || null;
+  if (item.type === 'song' || item.type === 'video' || item.type === 'episode') {
+    return item.id || null;
+  }
   return null;
+}
+
+export function getTrackUniqueId(item: MediaItem | null | undefined): string | null {
+  if (!item) return null;
+  if (isLocalTrack(item)) return item.localFileId || item.id;
+  return getPlayableVideoId(item) || item.id || null;
+}
+
+export function isPlayableTrack(item: MediaItem | null | undefined): boolean {
+  return Boolean(isLocalTrack(item) || getPlayableVideoId(item));
 }
 
 export function findActiveLyricIndex(lines: LyricLine[], currentTimeMs: number): number {
@@ -32,7 +48,11 @@ export function findActiveLyricIndex(lines: LyricLine[], currentTimeMs: number):
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     if (currentTimeMs >= line.startTimeMs) {
-      if (currentTimeMs < line.endTimeMs || i === lines.length - 1 || currentTimeMs < lines[i + 1].startTimeMs) {
+      if (
+        currentTimeMs < line.endTimeMs ||
+        i === lines.length - 1 ||
+        currentTimeMs < lines[i + 1].startTimeMs
+      ) {
         active = i;
       }
     } else {
@@ -91,18 +111,17 @@ export function mergeWatchTracksIntoQueue(
   watchTracks: MediaItem[],
 ): MediaItem[] {
   const existingVideoIds = new Set<string>();
-  const head = currentIndex >= 0 && currentIndex < currentQueue.length
-    ? currentQueue.slice(0, currentIndex + 1)
-    : [];
+  const head =
+    currentIndex >= 0 && currentIndex < currentQueue.length
+      ? currentQueue.slice(0, currentIndex + 1)
+      : [];
 
   for (const item of head) {
     const vid = getPlayableVideoId(item);
     if (vid) existingVideoIds.add(vid);
   }
 
-  const manualUpcoming = currentIndex >= 0
-    ? currentQueue.slice(currentIndex + 1)
-    : [];
+  const manualUpcoming = currentIndex >= 0 ? currentQueue.slice(currentIndex + 1) : [];
   for (const item of manualUpcoming) {
     const vid = getPlayableVideoId(item);
     if (vid) existingVideoIds.add(vid);
@@ -124,8 +143,7 @@ export function getEffectiveThumbnail(
   dataSaver: boolean,
 ): string | null {
   if (!url) return null;
-  if (!dataSaver) return url;
-  // Downscale Googleusercontent artwork URLs cleanly when Data Saver is enabled
+  if (!dataSaver || url.startsWith('data:') || url.startsWith('blob:')) return url;
   return url.replace(/=w\d+-h\d+/, '=w120-h120');
 }
 
@@ -133,7 +151,7 @@ export function findDuplicateTrackIndices(tracks: MediaItem[]): Set<number> {
   const seen = new Set<string>();
   const duplicates = new Set<number>();
   tracks.forEach((track, idx) => {
-    const key = getPlayableVideoId(track) || track.id;
+    const key = getTrackUniqueId(track) || track.id;
     if (seen.has(key)) {
       duplicates.add(idx);
     } else {
@@ -151,7 +169,7 @@ export function interleaveSmartShuffleTracks(
   const existingIds = new Set<string>();
   if (currentVideoId) existingIds.add(currentVideoId);
   for (const t of upcoming) {
-    const vid = getPlayableVideoId(t);
+    const vid = getTrackUniqueId(t);
     if (vid) existingIds.add(vid);
   }
 

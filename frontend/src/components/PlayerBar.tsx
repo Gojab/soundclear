@@ -17,7 +17,7 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
-  SlidersHorizontal,
+  Sliders,
   Sparkles,
   Volume2,
   VolumeX,
@@ -25,18 +25,18 @@ import {
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem } from '../types/music';
-import { formatTime, getPlayableVideoId } from '../utils/playerLogic';
+import { clampYoutubeVolume, PLAYBACK_RATE_OPTIONS } from '../utils/audioMath';
+import { formatTime, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
 
 interface PlayerBarProps {
   onAddToPlaylist: (track: MediaItem) => void;
 }
 
-const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
-
 export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
-  const [openMenu, setOpenMenu] = useState<'sleep' | 'audio' | null>(null);
+  const [speakerOpen, setSpeakerOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -49,12 +49,13 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const repeat = usePlayerStore((s) => s.repeat);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
-  const crossfadeSeconds = usePlayerStore((s) => s.crossfadeSeconds);
   const sleepTimerMode = usePlayerStore((s) => s.sleepTimerMode);
   const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const rightPanelTab = usePlayerStore((s) => s.rightPanelTab);
   const floatingMiniOpen = usePlayerStore((s) => s.floatingMiniOpen);
+
+  const youtubeSound = useSettingsStore((s) => s.youtubeSound);
 
   const togglePlayPause = usePlayerStore((s) => s.togglePlayPause);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
@@ -66,7 +67,6 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
-  const setCrossfadeSeconds = usePlayerStore((s) => s.setCrossfadeSeconds);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const setRightPanelOpen = usePlayerStore((s) => s.setRightPanelOpen);
   const setRightPanelTab = usePlayerStore((s) => s.setRightPanelTab);
@@ -76,25 +76,32 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
 
   const navigate = useNavigationStore((s) => s.navigate);
 
-  const trackKey = currentTrack ? getPlayableVideoId(currentTrack) || currentTrack.id : null;
+  const trackKey = getTrackUniqueId(currentTrack);
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
   const toggleLike = useLibraryStore((s) => s.toggleLike);
 
   useEffect(() => {
-    if (!openMenu) return;
+    if (!speakerOpen) return;
     const onPointerDown = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setOpenMenu(null);
+        setSpeakerOpen(false);
       }
     };
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [openMenu]);
+  }, [speakerOpen]);
+
+  const localPlaying = isLocalTrack(currentTrack);
+  const maxVolumeCap = localPlaying ? 100 : youtubeSound.maxVolumeLimit;
+  const effectiveVolume = localPlaying
+    ? isMuted
+      ? 0
+      : Math.min(100, volume)
+    : clampYoutubeVolume(volume, youtubeSound.maxVolumeLimit, isMuted);
 
   const safeDuration = duration > 0 ? duration : currentTrack?.durationSeconds || 0;
   const progressPct =
     safeDuration > 0 ? Math.min(100, Math.max(0, (currentTime / safeDuration) * 100)) : 0;
-  const effectiveVolume = isMuted ? 0 : volume;
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
   const remainingSleepMin =
@@ -105,7 +112,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   return (
     <footer
       aria-label="Pemutar musik"
-      className="hidden md:grid grid-cols-[minmax(0,1fr)_minmax(340px,1.35fr)_minmax(0,1.1fr)] items-center gap-3 h-[84px] shrink-0 glass-panel rounded-2xl px-4 relative"
+      className="hidden md:grid grid-cols-[minmax(0,1fr)_minmax(340px,1.35fr)_minmax(0,1.1fr)] items-center gap-3 h-[84px] shrink-0 glass-panel rounded-2xl px-4 relative z-30"
     >
       {/* Left: Track info */}
       <div className="flex items-center gap-3 min-w-0">
@@ -276,7 +283,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
         </div>
       </div>
 
-      {/* Right: Lyrics/Karaoke, Queue, Sleep Timer, Audio Controls, PiP/Fullscreen, Volume */}
+      {/* Right: Lyrics/Karaoke, Queue, PiP/Fullscreen, Quick Sound Controls (Speaker) */}
       <div ref={popoverRef} className="flex items-center justify-end gap-1 relative">
         <button
           type="button"
@@ -312,39 +319,6 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           }`}
         >
           <ListMusic className="w-4 h-4" strokeWidth={1.75} />
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setOpenMenu(openMenu === 'sleep' ? null : 'sleep')}
-          aria-label="Pengatur waktu tidur"
-          title="Sleep Timer"
-          className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-            sleepTimerMode !== 'off'
-              ? 'text-[#2EE6A6] bg-white/[0.08]'
-              : 'text-white/60 hover:text-white hover:bg-white/[0.06]'
-          }`}
-        >
-          <Moon className="w-4 h-4" strokeWidth={1.75} />
-          {remainingSleepMin && (
-            <span className="absolute -top-1 -right-1 text-[9px] font-semibold bg-[#2EE6A6] text-[#06130E] px-1 rounded tabular-nums">
-              {remainingSleepMin}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setOpenMenu(openMenu === 'audio' ? null : 'audio')}
-          aria-label="Kecepatan putar dan fade antar lagu"
-          title="Kecepatan & Fade"
-          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-            playbackRate !== 1 || crossfadeSeconds > 0
-              ? 'text-[#2EE6A6] bg-white/[0.08]'
-              : 'text-white/60 hover:text-white hover:bg-white/[0.06]'
-          }`}
-        >
-          <SlidersHorizontal className="w-4 h-4" strokeWidth={1.75} />
         </button>
 
         <button
@@ -397,97 +371,107 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           )}
         </button>
 
+        {/* Speaker Quick Controls + Inline Volume Slider */}
         <div className="flex items-center gap-1.5 pl-1">
           <button
             type="button"
-            onClick={toggleMute}
-            aria-label={isMuted ? 'Nyalakan suara' : 'Bisukan suara'}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-white/65 hover:text-white transition-colors"
+            onClick={() => setSpeakerOpen((v) => !v)}
+            aria-label="Kontrol suara cepat"
+            aria-expanded={speakerOpen}
+            title="Kontrol Suara (Volume, Kecepatan, Sleep Timer, EQ)"
+            className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+              speakerOpen || sleepTimerMode !== 'off' || playbackRate !== 1
+                ? 'text-[#2EE6A6] bg-white/[0.08]'
+                : 'text-white/65 hover:text-white hover:bg-white/[0.06]'
+            }`}
           >
-            {isMuted || volume === 0 ? (
+            {isMuted || effectiveVolume === 0 ? (
               <VolumeX className="w-4 h-4" strokeWidth={1.75} />
             ) : (
               <Volume2 className="w-4 h-4" strokeWidth={1.75} />
             )}
+            {remainingSleepMin && (
+              <span className="absolute -top-1 -right-1 text-[9px] font-semibold bg-[#2EE6A6] text-[#06130E] px-1 rounded tabular-nums">
+                {remainingSleepMin}
+              </span>
+            )}
           </button>
+
           <input
             type="range"
             aria-label="Volume"
             min={0}
-            max={100}
+            max={maxVolumeCap}
             value={effectiveVolume}
             onChange={(e) => setVolume(Number(e.target.value))}
             style={{
-              background: `linear-gradient(to right, #2EE6A6 ${effectiveVolume}%, rgba(255,255,255,0.16) ${effectiveVolume}%)`,
+              background: `linear-gradient(to right, #2EE6A6 ${(effectiveVolume / maxVolumeCap) * 100}%, rgba(255,255,255,0.16) ${(effectiveVolume / maxVolumeCap) * 100}%)`,
             }}
             className="sc-range w-20 h-1 rounded-full"
           />
         </div>
 
-        {/* Sleep Timer Popover */}
-        {openMenu === 'sleep' && (
+        {/* Speaker Quick Controls Popover */}
+        {speakerOpen && (
           <div
             role="dialog"
-            aria-label="Sleep Timer"
-            className="absolute right-12 bottom-16 z-50 w-52 glass-panel rounded-xl p-2 bg-[#141418]/95 border border-white/[0.12] shadow-2xl space-y-1 text-xs"
+            aria-label="Kontrol suara cepat"
+            className="absolute right-0 bottom-16 z-50 w-72 rounded-2xl p-3.5 bg-[#111115]/95 backdrop-blur-2xl border border-white/[0.14] shadow-2xl space-y-3 text-xs"
           >
-            <p className="px-2 py-1 font-semibold text-white/75">Sleep Timer</p>
-            {[15, 30, 45, 60].map((min) => (
-              <button
-                key={min}
-                type="button"
-                onClick={() => {
-                  setSleepTimer('minutes', min);
-                  setOpenMenu(null);
+            {/* Volume & Mute */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-white/80">Volume</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#2EE6A6] tabular-nums">{effectiveVolume}%</span>
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    aria-pressed={isMuted}
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                      isMuted
+                        ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'
+                        : 'bg-white/[0.08] text-white/80 hover:text-white'
+                    }`}
+                  >
+                    {isMuted ? (
+                      <>
+                        <VolumeX className="w-3 h-3" strokeWidth={1.75} />
+                        Dibisukan
+                      </>
+                    ) : (
+                      'Bisu'
+                    )}
+                  </button>
+                </div>
+              </div>
+              <input
+                type="range"
+                aria-label="Pengatur volume cepat"
+                min={0}
+                max={maxVolumeCap}
+                value={effectiveVolume}
+                onChange={(e) => setVolume(Number(e.target.value))}
+                style={{
+                  background: `linear-gradient(to right, #2EE6A6 ${(effectiveVolume / maxVolumeCap) * 100}%, rgba(255,255,255,0.16) ${(effectiveVolume / maxVolumeCap) * 100}%)`,
                 }}
-                className="w-full text-left px-2.5 py-1.5 rounded-lg text-white/80 hover:bg-white/[0.08] tabular-nums"
-              >
-                {min} menit
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                setSleepTimer('end_of_track');
-                setOpenMenu(null);
-              }}
-              className={`w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/[0.08] ${
-                sleepTimerMode === 'end_of_track' ? 'text-[#2EE6A6] font-semibold' : 'text-white/80'
-              }`}
-            >
-              Akhir lagu ini
-            </button>
-            {sleepTimerMode !== 'off' && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSleepTimer('off');
-                  setOpenMenu(null);
-                }}
-                className="w-full text-left px-2.5 py-1.5 rounded-lg text-red-300 hover:bg-red-500/15"
-              >
-                Matikan timer
-              </button>
-            )}
-          </div>
-        )}
+                className="sc-range w-full h-1.5 rounded-full"
+              />
+            </div>
 
-        {/* Playback Rate & Crossfade Popover */}
-        {openMenu === 'audio' && (
-          <div
-            role="dialog"
-            aria-label="Kecepatan putar dan fade"
-            className="absolute right-8 bottom-16 z-50 w-60 glass-panel rounded-xl p-3 bg-[#141418]/95 border border-white/[0.12] shadow-2xl space-y-3 text-xs"
-          >
-            <div className="space-y-1.5">
-              <p className="font-semibold text-white/75">Kecepatan Putar</p>
-              <div className="grid grid-cols-5 gap-1">
-                {PLAYBACK_RATES.map((rate) => (
+            {/* Playback Speed */}
+            <div className="space-y-1.5 pt-2.5 border-t border-white/[0.08]">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-white/80">Kecepatan Putar</span>
+                <span className="text-[#2EE6A6] tabular-nums">{playbackRate}x</span>
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                {PLAYBACK_RATE_OPTIONS.map((rate) => (
                   <button
                     key={rate}
                     type="button"
                     onClick={() => setPlaybackRate(rate)}
-                    className={`py-1.5 rounded-lg text-[11px] font-medium tabular-nums transition-colors ${
+                    className={`py-1 rounded-lg text-[11px] font-medium tabular-nums transition-colors ${
                       playbackRate === rate
                         ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'
                         : 'bg-white/[0.06] text-white/75 hover:text-white'
@@ -499,24 +483,76 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            {/* Sleep Timer */}
+            <div className="space-y-1.5 pt-2.5 border-t border-white/[0.08]">
               <div className="flex items-center justify-between">
-                <p className="font-semibold text-white/75">Fade Antar Lagu</p>
-                <span className="text-[#2EE6A6] tabular-nums">{crossfadeSeconds} dtk</span>
+                <span className="font-semibold text-white/80 inline-flex items-center gap-1.5">
+                  <Moon className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                  Sleep Timer
+                </span>
+                <span className="text-[11px] text-[#2EE6A6] tabular-nums">
+                  {sleepTimerMode === 'end_of_track'
+                    ? 'Akhir lagu'
+                    : remainingSleepMin
+                      ? `${remainingSleepMin} mnt`
+                      : 'Mati'}
+                </span>
               </div>
-              <input
-                type="range"
-                aria-label="Durasi fade antar lagu"
-                min={0}
-                max={12}
-                step={1}
-                value={crossfadeSeconds}
-                onChange={(e) => setCrossfadeSeconds(Number(e.target.value))}
-                style={{
-                  background: `linear-gradient(to right, #2EE6A6 ${(crossfadeSeconds / 12) * 100}%, rgba(255,255,255,0.16) ${(crossfadeSeconds / 12) * 100}%)`,
+              <div className="grid grid-cols-3 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSleepTimer('off')}
+                  className={`py-1 rounded-lg text-[11px] font-medium ${
+                    sleepTimerMode === 'off'
+                      ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'
+                      : 'bg-white/[0.06] text-white/75 hover:text-white'
+                  }`}
+                >
+                  Mati
+                </button>
+                {[15, 30, 45, 60].map((min) => (
+                  <button
+                    key={min}
+                    type="button"
+                    onClick={() => setSleepTimer('minutes', min)}
+                    className="py-1 rounded-lg text-[11px] font-medium bg-white/[0.06] text-white/75 hover:text-white tabular-nums"
+                  >
+                    {min}m
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSleepTimer('end_of_track')}
+                  className={`py-1 rounded-lg text-[11px] font-medium ${
+                    sleepTimerMode === 'end_of_track'
+                      ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'
+                      : 'bg-white/[0.06] text-white/75 hover:text-white'
+                  }`}
+                >
+                  Akhir
+                </button>
+              </div>
+            </div>
+
+            {/* EQ Button (only enabled when local file is playing) */}
+            <div className="pt-2.5 border-t border-white/[0.08] space-y-1">
+              <button
+                type="button"
+                disabled={!localPlaying}
+                onClick={() => {
+                  setSpeakerOpen(false);
+                  navigate({ name: 'settings', tab: 'sound', focusEq: true });
                 }}
-                className="sc-range w-full h-1 rounded-full"
-              />
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#2EE6A6] text-[#06130E] font-semibold hover:brightness-105 disabled:bg-white/[0.06] disabled:text-white/35 disabled:cursor-not-allowed transition-colors"
+              >
+                <Sliders className="w-3.5 h-3.5" strokeWidth={1.75} />
+                <span>Equalizer (EQ)</span>
+              </button>
+              {!localPlaying && (
+                <p className="text-[11px] text-white/45 text-center">
+                  Tombol EQ hanya aktif saat File Lokal diputar.
+                </p>
+              )}
             </div>
           </div>
         )}

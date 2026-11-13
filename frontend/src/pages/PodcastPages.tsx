@@ -6,7 +6,9 @@ import { ErrorBanner, TrackListSkeleton } from '../components/Skeletons';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
+import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItem, PodcastEpisode } from '../types/music';
+import { PLAYBACK_RATE_OPTIONS } from '../utils/audioMath';
 import { formatTime } from '../utils/playerLogic';
 
 function episodeToMediaItem(ep: PodcastEpisode, fallbackAuthor?: string | null): MediaItem {
@@ -33,6 +35,11 @@ export function PodcastDetailPage({ id }: { id: string }) {
   const toggleFollowPodcast = useLibraryStore((s) => s.toggleFollowPodcast);
   const episodeProgress = useLibraryStore((s) => s.episodeProgress);
   const markEpisodeCompleted = useLibraryStore((s) => s.markEpisodeCompleted);
+  const episodePlaybackRates = useSettingsStore((s) => s.episodePlaybackRates);
+  const setEpisodePlaybackRate = useSettingsStore((s) => s.setEpisodePlaybackRate);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
+  const defaultRate = useSettingsStore((s) => s.youtubeSound.defaultPlaybackRate);
 
   const query = useQuery({
     queryKey: ['podcast', id],
@@ -206,6 +213,31 @@ export function PodcastDetailPage({ id }: { id: string }) {
                   </button>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    <select
+                      aria-label={`Kecepatan putar episode ${ep.title}`}
+                      value={
+                        typeof episodePlaybackRates[ep.videoId] === 'number'
+                          ? String(episodePlaybackRates[ep.videoId])
+                          : 'default'
+                      }
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const nextRate = raw === 'default' ? null : Number(raw);
+                        setEpisodePlaybackRate(ep.videoId, nextRate);
+                        if (currentTrack && (currentTrack.videoId || currentTrack.id) === ep.videoId) {
+                          setPlaybackRate(nextRate ?? defaultRate);
+                        }
+                      }}
+                      className="h-9 px-2 rounded-xl bg-[#16161B] border border-white/[0.1] text-[11px] text-white/85 tabular-nums focus:outline-none focus:border-[#2EE6A6]"
+                    >
+                      <option value="default">Default ({defaultRate}x)</option>
+                      {PLAYBACK_RATE_OPTIONS.map((r) => (
+                        <option key={r} value={String(r)}>
+                          {r}x
+                        </option>
+                      ))}
+                    </select>
+
                     <button
                       type="button"
                       onClick={() =>
@@ -256,6 +288,11 @@ export function EpisodeDetailPage({ id }: { id: string }) {
   const navigate = useNavigationStore((s) => s.navigate);
   const prog = useLibraryStore((s) => s.episodeProgress[id]);
   const markEpisodeCompleted = useLibraryStore((s) => s.markEpisodeCompleted);
+  const customEpisodeRate = useSettingsStore((s) => s.episodePlaybackRates[id]);
+  const setEpisodePlaybackRate = useSettingsStore((s) => s.setEpisodePlaybackRate);
+  const defaultRate = useSettingsStore((s) => s.youtubeSound.defaultPlaybackRate);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
 
   const query = useQuery({
     queryKey: ['episode', id],
@@ -357,6 +394,27 @@ export function EpisodeDetailPage({ id }: { id: string }) {
                 </>
               )}
             </button>
+
+            <select
+              aria-label="Kecepatan putar episode ini"
+              value={typeof customEpisodeRate === 'number' ? String(customEpisodeRate) : 'default'}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const nextRate = raw === 'default' ? null : Number(raw);
+                setEpisodePlaybackRate(ep.videoId, nextRate);
+                if (currentTrack && (currentTrack.videoId || currentTrack.id) === ep.videoId) {
+                  setPlaybackRate(nextRate ?? defaultRate);
+                }
+              }}
+              className="h-10 px-3 rounded-xl bg-[#16161B] border border-white/[0.1] text-xs text-white tabular-nums focus:outline-none focus:border-[#2EE6A6]"
+            >
+              <option value="default">Kecepatan: Default ({defaultRate}x)</option>
+              {PLAYBACK_RATE_OPTIONS.map((r) => (
+                <option key={r} value={String(r)}>
+                  Kecepatan: {r}x
+                </option>
+              ))}
+            </select>
 
             {ep.podcastId && (
               <button

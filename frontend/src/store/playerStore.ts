@@ -4,7 +4,10 @@ import { db, type PersistedPlayerSession } from '../db/soundclearDb';
 import type { MediaItem, RepeatMode } from '../types/music';
 import {
   getPlayableVideoId,
+  getTrackUniqueId,
   interleaveSmartShuffleTracks,
+  isLocalTrack,
+  isPlayableTrack,
 } from '../utils/playerLogic';
 import { useLibraryStore } from './libraryStore';
 import { useSettingsStore } from './settingsStore';
@@ -136,7 +139,7 @@ let trackedPlayKey: string | null = null;
 let trackedPlayStartMs = 0;
 function commitListenProgress(track: MediaItem | null, listenedSec: number): void {
   if (!track) return;
-  const key = getPlayableVideoId(track) || track.id;
+  const key = getTrackUniqueId(track) || track.id;
   if (trackedPlayKey === key && listenedSec >= 8) {
     useLibraryStore.getState().recordPlay(track, Math.round(listenedSec));
     trackedPlayKey = null;
@@ -149,15 +152,27 @@ function beginTrackTelemetry(track: MediaItem): void {
     const elapsed = (Date.now() - trackedPlayStartMs) / 1000;
     commitListenProgress(prev.currentTrack, Math.max(prev.currentTime, elapsed));
   }
-  trackedPlayKey = getPlayableVideoId(track) || track.id;
+  trackedPlayKey = getTrackUniqueId(track) || track.id;
   trackedPlayStartMs = Date.now();
+}
+
+function resolvePlaybackRateForTrack(track: MediaItem | null | undefined): number {
+  const settings = useSettingsStore.getState();
+  if (track?.type === 'episode') {
+    const epKey = getPlayableVideoId(track) || track.id;
+    const epRate = epKey ? settings.episodePlaybackRates[epKey] : undefined;
+    if (typeof epRate === 'number' && Number.isFinite(epRate)) {
+      return epRate;
+    }
+  }
+  return settings.youtubeSound.defaultPlaybackRate || 1;
 }
 
 function filterHiddenAndExplicit(tracks: MediaItem[]): MediaItem[] {
   const hidden = new Set(useLibraryStore.getState().hiddenTrackIds);
   const hideExplicit = useSettingsStore.getState().hideExplicit;
   return tracks.filter((t) => {
-    const id = getPlayableVideoId(t) || t.id;
+    const id = getTrackUniqueId(t) || t.id;
     if (hidden.has(id)) return false;
     if (hideExplicit && t.isExplicit) return false;
     return true;
@@ -170,6 +185,11 @@ async function hydrateTrackContext(
   getState: () => PlayerState,
   setState: (partial: Partial<PlayerState> | ((s: PlayerState) => Partial<PlayerState>)) => void,
 ) {
+  if (isLocalTrack(track)) {
+    setState({ ambientColor: DEFAULT_AMBIENT });
+    return;
+  }
+
   const videoId = getPlayableVideoId(track);
   if (!videoId) return;
 
@@ -248,37 +268,59 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   hydrate: async () => {
     try {
       const rec = await db.kvState.get('player_session');
-      const settingsRightPanel = useSettingsStore.getState().showRightPanel;
+      const settingsState = useSettingsStore.getState();
+      const settingsRightPanel = settingsState.showRightPanel;
+      const ytSound = settingsState.youtubeSound;
+
       if (rec?.value && typeof rec.value === 'object') {
         const s = rec.value as Partial<PersistedPlayerSession>;
+        const rawVol =
+          ytSound.startupVolumeMode === 'fixed'
+            ? ytSound.startupFixedVolume
+            : typeof s.volume === 'number'
+              ? s.volume
+              : 80;
+        const effectiveVol = isLocalTrack(s.currentTrack)
+          ? rawVol
+          : Math.min(ytSound.maxVolumeLimit, rawVol);
+        const resumedTime =
+          ytSound.resumeLastPosition && typeof s.currentTime === 'number' ? s.currentTime : 0;
+
         set({
           hydrated: true,
           currentTrack: s.currentTrack ?? null,
           manualQueue: Array.isArray(s.queue) ? s.queue : [],
           sourceQueue: Array.isArray(s.sourceQueue) ? s.sourceQueue : [],
           sourceLabel: s.sourceLabel ?? null,
-          currentTime: typeof s.currentTime === 'number' ? s.currentTime : 0,
+          currentTime: resumedTime,
           duration: typeof s.duration === 'number' ? s.duration : 0,
-          volume: typeof s.volume === 'number' ? s.volume : 80,
+          volume: effectiveVol,
           isMuted: Boolean(s.isMuted),
           shuffle: Boolean(s.shuffle),
           smartShuffle: Boolean(s.smartShuffle),
           repeat: s.repeat ?? 'off',
-          playbackRate: typeof s.playbackRate === 'number' ? s.playbackRate : 1,
-          crossfadeSeconds: typeof s.crossfadeSeconds === 'number' ? s.crossfadeSeconds : 0,
-          pendingSeekSeconds:
-            s.currentTrack && typeof s.currentTime === 'number' && s.currentTime > 2
-              ? s.currentTime
-              : null,
+          playbackRate: resolvePlaybackRateForTrack(s.currentTrack),
+          crossfadeSeconds: ytSound.trackFadeSeconds ?? 0,
+          pendingSeekSeconds: s.currentTrack && resumedTime > 2 ? resumedTime : null,
           rightPanelOpen: settingsRightPanel,
-          isPlaying: false,
+          isPlaying: Boolean(s.currentTrack && ytSound.autoStartOnOpen),
         });
 
         if (s.currentTrack) {
           void hydrateTrackContext(s.currentTrack, false, get, set);
         }
       } else {
-        set({ hydrated: true, rightPanelOpen: settingsRightPanel });
+        const initialVol =
+          ytSound.startupVolumeMode === 'fixed'
+            ? Math.min(ytSound.maxVolumeLimit, ytSound.startupFixedVolume)
+            : Math.min(ytSound.maxVolumeLimit, 80);
+        set({
+          hydrated: true,
+          volume: initialVol,
+          playbackRate: ytSound.defaultPlaybackRate || 1,
+          crossfadeSeconds: ytSound.trackFadeSeconds ?? 0,
+          rightPanelOpen: settingsRightPanel,
+        });
       }
     } catch {
       set({ hydrated: true });
@@ -286,22 +328,23 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   playTrack: (track, options) => {
-    const videoId = getPlayableVideoId(track);
-    if (!videoId) return;
+    if (!isPlayableTrack(track)) return;
     beginTrackTelemetry(track);
 
     const startAt = options?.startAtSeconds ?? 0;
     const prevTrack = get().currentTrack;
+    const targetRate = resolvePlaybackRateForTrack(track);
 
     set((state) => ({
       currentTrack: track,
       historyStack: prevTrack ? [prevTrack, ...state.historyStack].slice(0, 40) : state.historyStack,
       sourceQueue: options?.autoRadio === false ? [] : state.sourceQueue,
-      sourceLabel: options?.sourceLabel ?? 'Radio Lagu',
+      sourceLabel: options?.sourceLabel ?? (isLocalTrack(track) ? 'File Lokal' : 'Radio Lagu'),
       isPlaying: true,
-      isBuffering: true,
+      isBuffering: !isLocalTrack(track),
       currentTime: startAt,
       duration: track.durationSeconds || 0,
+      playbackRate: targetRate,
       pendingSeekSeconds: startAt > 0 ? startAt : null,
       seekVersion: startAt > 0 ? state.seekVersion + 1 : state.seekVersion,
       lyricsBrowseId: null,
@@ -314,9 +357,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   playTrackList: (tracks, startIndex = 0, sourceLabel = 'Daftar Putar') => {
-    const playable = filterHiddenAndExplicit(
-      tracks.filter((t) => Boolean(getPlayableVideoId(t))),
-    );
+    const playable = filterHiddenAndExplicit(tracks.filter((t) => isPlayableTrack(t)));
     if (playable.length === 0) return;
 
     const safeIdx = Math.max(0, Math.min(startIndex, playable.length - 1));
@@ -325,6 +366,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     beginTrackTelemetry(target);
     const prevTrack = get().currentTrack;
+    const targetRate = resolvePlaybackRateForTrack(target);
 
     set((state) => ({
       currentTrack: target,
@@ -332,9 +374,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       sourceQueue: remaining,
       sourceLabel,
       isPlaying: true,
-      isBuffering: true,
+      isBuffering: !isLocalTrack(target),
       currentTime: 0,
       duration: target.durationSeconds || 0,
+      playbackRate: targetRate,
       lyricsBrowseId: null,
       playerError: null,
     }));
@@ -349,6 +392,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const target = manualQueue[index];
     const nextManual = manualQueue.slice(index + 1);
     beginTrackTelemetry(target);
+    const targetRate = resolvePlaybackRateForTrack(target);
     set((state) => ({
       currentTrack: target,
       manualQueue: nextManual,
@@ -356,9 +400,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         ? [currentTrack, ...state.historyStack].slice(0, 40)
         : state.historyStack,
       isPlaying: true,
-      isBuffering: true,
+      isBuffering: !isLocalTrack(target),
       currentTime: 0,
       duration: target.durationSeconds || 0,
+      playbackRate: targetRate,
       lyricsBrowseId: null,
       playerError: null,
     }));
@@ -372,6 +417,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const target = sourceQueue[index];
     const nextSource = sourceQueue.slice(index + 1);
     beginTrackTelemetry(target);
+    const targetRate = resolvePlaybackRateForTrack(target);
     set((state) => ({
       currentTrack: target,
       sourceQueue: nextSource,
@@ -379,9 +425,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         ? [currentTrack, ...state.historyStack].slice(0, 40)
         : state.historyStack,
       isPlaying: true,
-      isBuffering: true,
+      isBuffering: !isLocalTrack(target),
       currentTime: 0,
       duration: target.durationSeconds || 0,
+      playbackRate: targetRate,
       lyricsBrowseId: null,
       playerError: null,
     }));
@@ -390,7 +437,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   addToQueue: (track) => {
-    if (!getPlayableVideoId(track)) return;
+    if (!isPlayableTrack(track)) return;
     if (!get().currentTrack) {
       get().playTrack(track);
       return;
@@ -400,7 +447,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   playNextInQueue: (track) => {
-    if (!getPlayableVideoId(track)) return;
+    if (!isPlayableTrack(track)) return;
     if (!get().currentTrack) {
       get().playTrack(track);
       return;
@@ -568,12 +615,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   setPlaybackRate: (playbackRate) => {
+    const current = get().currentTrack;
+    if (current?.type === 'episode') {
+      const epKey = getPlayableVideoId(current) || current.id;
+      if (epKey) {
+        useSettingsStore.getState().setEpisodePlaybackRate(epKey, playbackRate);
+      }
+    }
     set({ playbackRate });
     persistPlayerSession(get(), true);
   },
 
   setCrossfadeSeconds: (seconds) => {
     const clamped = Math.max(0, Math.min(12, Math.round(seconds)));
+    useSettingsStore.getState().updateYoutubeSound('trackFadeSeconds', clamped);
     set({ crossfadeSeconds: clamped });
     persistPlayerSession(get(), true);
   },
@@ -612,9 +667,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         sourceQueue: nextSource,
         historyStack: currentTrack ? [currentTrack, ...state.historyStack].slice(0, 40) : state.historyStack,
         isPlaying: true,
-        isBuffering: true,
+        isBuffering: !isLocalTrack(target),
         currentTime: 0,
         duration: target.durationSeconds || 0,
+        playbackRate: resolvePlaybackRateForTrack(target),
         lyricsBrowseId: null,
         playerError: null,
       });
@@ -658,9 +714,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       historyStack: restHistory,
       sourceQueue: state.currentTrack ? [state.currentTrack, ...state.sourceQueue] : state.sourceQueue,
       isPlaying: true,
-      isBuffering: true,
+      isBuffering: !isLocalTrack(prev),
       currentTime: 0,
       duration: prev.durationSeconds || 0,
+      playbackRate: resolvePlaybackRateForTrack(prev),
       lyricsBrowseId: null,
       playerError: null,
     });
