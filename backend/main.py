@@ -20,7 +20,7 @@ provider = MusicProvider(country="ID")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if os.environ.get("SOUNDCLEAR_DISABLE_WARMUP") != "1":
+    if os.environ.get("SOUNDCLEAR_DISABLE_WARMUP") != "1" and not os.environ.get("VERCEL"):
         threading.Thread(target=provider.warmup, daemon=True).start()
     yield
 

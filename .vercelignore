@@ -3,6 +3,10 @@ backend/__pycache__
 backend/tests
 .pytest_cache
 .playwright-cli
+.aistudio
+dev-dist
+backend/.spotapi_sessions.json
+backend/.audio_settings.json
 *headers_auth*.json
 browser.json
 ytmusic_auth*.json

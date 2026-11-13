@@ -888,9 +888,14 @@ class AudioSettingsStore:
     """Server-side per-account persistence for user audio preferences."""
 
     def __init__(self, file_path: Optional[str] = None) -> None:
+        default_dir = (
+            "/tmp"
+            if os.environ.get("VERCEL") or not os.access(os.path.dirname(__file__), os.W_OK)
+            else os.path.dirname(__file__)
+        )
         self._file_path = file_path or os.environ.get(
             "SOUNDCLEAR_AUDIO_SETTINGS_FILE",
-            os.path.join(os.path.dirname(__file__), ".audio_settings.json"),
+            os.path.join(default_dir, ".audio_settings.json"),
         )
         self._lock = threading.RLock()
 
@@ -955,9 +960,14 @@ class SpotAPIClientGateway:
         self._artist_client: Optional[Artist] = None
         self._podcast_client: Optional[Podcast] = None
 
+        default_session_dir = (
+            "/tmp"
+            if os.environ.get("VERCEL") or not os.access(os.path.dirname(__file__), os.W_OK)
+            else os.path.dirname(__file__)
+        )
         self._session_file = session_file or os.environ.get(
             "SPOTAPI_SESSION_FILE",
-            os.path.join(os.path.dirname(__file__), ".spotapi_sessions.json"),
+            os.path.join(default_session_dir, ".spotapi_sessions.json"),
         )
         self._identifier = identifier or os.environ.get("SPOTAPI_IDENTIFIER", "") or None
         self._login: Optional[Login] = None
