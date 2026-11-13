@@ -24,6 +24,6 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src", "frontend/src", "server.ts"],
-  "exclude": ["dist", "backend"]
+  "include": ["src", "frontend/src", "server", "server.ts"],
+  "exclude": ["dist"]
 }

@@ -21,11 +21,7 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
   const isArtist = item.type === 'artist';
 
   const handleCardClick = () => {
-    if (item.type === 'podcast') {
-      navigateToItem(item);
-      return;
-    }
-    if (item.type === 'episode') {
+    if (item.type === 'podcast' || item.type === 'episode') {
       navigateToItem(item);
       return;
     }
@@ -61,9 +57,9 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
           openMenu(e.clientX, e.clientY, item, { onAddToPlaylist });
         }
       }}
-      className="glass-card group rounded-2xl p-3 flex flex-col"
+      className="group rounded-lg p-3 flex flex-col bg-transparent hover:bg-white/[0.08] transition-colors duration-150"
     >
-      <div className="relative aspect-square w-full mb-3 overflow-hidden rounded-xl">
+      <div className="relative aspect-square w-full mb-2.5 overflow-hidden rounded-md shadow-md shadow-black/40">
         <button
           type="button"
           onClick={handleCardClick}
@@ -75,7 +71,7 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
             alt={item.title}
             type={item.type}
             className="w-full h-full"
-            roundedClass={isArtist ? 'rounded-full' : 'rounded-xl'}
+            roundedClass={isArtist ? 'rounded-full' : 'rounded-md'}
           />
         </button>
 
@@ -87,9 +83,9 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
               playTrack(item);
             }}
             aria-label={`Putar ${item.title}`}
-            className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#2EE6A6] text-[#06130E] flex items-center justify-center opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 focus-visible:opacity-100"
+            className="absolute bottom-2 right-2 w-11 h-11 rounded-full bg-[#2EE6A6] text-[#06130E] shadow-lg shadow-black/50 flex items-center justify-center opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 hover:scale-105 focus-visible:opacity-100"
           >
-            <Play className="w-4 h-4 fill-current ml-0.5" strokeWidth={2} />
+            <Play className="w-4.5 h-4.5 fill-current ml-0.5" strokeWidth={2} />
           </button>
         )}
       </div>
@@ -101,7 +97,7 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
       >
         {item.title}
       </button>
-      <p className="text-xs text-white/55 truncate mt-1">{resolvedSubtitle}</p>
+      <p className="text-xs text-white/60 truncate mt-1 leading-snug">{resolvedSubtitle}</p>
     </div>
   );
 }

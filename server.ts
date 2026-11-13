@@ -1,148 +1,241 @@
-import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
+import { MusicServiceError, SoundClearService } from './server/ytmusicService.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
-const BACKEND_HOST = '127.0.0.1';
-const BACKEND_PORT = Number(process.env.BACKEND_PORT) || 8787;
-const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 const IS_PROD = process.env.NODE_ENV === 'production';
+const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS) || 420;
 
-let backendProcess: ChildProcess | null = null;
-let shuttingDown = false;
+const musicService = new SoundClearService(CACHE_TTL_SECONDS, 'ID');
 
-async function isSoundClearBackendUp(): Promise<boolean> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/health`, {
-      signal: AbortSignal.timeout(800),
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { service?: string };
-    return data?.service === 'soundclear';
-  } catch {
-    return false;
-  }
+function asyncHandler(
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
+) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    fn(req, res, next).catch(next);
+  };
 }
 
-async function waitForBackend(timeoutMs = 15000): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await isSoundClearBackendUp()) return true;
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  return false;
-}
+function createApiRouter(): express.Router {
+  const router = express.Router();
+  router.use(express.json({ limit: '1mb' }));
 
-async function ensurePythonBackend(): Promise<void> {
-  if (await isSoundClearBackendUp()) {
-    return;
-  }
+  router.get('/health', (_req, res) => {
+    res.json({ status: 'ok', service: 'soundclear' });
+  });
 
-  const backendDir = path.join(__dirname, 'backend');
-  const venvPython = path.join(backendDir, '.venv', 'bin', 'python');
-  const pythonBin = fs.existsSync(venvPython) ? venvPython : 'python3';
-
-  backendProcess = spawn(
-    pythonBin,
-    ['-m', 'uvicorn', 'main:app', '--host', BACKEND_HOST, '--port', String(BACKEND_PORT)],
-    {
-      cwd: backendDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
-    },
+  router.get(
+    '/search',
+    asyncHandler(async (req, res) => {
+      const q = typeof req.query.q === 'string' ? req.query.q : '';
+      const filter = typeof req.query.filter === 'string' ? req.query.filter : null;
+      const rawLimit = Number(req.query.limit) || 25;
+      const limit = Math.max(1, Math.min(50, rawLimit));
+      res.json(await musicService.search(q, filter, limit));
+    }),
   );
 
-  backendProcess.stdout?.on('data', (chunk: Buffer) => {
-    const line = chunk.toString().trim();
-    if (line) console.log(`[backend] ${line}`);
+  router.get(
+    '/suggest',
+    asyncHandler(async (req, res) => {
+      const q = typeof req.query.q === 'string' ? req.query.q : '';
+      res.json(await musicService.suggest(q));
+    }),
+  );
+
+  router.get(
+    '/home',
+    asyncHandler(async (req, res) => {
+      const rawLimit = Number(req.query.limit) || 8;
+      const limit = Math.max(1, Math.min(20, rawLimit));
+      res.json(await musicService.getHome(limit));
+    }),
+  );
+
+  router.get(
+    '/charts',
+    asyncHandler(async (req, res) => {
+      const country = typeof req.query.country === 'string' ? req.query.country : 'ID';
+      res.json(await musicService.getCharts(country));
+    }),
+  );
+
+  router.get(
+    '/moods',
+    asyncHandler(async (_req, res) => {
+      res.json(await musicService.getMoods());
+    }),
+  );
+
+  router.get(
+    '/moods/:params',
+    asyncHandler(async (req, res) => {
+      res.json(await musicService.getMoodPlaylists(req.params.params));
+    }),
+  );
+
+  router.get(
+    '/artist/:artistId',
+    asyncHandler(async (req, res) => {
+      res.json(await musicService.getArtist(req.params.artistId));
+    }),
+  );
+
+  router.get(
+    '/artist/:artistId/albums',
+    asyncHandler(async (req, res) => {
+      const params = typeof req.query.params === 'string' ? req.query.params : '';
+      if (!params) {
+        res.status(400).json({ detail: 'Parameter params wajib diisi.' });
+        return;
+      }
+      res.json(await musicService.getArtistAlbums(req.params.artistId, params));
+    }),
+  );
+
+  router.get(
+    '/album/:albumId',
+    asyncHandler(async (req, res) => {
+      res.json(await musicService.getAlbum(req.params.albumId));
+    }),
+  );
+
+  router.get(
+    '/playlist/:playlistId',
+    asyncHandler(async (req, res) => {
+      const rawLimit = Number(req.query.limit) || 100;
+      const limit = Math.max(1, Math.min(200, rawLimit));
+      res.json(await musicService.getPlaylist(req.params.playlistId, limit));
+    }),
+  );
+
+  router.get(
+    '/watch/:videoId',
+    asyncHandler(async (req, res) => {
+      const radio = req.query.radio !== 'false';
+      const playlistId =
+        typeof req.query.playlistId === 'string' ? req.query.playlistId : null;
+      const rawLimit = Number(req.query.limit) || 25;
+      const limit = Math.max(1, Math.min(50, rawLimit));
+      res.json(
+        await musicService.getWatchPlaylist(req.params.videoId, playlistId, radio, limit),
+      );
+    }),
+  );
+
+  router.get(
+    '/lyrics/:browseId',
+    asyncHandler(async (req, res) => {
+      res.json(await musicService.getLyrics(req.params.browseId));
+    }),
+  );
+
+  router.get(
+    '/song/:videoId/credits',
+    asyncHandler(async (req, res) => {
+      const albumId = typeof req.query.albumId === 'string' ? req.query.albumId : null;
+      const creditsBrowseId =
+        typeof req.query.creditsBrowseId === 'string' ? req.query.creditsBrowseId : null;
+      res.json(
+        await musicService.getSongCredits(req.params.videoId, albumId, creditsBrowseId),
+      );
+    }),
+  );
+
+  router.get(
+    '/song/:videoId/related',
+    asyncHandler(async (req, res) => {
+      res.json(await musicService.getSongRelated(req.params.videoId));
+    }),
+  );
+
+  router.get(
+    '/podcast/:podcastId',
+    asyncHandler(async (req, res) => {
+      const rawLimit = Number(req.query.limit) || 100;
+      const limit = Math.max(1, Math.min(200, rawLimit));
+      res.json(await musicService.getPodcast(req.params.podcastId, limit));
+    }),
+  );
+
+  router.get(
+    '/episode/:videoId',
+    asyncHandler(async (req, res) => {
+      res.json(await musicService.getEpisode(req.params.videoId));
+    }),
+  );
+
+  router.get(
+    '/channel/:channelId/episodes',
+    asyncHandler(async (req, res) => {
+      const params = typeof req.query.params === 'string' ? req.query.params : '';
+      if (!params) {
+        res.status(400).json({ detail: 'Parameter params wajib diisi.' });
+        return;
+      }
+      res.json(await musicService.getChannelEpisodes(req.params.channelId, params));
+    }),
+  );
+
+  router.get('/account/status', (_req, res) => {
+    res.json(musicService.getAccountStatus());
   });
 
-  backendProcess.stderr?.on('data', (chunk: Buffer) => {
-    const line = chunk.toString().trim();
-    if (line) console.error(`[backend] ${line}`);
+  router.get('/account/library', (_req, res) => {
+    res.json(musicService.getAccountLibrary());
   });
 
-  backendProcess.on('exit', (code) => {
-    backendProcess = null;
-    if (!shuttingDown && code !== 0) {
-      console.error(`[backend] exited with code ${code}, restarting in 2s...`);
-      setTimeout(() => {
-        if (!shuttingDown) {
-          void ensurePythonBackend();
-        }
-      }, 2000);
+  router.post('/account/rate', (_req, res) => {
+    res.json({ synced: false, reason: 'local_mode' });
+  });
+
+  router.post('/account/playlist', (_req, res) => {
+    res.json({ synced: false, reason: 'local_mode' });
+  });
+
+  router.post('/account/playlist/items', (_req, res) => {
+    res.json({ synced: false, reason: 'local_mode' });
+  });
+
+  router.post('/account/subscribe', (_req, res) => {
+    res.json({ synced: false, reason: 'local_mode' });
+  });
+
+  router.get(
+    '/artwork-color',
+    asyncHandler(async (req, res) => {
+      const url = typeof req.query.url === 'string' ? req.query.url : '';
+      if (url.length < 10) {
+        res.status(400).json({ detail: 'Parameter url tidak valid.' });
+        return;
+      }
+      res.json(await musicService.extractArtworkColor(url));
+    }),
+  );
+
+  router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (err instanceof MusicServiceError) {
+      res.status(err.statusCode).json({ detail: err.message });
+      return;
     }
+    const message = err instanceof Error ? err.message : 'Terjadi kesalahan server.';
+    res.status(502).json({ detail: message });
   });
 
-  const ready = await waitForBackend(15000);
-  if (ready) {
-    console.log(`[backend] FastAPI ready at ${BACKEND_URL}`);
-  } else {
-    console.warn('[backend] FastAPI did not respond within 15s, continuing startup');
-  }
+  return router;
 }
-
-function cleanupBackend(): void {
-  shuttingDown = true;
-  if (backendProcess && !backendProcess.killed) {
-    backendProcess.kill('SIGTERM');
-    backendProcess = null;
-  }
-}
-
-process.on('SIGINT', () => {
-  cleanupBackend();
-  process.exit(0);
-});
-process.on('SIGTERM', () => {
-  cleanupBackend();
-  process.exit(0);
-});
-process.on('exit', cleanupBackend);
 
 async function startServer(): Promise<void> {
-  await ensurePythonBackend();
-
   const app = express();
 
-  app.use('/api', express.raw({ type: '*/*', limit: '2mb' }), async (req, res) => {
-    const targetPath = req.originalUrl.replace(/^\/api/, '') || '/';
-    const targetUrl = `${BACKEND_URL}${targetPath}`;
+  app.use('/api', createApiRouter());
 
-    try {
-      const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-      const upstream = await fetch(targetUrl, {
-        method: req.method,
-        headers: {
-          Accept: 'application/json',
-          ...(hasBody && req.headers['content-type']
-            ? { 'Content-Type': String(req.headers['content-type']) }
-            : {}),
-        },
-        body:
-          hasBody && Buffer.isBuffer(req.body) && req.body.length > 0
-            ? new Uint8Array(req.body)
-            : undefined,
-      });
-
-      const contentType = upstream.headers.get('content-type') || 'application/json';
-      const bodyText = await upstream.text();
-      res.status(upstream.status).setHeader('Content-Type', contentType).send(bodyText);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Tidak dapat terhubung ke layanan musik.';
-      res.status(502).json({
-        detail: `Server backend musik belum siap atau tidak terjangkau: ${message}`,
-      });
-    }
-  });
-
-  if (IS_PROD) {
+  if (IS_PROD && fs.existsSync(path.join(__dirname, 'dist', 'index.html'))) {
     const distDir = path.join(__dirname, 'dist');
     app.use(express.static(distDir));
     app.get('*', (_req, res) => {
@@ -164,6 +257,5 @@ async function startServer(): Promise<void> {
 
 startServer().catch((err) => {
   console.error('[soundclear] Failed to start server:', err);
-  cleanupBackend();
   process.exit(1);
 });

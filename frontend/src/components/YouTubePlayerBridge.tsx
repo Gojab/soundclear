@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -94,6 +94,8 @@ export function YouTubePlayerBridge() {
   const loadedVideoIdRef = useRef<string | null>(null);
   const microFadeTimerRef = useRef<number | null>(null);
 
+  const [ytActuallyPlaying, setYtActuallyPlaying] = useState(false);
+
   const hydrated = usePlayerStore((s) => s.hydrated);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -105,6 +107,7 @@ export function YouTubePlayerBridge() {
   const rightPanelOpen = usePlayerStore((s) => s.rightPanelOpen);
   const karaokeOpen = usePlayerStore((s) => s.karaokeOpen);
   const fullscreenNowPlaying = usePlayerStore((s) => s.fullscreenNowPlaying);
+  const playerError = usePlayerStore((s) => s.playerError);
 
   const youtubeSound = useSettingsStore((s) => s.youtubeSound);
 
@@ -173,6 +176,7 @@ export function YouTubePlayerBridge() {
             if (!getPlayableVideoId(store.currentTrack)) return;
 
             if (event.data === YTState.PLAYING) {
+              setYtActuallyPlaying(true);
               store.setIsBuffering(false);
               if (!store.isPlaying) store.setIsPlaying(true);
               store.setPlayerError(null);
@@ -182,16 +186,19 @@ export function YouTubePlayerBridge() {
                 // Ignore
               }
             } else if (event.data === YTState.PAUSED) {
+              setYtActuallyPlaying(false);
               store.setIsBuffering(false);
               if (store.isPlaying) store.setIsPlaying(false);
             } else if (event.data === YTState.BUFFERING) {
               store.setIsBuffering(true);
             } else if (event.data === YTState.ENDED) {
+              setYtActuallyPlaying(false);
               store.setIsBuffering(false);
               store.handleTrackEnded();
             }
           },
           onError: (event) => {
+            setYtActuallyPlaying(false);
             const store = usePlayerStore.getState();
             if (!getPlayableVideoId(store.currentTrack)) return;
             store.setIsBuffering(false);
@@ -230,7 +237,13 @@ export function YouTubePlayerBridge() {
     };
   }, []);
 
+  // Reset active video overlay whenever track changes or playback pauses
+  useEffect(() => {
+    setYtActuallyPlaying(false);
+  }, [currentVideoId]);
+
   // Overlay visible YouTube player inside RightPanel [data-yt-visible-slot]
+  // Only shown when playback is genuinely active without errors, so idle/paused/blocked states reveal artwork.
   useEffect(() => {
     const syncSlotPosition = () => {
       const wrapper = wrapperRef.current;
@@ -239,6 +252,9 @@ export function YouTubePlayerBridge() {
       if (
         slot &&
         currentVideoId &&
+        isPlaying &&
+        ytActuallyPlaying &&
+        !playerError &&
         rightPanelOpen &&
         !karaokeOpen &&
         !fullscreenNowPlaying
@@ -285,7 +301,15 @@ export function YouTubePlayerBridge() {
       window.removeEventListener('resize', syncSlotPosition);
       window.removeEventListener('scroll', syncSlotPosition, true);
     };
-  }, [currentVideoId, rightPanelOpen, karaokeOpen, fullscreenNowPlaying]);
+  }, [
+    currentVideoId,
+    isPlaying,
+    ytActuallyPlaying,
+    playerError,
+    rightPanelOpen,
+    karaokeOpen,
+    fullscreenNowPlaying,
+  ]);
 
   // Load/cue YouTube video OR pause immediately if switching to a Local file
   useEffect(() => {
