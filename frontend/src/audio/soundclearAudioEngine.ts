@@ -61,6 +61,7 @@ export interface SharedAudioGraph {
 }
 
 let sharedGraph: SharedAudioGraph | null = null;
+let backgroundHandoffInProgress = false;
 let keepaliveAudio: HTMLAudioElement | null = null;
 let keepaliveBlobUrl: string | null = null;
 let testToneMode: TestToneMode | null = null;
@@ -395,10 +396,13 @@ export async function engageBackgroundDirectDeck(
   isMuted: boolean,
 ): Promise<boolean> {
   const graph = sharedGraph;
-  if (!graph || graph.backgroundDirectActive) return Boolean(graph?.backgroundDirectActive);
+  if (!graph || graph.backgroundDirectActive || backgroundHandoffInProgress) {
+    return Boolean(graph?.backgroundDirectActive);
+  }
   const activeDeck = graph.decks[graph.activeDeck];
   if (!activeDeck.src || activeDeck.paused) return false;
 
+  backgroundHandoffInProgress = true;
   const targetSrc = activeDeck.src;
   const resumeAt = Number.isFinite(activeDeck.currentTime) ? activeDeck.currentTime : 0;
   const targetRate = activeDeck.playbackRate || 1;
@@ -412,14 +416,18 @@ export async function engageBackgroundDirectDeck(
     if (resumeAt > 0) {
       graph.directDeck.currentTime = resumeAt;
     }
+    await graph.directDeck.play();
     graph.backgroundDirectActive = true;
     activeDeck.pause();
-    await graph.directDeck.play();
     notifyDiagnosticsListeners();
     return true;
   } catch {
     graph.backgroundDirectActive = false;
+    graph.directDeck.pause();
+    graph.directDeck.removeAttribute('src');
     return false;
+  } finally {
+    backgroundHandoffInProgress = false;
   }
 }
 
