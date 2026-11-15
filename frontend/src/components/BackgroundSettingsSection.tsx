@@ -150,9 +150,9 @@ export function BackgroundSettingsSection() {
               <div
                 className={`w-20 sm:w-28 rounded-lg p-2 flex flex-col gap-1.5 border border-white/[0.1] ${
                   previewPresentation.useGlassPanels
-                    ? 'bg-white/[0.06] backdrop-blur-md'
+                    ? 'bg-black/35'
                     : previewPresentation.isActive
-                      ? 'bg-white/[0.09]'
+                      ? 'bg-black/65'
                       : 'bg-white/[0.04]'
                 }`}
               >
@@ -172,9 +172,9 @@ export function BackgroundSettingsSection() {
               <div
                 className={`flex-1 rounded-lg p-3 flex flex-col justify-between border border-white/[0.1] ${
                   previewPresentation.useGlassPanels
-                    ? 'bg-white/[0.06] backdrop-blur-md'
+                    ? 'bg-black/30'
                     : previewPresentation.isActive
-                      ? 'bg-white/[0.09]'
+                      ? 'bg-black/60'
                       : 'bg-white/[0.04]'
                 }`}
               >
@@ -307,7 +307,7 @@ export function BackgroundSettingsSection() {
           <div>
             <h3 className="text-sm font-bold text-[#E8FFF3]">Latar Sampul Lagu Aktif</h3>
             <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed">
-              Latar belakang secara otomatis menampilkan sampul dan warna dominan lagu yang sedang kamu putar dengan efek blur lembut.
+              Latar belakang secara otomatis menampilkan sampul dan warna dominan lagu yang sedang kamu putar secara jernih tanpa blur bawaan.
             </p>
           </div>
         </section>
@@ -560,7 +560,9 @@ export function BackgroundSettingsSection() {
                 <label htmlFor="bg-blur-slider" className="font-medium text-[#E8FFF3]/90">
                   Blur Latar Belakang
                 </label>
-                <span className="font-mono-num text-[#19EE8A]">{customBackground.blurPx} px</span>
+                <span className="font-mono-num text-[#19EE8A]">
+                  {customBackground.blurPx === 0 ? '0 px (Jernih / Tanpa Blur)' : `${customBackground.blurPx} px`}
+                </span>
               </div>
               <input
                 id="bg-blur-slider"

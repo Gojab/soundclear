@@ -33,6 +33,7 @@ import { prefetchStreamProbe } from '../utils/streamProbeCache';
 
 interface HomePageProps {
   onAddToPlaylist: (track: MediaItem) => void;
+  onOpenProfileDrawer?: () => void;
 }
 
 type HomeCategoryTab = 'all' | 'music' | 'podcast' | 'local';
@@ -46,7 +47,7 @@ interface QuickTile {
   onPlay?: () => void;
 }
 
-export function HomePage({ onAddToPlaylist }: HomePageProps) {
+export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps) {
   const [categoryTab, setCategoryTab] = useState<HomeCategoryTab>('all');
 
   const playTrackList = usePlayerStore((s) => s.playTrackList);
@@ -356,7 +357,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 Putar semua
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+            <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
               {continueTracks.slice(0, 5).map((item, idx) => (
                 <MediaCard
                   key={`cont-${item.id}-${idx}`}
@@ -458,7 +459,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
             <h2 id="releases-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
               Rilisan Baru Artis yang Diikuti
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+            <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
               {artistNewReleases.map((item) => (
                 <MediaCard key={`rel-${item.id}`} item={item} />
               ))}
@@ -582,7 +583,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 {chartPlaylists.length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-lg font-bold text-[#E8FFF3]">Daftar Putar Tangga Lagu</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                    <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
                       {chartPlaylists.map((item) => (
                         <MediaCard key={item.id} item={item} subtitle="Tangga Lagu" />
                       ))}
@@ -593,7 +594,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 {chartArtists.length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-lg font-bold text-[#E8FFF3]">Artis Teratas Indonesia</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                    <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
                       {chartArtists.slice(0, 10).map((artist) => (
                         <MediaCard
                           key={artist.id}
@@ -673,7 +674,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                         ))}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                      <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
                         {visibleItems.slice(0, 10).map((item, idx) => (
                           <MediaCard
                             key={`${item.id}-${idx}`}
@@ -742,9 +743,19 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Top Category Filter Pills (Windows Desktop style) */}
-      <div className="flex items-center gap-2 flex-wrap">
+    <div className="space-y-5 sm:space-y-6">
+      {/* Top Row: Mobile Profile Avatar + Category Filter Pills (IMG_4280 layout) */}
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none pb-0.5">
+        {onOpenProfileDrawer && (
+          <button
+            type="button"
+            onClick={onOpenProfileDrawer}
+            aria-label="Buka menu profil"
+            className="md:hidden w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0 shadow-md shadow-[#01BA53]/20"
+          >
+            S
+          </button>
+        )}
         {categoryButtons.map((tab) => {
           const active = categoryTab === tab.id;
           return (
@@ -752,9 +763,9 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
               key={tab.id}
               type="button"
               onClick={() => setCategoryTab(tab.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
                 active
-                  ? 'bg-[#E8FFF3] text-[#0F1F17]'
+                  ? 'bg-sc-gradient text-[#0F1F17]'
                   : 'bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] text-[#B3F7D1]/85 hover:bg-white/[0.11] hover:text-[#E8FFF3]'
               }`}
             >
@@ -770,7 +781,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
           {savedPodcasts.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-[#E8FFF3] tracking-tight">Podcast Tersimpan</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+              <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
                 {savedPodcasts.map((entry) => (
                   <MediaCard key={entry.id} item={entry.item} subtitle="Podcast" />
                 ))}
@@ -796,7 +807,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
             {podcastDiscoverQuery.isLoading ? (
               <CardGridSkeleton count={5} />
             ) : podcastDiscoverQuery.data && filterList(podcastDiscoverQuery.data.items).length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+              <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
                 {filterList(podcastDiscoverQuery.data.items).slice(0, 10).map((item) => (
                   <MediaCard key={item.id} item={item} />
                 ))}

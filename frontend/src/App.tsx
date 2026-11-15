@@ -22,6 +22,7 @@ import {
 } from './components/FullscreenViews';
 import { Footer } from './components/Footer';
 import { LocalAudioEngine } from './components/LocalAudioEngine';
+import { MobileProfileDrawer } from './components/MobileProfileDrawer';
 import { MobileShell } from './components/MobileShell';
 import { NotchMiniPlayer } from './components/NotchMiniPlayer';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -61,6 +62,7 @@ export default function App() {
   const [topSearchInput, setTopSearchInput] = useState('');
   const [topSearchOpen, setTopSearchOpen] = useState(false);
   const [topSuggestions, setTopSuggestions] = useState<string[]>([]);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const topSearchWrapperRef = useRef<HTMLDivElement | null>(null);
   const mainScrollRef = useRef<HTMLElement | null>(null);
 
@@ -238,9 +240,9 @@ export default function App() {
       <header
         className={`relative hidden md:flex items-center justify-between gap-4 px-3 h-15 shrink-0 z-20 transition-[background-color,padding,height] duration-300 ${
           glassPanels
-            ? 'bg-black/45 backdrop-blur-md border-b border-[#B3F7D1]/10'
+            ? 'bg-black/30 border-b border-white/[0.08]'
             : bgActive
-              ? 'bg-black/75 backdrop-blur-sm'
+              ? 'bg-black/65'
               : 'bg-black'
         }`}
       >
@@ -513,9 +515,9 @@ export default function App() {
           ref={mainScrollRef}
           className={`flex-1 min-w-0 md:rounded-lg overflow-y-auto flex flex-col relative transition-colors duration-300 border border-white/[0.08] ${
             glassPanels
-              ? 'bg-black/45 backdrop-blur-2xl'
+              ? 'bg-black/25'
               : bgActive
-                ? 'bg-[#090C0B]/80 backdrop-blur-xl'
+                ? 'bg-black/60'
                 : 'bg-white/[0.03] backdrop-blur-2xl'
           }`}
         >
@@ -528,59 +530,60 @@ export default function App() {
             }}
           />
 
-          {/* Compact Mobile Header (hidden on Windows/desktop) */}
-          <header
-            style={{ top: 'env(safe-area-inset-top, 0px)' }}
-            className={`md:hidden sticky z-20 flex items-center justify-between gap-3 px-4 py-3 backdrop-blur-2xl border-b border-white/[0.09] shrink-0 ${
-              glassPanels ? 'bg-black/50' : 'bg-black/65'
-            }`}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <img
-                src="/soundclear-logo.png"
-                alt="SoundClear"
-                className="w-7 h-7 rounded-lg object-contain shrink-0"
-              />
-              <span className="text-sm font-semibold tracking-tight text-[#E8FFF3]">
-                SoundClear
-              </span>
-              <button
-                type="button"
-                onClick={goBack}
-                disabled={!canGoBack}
-                aria-label="Kembali"
-                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] disabled:opacity-30 flex items-center justify-center text-[#E8FFF3] ml-1"
-              >
-                <ChevronLeft className="w-4 h-4" strokeWidth={1.75} />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <PWAInstallButton variant="compact" />
-              {currentRoute.name !== 'search' && (
+          {/* Compact Mobile Header (shown on secondary mobile pages; Home uses IMG_4280 avatar+pills, Settings uses IMG_4281 back+title+search) */}
+          {currentRoute.name !== 'home' && currentRoute.name !== 'settings' && (
+            <header
+              style={{ top: 'env(safe-area-inset-top, 0px)' }}
+              className={`md:hidden sticky z-20 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.09] shrink-0 ${
+                glassPanels ? 'bg-black/40' : bgActive ? 'bg-black/65' : 'bg-black/70 backdrop-blur-2xl'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
                 <button
                   type="button"
-                  onClick={() => navigate({ name: 'search' })}
-                  aria-label="Cari"
-                  className="w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
+                  onClick={() => setMobileDrawerOpen(true)}
+                  aria-label="Buka menu profil"
+                  className="w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0"
                 >
-                  <Search className="w-4 h-4" strokeWidth={1.75} />
+                  S
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => navigate({ name: 'settings' })}
-                aria-label="Pengaturan"
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
-                  currentRoute.name === 'settings'
-                    ? 'bg-[#19EE8A] text-[#0F1F17]'
-                    : 'bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] text-[#B3F7D1]'
-                }`}
-              >
-                <Settings className="w-4 h-4" strokeWidth={1.75} />
-              </button>
-            </div>
-          </header>
+                <button
+                  type="button"
+                  onClick={goBack}
+                  disabled={!canGoBack}
+                  aria-label="Kembali"
+                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] disabled:opacity-30 flex items-center justify-center text-[#E8FFF3]"
+                >
+                  <ChevronLeft className="w-4 h-4" strokeWidth={1.75} />
+                </button>
+                <span className="text-sm font-semibold tracking-tight text-[#E8FFF3] truncate">
+                  SoundClear
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <PWAInstallButton variant="compact" />
+                {currentRoute.name !== 'search' && (
+                  <button
+                    type="button"
+                    onClick={() => navigate({ name: 'search' })}
+                    aria-label="Cari"
+                    className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
+                  >
+                    <Search className="w-4 h-4" strokeWidth={1.75} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => navigate({ name: 'settings' })}
+                  aria-label="Pengaturan"
+                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
+                >
+                  <Settings className="w-4 h-4" strokeWidth={1.75} />
+                </button>
+              </div>
+            </header>
+          )}
 
           {/* Scrollable page body */}
           <div
@@ -589,7 +592,10 @@ export default function App() {
             }`}
           >
             {currentRoute.name === 'home' && (
-              <HomePage onAddToPlaylist={openAddToPlaylistModal} />
+              <HomePage
+                onAddToPlaylist={openAddToPlaylistModal}
+                onOpenProfileDrawer={() => setMobileDrawerOpen(true)}
+              />
             )}
 
             {currentRoute.name === 'search' && (
@@ -728,7 +734,17 @@ export default function App() {
       <PlayerBar onAddToPlaylist={openAddToPlaylistModal} />
 
       {/* Mobile mini player + expandable sheet + bottom tabs */}
-      <MobileShell onAddToPlaylist={openAddToPlaylistModal} />
+      <MobileShell
+        onAddToPlaylist={openAddToPlaylistModal}
+        onOpenCreatePlaylist={openCreatePlaylistModal}
+      />
+
+      {/* Mobile slide-over profile drawer (IMG_4282 layout) */}
+      <MobileProfileDrawer
+        open={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        onOpenCreatePlaylist={openCreatePlaylistModal}
+      />
 
       {/* Playlist create / add / edit modal */}
       <PlaylistModal

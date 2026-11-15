@@ -98,9 +98,9 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
       aria-label="Koleksi Kamu"
       className={`hidden md:flex flex-col w-[272px] lg:w-[296px] shrink-0 rounded-lg overflow-hidden transition-colors duration-300 border border-white/[0.08] ${
         glassPanels
-          ? 'bg-black/45 backdrop-blur-2xl'
+          ? 'bg-black/35'
           : bgActive
-            ? 'bg-[#090C0B]/80 backdrop-blur-xl'
+            ? 'bg-black/65'
             : 'bg-white/[0.03] backdrop-blur-2xl'
       }`}
     >

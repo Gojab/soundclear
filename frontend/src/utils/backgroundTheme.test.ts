@@ -96,8 +96,10 @@ test('computeBackgroundPresentation handles every background mode accurately', (
   assert.equal(gradientPres.backgroundCss, 'linear-gradient(90deg, #112233 0%, #445566 100%)');
   assert.equal(gradientPres.scrimOpacity, 0.65);
 
+  assert.equal(DEFAULT_CUSTOM_BACKGROUND.blurPx, 0);
+
   const ambientPres = computeBackgroundPresentation(
-    { ...DEFAULT_CUSTOM_BACKGROUND, mode: 'ambient', blurPx: 4 },
+    { ...DEFAULT_CUSTOM_BACKGROUND, mode: 'ambient', blurPx: 0 },
     {
       currentTrackThumbnail: 'https://lh3.googleusercontent.com/sample',
       ambientColor: { r: 20, g: 120, b: 90 },
@@ -105,6 +107,6 @@ test('computeBackgroundPresentation handles every background mode accurately', (
   );
   assert.equal(ambientPres.isActive, true);
   assert.equal(ambientPres.imageUrl, 'https://lh3.googleusercontent.com/sample');
-  assert.equal(ambientPres.blurPx, 14);
+  assert.equal(ambientPres.blurPx, 0);
   assert.ok(ambientPres.backgroundCss.includes('20, 120, 90'));
 });

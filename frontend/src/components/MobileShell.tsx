@@ -12,6 +12,8 @@ import {
   Moon,
   Pause,
   Play,
+  Plus,
+  PlusCircle,
   Repeat,
   Repeat1,
   Search,
@@ -20,6 +22,7 @@ import {
   SkipForward,
   Sliders,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
@@ -39,10 +42,12 @@ import { QueueView } from './QueueView';
 
 interface MobileShellProps {
   onAddToPlaylist: (track: MediaItem) => void;
+  onOpenCreatePlaylist: () => void;
 }
 
-export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
+export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShellProps) {
   const [sheetTab, setSheetTab] = useState<'player' | 'lyrics' | 'queue'>('player');
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const touchStartYRef = useRef<number | null>(null);
 
   const currentRoute = useNavigationStore((s) => s.currentRoute);
@@ -89,8 +94,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
   const tabs = [
     { id: 'home' as const, label: 'Beranda', icon: Home },
     { id: 'search' as const, label: 'Cari', icon: Search },
-    { id: 'moods' as const, label: 'Mood', icon: Compass },
-    { id: 'library' as const, label: 'Koleksi', icon: Library },
+    { id: 'library' as const, label: 'Koleksi Kamu', icon: Library },
     { id: 'recap' as const, label: 'Rekap', icon: BarChart3 },
   ];
 
@@ -143,20 +147,33 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
 
             <button
               type="button"
+              onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
+              aria-label="Pengaturan Audio DSP"
+              className="min-w-[38px] min-h-[44px] flex items-center justify-center text-[#B3F7D1]/75 hover:text-[#19EE8A]"
+            >
+              <Sliders className="w-4 h-4" strokeWidth={1.85} />
+            </button>
+
+            <button
+              type="button"
               onClick={() => toggleLike(currentTrack)}
-              aria-label={liked ? 'Hapus dari lagu disukai' : 'Sukai lagu'}
-              className={`min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                liked ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/70'
+              aria-label={liked ? 'Hapus dari lagu disukai' : 'Simpan lagu disukai'}
+              className={`min-w-[38px] min-h-[44px] flex items-center justify-center ${
+                liked ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/75'
               }`}
             >
-              <Heart className={`w-4 h-4 ${liked ? 'fill-[#19EE8A]' : ''}`} strokeWidth={1.75} />
+              {liked ? (
+                <Heart className="w-4.5 h-4.5 fill-[#19EE8A]" strokeWidth={1.85} />
+              ) : (
+                <PlusCircle className="w-4.5 h-4.5" strokeWidth={1.85} />
+              )}
             </button>
 
             <button
               type="button"
               onClick={togglePlayPause}
               aria-label={isPlaying ? 'Jeda' : 'Putar'}
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-[#E8FFF3]"
+              className="min-w-[40px] min-h-[44px] flex items-center justify-center text-[#E8FFF3]"
             >
               {isPlaying ? (
                 <Pause className="w-5 h-5 fill-current" strokeWidth={1.75} />
@@ -445,11 +462,70 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
         </div>
       )}
 
-      {/* Mobile Bottom Tab Bar */}
+      {/* Quick Create Menu Sheet (triggered by "Buat" tab) */}
+      {createMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center p-3 pb-20">
+          <button
+            type="button"
+            aria-label="Tutup menu buat"
+            onClick={() => setCreateMenuOpen(false)}
+            className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-[#0B0F0D]/90 backdrop-blur-2xl border border-white/[0.14] p-3 space-y-1.5 shadow-2xl">
+            <div className="flex items-center justify-between px-2 py-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#B3F7D1]/65">
+                Buat &amp; Kelola
+              </span>
+              <button
+                type="button"
+                onClick={() => setCreateMenuOpen(false)}
+                aria-label="Tutup"
+                className="p-1 text-[#B3F7D1]/65 hover:text-[#E8FFF3]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCreateMenuOpen(false);
+                onOpenCreatePlaylist();
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-left transition-colors"
+            >
+              <span className="w-9 h-9 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center shrink-0">
+                <ListPlus className="w-4.5 h-4.5" strokeWidth={2} />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-[#E8FFF3]">Buat Playlist Baru</p>
+                <p className="text-[11px] text-[#B3F7D1]/60">Kumpulkan lagu favoritmu dalam satu daftar putar</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCreateMenuOpen(false);
+                navigate({ name: 'moods' });
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-left transition-colors"
+            >
+              <span className="w-9 h-9 rounded-full bg-white/[0.08] text-[#19EE8A] flex items-center justify-center shrink-0">
+                <Compass className="w-4.5 h-4.5" strokeWidth={2} />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-[#E8FFF3]">Jelajahi Mood &amp; Genre</p>
+                <p className="text-[11px] text-[#B3F7D1]/60">Temukan musik sesuai suasana hati</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Bottom Tab Bar (5 tabs matching IMG_4280 layout) */}
       <nav
         aria-label="Navigasi seluler"
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[58px] backdrop-blur-2xl border-t border-white/[0.1] grid grid-cols-5 ${
-          glassPanels ? 'bg-black/65' : 'bg-[#080B09]/88'
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[60px] backdrop-blur-2xl border-t border-white/[0.1] grid grid-cols-5 ${
+          glassPanels ? 'bg-black/65' : 'bg-[#080B09]/90'
         }`}
       >
         {tabs.map((tab) => {
@@ -457,23 +533,38 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
           const active =
             tab.id === 'library'
               ? isLibraryActive
-              : tab.id === 'moods'
-                ? currentRoute.name === 'moods' || currentRoute.name === 'mood-detail'
-                : currentRoute.name === tab.id;
+              : currentRoute.name === tab.id;
           return (
             <button
               key={tab.id}
               type="button"
-              onClick={() => navigate({ name: tab.id })}
+              onClick={() => {
+                setCreateMenuOpen(false);
+                navigate({ name: tab.id });
+              }}
               className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors ${
                 active ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/60'
               }`}
             >
-              <Icon className="w-5 h-5" strokeWidth={1.75} />
-              <span className="text-[10px] font-medium">{tab.label}</span>
+              <Icon className="w-5 h-5" strokeWidth={1.8} />
+              <span className="text-[10px] font-medium leading-tight truncate max-w-full px-1">
+                {tab.label}
+              </span>
             </button>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => setCreateMenuOpen((prev) => !prev)}
+          aria-expanded={createMenuOpen}
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors ${
+            createMenuOpen ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/60'
+          }`}
+        >
+          <Plus className="w-5 h-5" strokeWidth={2} />
+          <span className="text-[10px] font-medium leading-tight">Buat</span>
+        </button>
       </nav>
     </>
   );

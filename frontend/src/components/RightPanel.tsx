@@ -267,9 +267,9 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
       aria-label="Panel sedang diputar"
       className={`hidden lg:flex flex-col w-[312px] xl:w-[348px] shrink-0 rounded-lg overflow-hidden transition-all duration-200 border border-white/[0.08] ${
         glassPanels
-          ? 'bg-black/45 backdrop-blur-2xl'
+          ? 'bg-black/35'
           : bgActive
-            ? 'bg-[#090C0B]/80 backdrop-blur-xl'
+            ? 'bg-black/65'
             : 'bg-white/[0.03] backdrop-blur-2xl'
       }`}
     >

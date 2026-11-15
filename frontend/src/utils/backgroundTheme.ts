@@ -95,8 +95,8 @@ export const DEFAULT_CUSTOM_BACKGROUND: CustomBackgroundSettings = {
   gradientAngle: 135,
   customImageDataUrl: null,
   customImageName: null,
-  blurPx: 12,
-  dimOpacity: 58,
+  blurPx: 0,
+  dimOpacity: 40,
   panelGlass: true,
 };
 
@@ -219,8 +219,8 @@ export function computeBackgroundPresentation(
     resolvedPresetImageUrl?: string | null;
   },
 ): BackgroundPresentation {
-  const scrimOpacity = Number((clampBackgroundNumber(bg.dimOpacity, 25, 90, 58) / 100).toFixed(2));
-  const blurPx = clampBackgroundNumber(bg.blurPx, 0, 40, 12);
+  const scrimOpacity = Number((clampBackgroundNumber(bg.dimOpacity, 25, 90, 40) / 100).toFixed(2));
+  const blurPx = clampBackgroundNumber(bg.blurPx, 0, 40, 0);
 
   if (bg.mode === 'default') {
     return {
@@ -243,7 +243,7 @@ export function computeBackgroundPresentation(
       useGlassPanels: bg.panelGlass,
       imageUrl: thumb,
       backgroundCss: `radial-gradient(circle at 24% 20%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.48), rgba(8, 18, 13, 0.96) 72%)`,
-      blurPx: thumb ? Math.max(14, blurPx) : 0,
+      blurPx: thumb ? blurPx : 0,
       scrimOpacity,
     };
   }
