@@ -1,73 +1,111 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 180" width="100%" role="img" aria-label="SoundClear Web Audio DSP Signal Pipeline">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 265" width="100%" role="img" aria-label="SoundClear Web Audio DSP Signal Matrix">
   <defs>
-    <linearGradient id="pipe-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#070B0A" />
-      <stop offset="100%" stop-color="#0B1310" />
+    <linearGradient id="dsp-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#050807" />
+      <stop offset="100%" stop-color="#0A1310" />
     </linearGradient>
-    <linearGradient id="node-accent" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#14221D" />
-      <stop offset="100%" stop-color="#0D1613" />
+    <linearGradient id="node-card" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#13211C" />
+      <stop offset="100%" stop-color="#0B1411" />
+    </linearGradient>
+    <linearGradient id="curve-fill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2EE6A6" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#2EE6A6" stop-opacity="0.01" />
     </linearGradient>
   </defs>
 
-  <rect width="1200" height="180" rx="18" fill="url(#pipe-bg)" stroke="#FFFFFF" stroke-opacity="0.09" />
-  <text x="32" y="34" fill="#8EA69B" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" letter-spacing="1.6">WEB AUDIO API · SIGNAL PROCESSING CHAIN</text>
+  <rect width="1200" height="265" rx="20" fill="url(#dsp-bg)" stroke="#FFFFFF" stroke-opacity="0.1" />
+  <text x="32" y="34" fill="#7D968B" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" letter-spacing="1.8">SIGNAL MATRIX // WEB AUDIO BIQUAD &amp; DYNAMICS GRAPH</text>
+  <text x="1032" y="34" fill="#E5C07B" font-family="ui-monospace, monospace" font-size="10.5" letter-spacing="1.4">LATENCY &lt; 10ms</text>
 
-  <!-- Signal bus line -->
-  <line x1="90" y1="102" x2="1110" y2="102" stroke="#2EE6A6" stroke-opacity="0.24" stroke-width="2" />
-
-  <!-- Traveling signal pulses -->
-  <circle cx="90" cy="102" r="4.5" fill="#2EE6A6">
-    <animate attributeName="cx" values="90;1110" dur="3.2s" repeatCount="indefinite" />
-    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="3.2s" repeatCount="indefinite" />
+  <line x1="90" y1="92" x2="1110" y2="92" stroke="#2EE6A6" stroke-opacity="0.24" stroke-width="2" />
+  <circle cx="90" cy="92" r="4.5" fill="#2EE6A6">
+    <animate attributeName="cx" values="90;1110" dur="3s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="3s" repeatCount="indefinite" />
   </circle>
-  <circle cx="90" cy="102" r="3" fill="#FFFFFF">
-    <animate attributeName="cx" values="90;1110" dur="3.2s" begin="1.6s" repeatCount="indefinite" />
-    <animate attributeName="opacity" values="0;0.9;0.9;0" keyTimes="0;0.08;0.92;1" dur="3.2s" begin="1.6s" repeatCount="indefinite" />
+  <circle cx="90" cy="92" r="3" fill="#E5C07B">
+    <animate attributeName="cx" values="90;1110" dur="3s" begin="1.5s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.08;0.92;1" dur="3s" begin="1.5s" repeatCount="indefinite" />
   </circle>
 
-  <!-- Stage Nodes -->
   <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
-    <g transform="translate(32, 66)">
-      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#FFFFFF" stroke-opacity="0.12" />
-      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">01 · INPUT</text>
-      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Stream / Local</text>
-      <text x="16" y="64" fill="#8EA69B" font-size="11">Range · FLAC · MP3</text>
+    <g transform="translate(32, 56)">
+      <rect width="164" height="72" rx="12" fill="url(#node-card)" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="14" y="25" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">01 &#183; SOURCE</text>
+      <text x="14" y="46" fill="#FFFFFF" font-size="14" font-weight="700">Stream / Local</text>
+      <text x="14" y="61" fill="#8EA69B" font-size="10.5">Range &#183; FLAC &#183; MP3</text>
     </g>
 
-    <g transform="translate(226, 66)">
-      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#FFFFFF" stroke-opacity="0.12" />
-      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">02 · GAIN</text>
-      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Preamp &amp; LUFS</text>
-      <text x="16" y="64" fill="#8EA69B" font-size="11">ReplayGain · -14 LUFS</text>
+    <g transform="translate(226, 56)">
+      <rect width="164" height="72" rx="12" fill="url(#node-card)" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="14" y="25" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">02 &#183; PREAMP</text>
+      <text x="14" y="46" fill="#FFFFFF" font-size="14" font-weight="700">Gain &amp; LUFS</text>
+      <text x="14" y="61" fill="#8EA69B" font-size="10.5">ReplayGain &#183; -14 LUFS</text>
     </g>
 
-    <g transform="translate(420, 66)">
-      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#2EE6A6" stroke-opacity="0.35" />
-      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">03 · FILTER</text>
-      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">10-Band EQ</text>
-      <text x="16" y="64" fill="#8EA69B" font-size="11">BiquadFilterNode</text>
+    <g transform="translate(420, 56)">
+      <rect width="164" height="72" rx="12" fill="url(#node-card)" stroke="#2EE6A6" stroke-opacity="0.45" />
+      <text x="14" y="25" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">03 &#183; PARAMETRIC</text>
+      <text x="14" y="46" fill="#FFFFFF" font-size="14" font-weight="700">10-Band EQ</text>
+      <text x="14" y="61" fill="#8EA69B" font-size="10.5">32Hz &#8212; 16kHz Biquad</text>
     </g>
 
-    <g transform="translate(614, 66)">
-      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#FFFFFF" stroke-opacity="0.12" />
-      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">04 · SPACE</text>
-      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Bass &amp; Widener</text>
-      <text x="16" y="64" fill="#8EA69B" font-size="11">Mono · Balance L/R</text>
+    <g transform="translate(614, 56)">
+      <rect width="164" height="72" rx="12" fill="url(#node-card)" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="14" y="25" fill="#E5C07B" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">04 &#183; M/S MATRIX</text>
+      <text x="14" y="46" fill="#FFFFFF" font-size="14" font-weight="700">Bass &amp; Widener</text>
+      <text x="14" y="61" fill="#8EA69B" font-size="10.5">Mid-Side &#183; Balance L/R</text>
     </g>
 
-    <g transform="translate(808, 66)">
-      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#FFFFFF" stroke-opacity="0.12" />
-      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">05 · SAFETY</text>
-      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Limiter &amp; Fade</text>
-      <text x="16" y="64" fill="#8EA69B" font-size="11">Equal-Power · Gapless</text>
+    <g transform="translate(808, 56)">
+      <rect width="164" height="72" rx="12" fill="url(#node-card)" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="14" y="25" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">05 &#183; DYNAMICS</text>
+      <text x="14" y="46" fill="#FFFFFF" font-size="14" font-weight="700">Limiter &amp; Fade</text>
+      <text x="14" y="61" fill="#8EA69B" font-size="10.5">Equal-Power &#183; Gapless</text>
     </g>
 
-    <g transform="translate(1002, 66)">
-      <rect width="166" height="72" rx="12" fill="url(#node-accent)" stroke="#2EE6A6" stroke-opacity="0.35" />
-      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">06 · OUTPUT</text>
-      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Device &amp; FFT</text>
-      <text x="16" y="64" fill="#8EA69B" font-size="11">setSinkId · Analyser</text>
+    <g transform="translate(1002, 56)">
+      <rect width="166" height="72" rx="12" fill="url(#node-card)" stroke="#E5C07B" stroke-opacity="0.4" />
+      <text x="14" y="25" fill="#E5C07B" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">06 &#183; HARDWARE</text>
+      <text x="14" y="46" fill="#FFFFFF" font-size="14" font-weight="700">Sink &amp; Analyser</text>
+      <text x="14" y="61" fill="#8EA69B" font-size="10.5">setSinkId &#183; 512-FFT</text>
+    </g>
+  </g>
+
+  <g transform="translate(32, 148)">
+    <rect width="1136" height="94" rx="12" fill="#070C0A" stroke="#FFFFFF" stroke-opacity="0.08" />
+    <line x1="20" y1="47" x2="1116" y2="47" stroke="#FFFFFF" stroke-opacity="0.06" stroke-dasharray="4 4" />
+    <line x1="220" y1="12" x2="220" y2="82" stroke="#FFFFFF" stroke-opacity="0.04" />
+    <line x1="450" y1="12" x2="450" y2="82" stroke="#FFFFFF" stroke-opacity="0.04" />
+    <line x1="680" y1="12" x2="680" y2="82" stroke="#FFFFFF" stroke-opacity="0.04" />
+    <line x1="910" y1="12" x2="910" y2="82" stroke="#FFFFFF" stroke-opacity="0.04" />
+
+    <path fill="url(#curve-fill)"
+      d="M 20 82 L 20 44 C 140 24, 260 20, 380 48 C 500 66, 620 56, 740 34 C 860 18, 990 26, 1116 40 L 1116 82 Z">
+      <animate attributeName="d"
+        values="M 20 82 L 20 44 C 140 24, 260 20, 380 48 C 500 66, 620 56, 740 34 C 860 18, 990 26, 1116 40 L 1116 82 Z;
+                M 20 82 L 20 50 C 140 32, 260 56, 380 38 C 500 22, 620 42, 740 52 C 860 28, 990 18, 1116 34 L 1116 82 Z;
+                M 20 82 L 20 44 C 140 24, 260 20, 380 48 C 500 66, 620 56, 740 34 C 860 18, 990 26, 1116 40 L 1116 82 Z"
+        dur="5.5s" repeatCount="indefinite" />
+    </path>
+
+    <path fill="none" stroke="#2EE6A6" stroke-width="2.2" stroke-linecap="round"
+      d="M 20 44 C 140 24, 260 20, 380 48 C 500 66, 620 56, 740 34 C 860 18, 990 26, 1116 40">
+      <animate attributeName="d"
+        values="M 20 44 C 140 24, 260 20, 380 48 C 500 66, 620 56, 740 34 C 860 18, 990 26, 1116 40;
+                M 20 50 C 140 32, 260 56, 380 38 C 500 22, 620 42, 740 52 C 860 28, 990 18, 1116 34;
+                M 20 44 C 140 24, 260 20, 380 48 C 500 66, 620 56, 740 34 C 860 18, 990 26, 1116 40"
+        dur="5.5s" repeatCount="indefinite" />
+    </path>
+
+    <g font-family="ui-monospace, monospace" font-size="9.5" fill="#6F897F">
+      <text x="20" y="20">32 Hz</text>
+      <text x="210" y="20">125 Hz</text>
+      <text x="440" y="20">500 Hz</text>
+      <text x="670" y="20">2 kHz</text>
+      <text x="900" y="20">8 kHz</text>
+      <text x="1072" y="20" fill="#E5C07B">16 kHz</text>
     </g>
   </g>
 </svg>

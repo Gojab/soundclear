@@ -1,15 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 24" width="100%" role="img" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 18" width="100%" role="img" aria-hidden="true">
   <defs>
     <linearGradient id="wave-line" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#2EE6A6" stop-opacity="0" />
-      <stop offset="25%" stop-color="#2EE6A6" stop-opacity="0.25" />
-      <stop offset="50%" stop-color="#2EE6A6" stop-opacity="0.95" />
-      <stop offset="75%" stop-color="#0AD26C" stop-opacity="0.25" />
+      <stop offset="30%" stop-color="#2EE6A6" stop-opacity="0.3" />
+      <stop offset="55%" stop-color="#2EE6A6" stop-opacity="0.95" />
+      <stop offset="80%" stop-color="#E5C07B" stop-opacity="0.45" />
       <stop offset="100%" stop-color="#2EE6A6" stop-opacity="0" />
     </linearGradient>
   </defs>
-  <line x1="0" y1="12" x2="1200" y2="12" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1" />
-  <rect x="-320" y="11" width="320" height="2" rx="1" fill="url(#wave-line)">
-    <animate attributeName="x" values="-320;1200" dur="3.6s" repeatCount="indefinite" />
+  <line x1="0" y1="9" x2="1200" y2="9" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1" />
+  <circle cx="600" cy="9" r="2.2" fill="#E5C07B" fill-opacity="0.7" />
+  <rect x="-360" y="8" width="360" height="2" rx="1" fill="url(#wave-line)">
+    <animate attributeName="x" values="-360;1200" dur="4.2s" repeatCount="indefinite" />
   </rect>
 </svg>

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="100%" role="img" aria-label="SoundClear System Architecture &amp; 24/7 Background Worker Blueprint">
+  <defs>
+    <linearGradient id="bp-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#040706" />
+      <stop offset="100%" stop-color="#091310" />
+    </linearGradient>
+    <pattern id="bp-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#2EE6A6" stroke-opacity="0.045" stroke-width="1" />
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="320" rx="20" fill="url(#bp-bg)" stroke="#FFFFFF" stroke-opacity="0.1" />
+  <rect width="1200" height="320" rx="20" fill="url(#bp-grid)" />
+
+  <text x="32" y="34" fill="#7D968B" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" letter-spacing="1.8">SYSTEM BLUEPRINT // DUAL-RUNTIME ARCHITECTURE &amp; BACKGROUND DAEMON</text>
+  <text x="1032" y="34" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10.5">SYNC + WATCHDOG</text>
+
+  <!-- Symmetrical 4-Column Horizontal Connections -->
+  <g stroke="#2EE6A6" stroke-opacity="0.32" stroke-width="1.8" fill="none">
+    <line x1="292" y1="126" x2="328" y2="126" />
+    <line x1="588" y1="126" x2="624" y2="126" />
+    <line x1="884" y1="126" x2="920" y2="126" />
+    <path d="M 162 188 V 236 H 920" stroke="#E5C07B" stroke-opacity="0.32" stroke-dasharray="4 4" />
+  </g>
+
+  <circle cx="292" cy="126" r="4" fill="#2EE6A6">
+    <animate attributeName="cx" values="292;328;292" dur="2s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="588" cy="126" r="4" fill="#E5C07B">
+    <animate attributeName="cx" values="588;624;588" dur="2.2s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="884" cy="126" r="4" fill="#2EE6A6">
+    <animate attributeName="cx" values="884;920;884" dur="2.4s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Col 1: Browser / PWA Client -->
+  <g transform="translate(32, 64)">
+    <rect width="260" height="124" rx="14" fill="#0B1411" stroke="#2EE6A6" stroke-opacity="0.38" />
+    <text x="18" y="26" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">01 // CLIENT RUNTIME</text>
+    <text x="18" y="50" fill="#FFFFFF" font-family="-apple-system, sans-serif" font-size="15.5" font-weight="800">React 19 &#183; PWA &#183; DSP</text>
+    <text x="18" y="72" fill="#9BB0A7" font-family="-apple-system, sans-serif" font-size="11.5">Zustand &#183; Dexie IndexedDB</text>
+    <text x="18" y="90" fill="#9BB0A7" font-family="-apple-system, sans-serif" font-size="11.5">sendBeacon Session Flush</text>
+    <text x="18" y="108" fill="#6F897F" font-family="ui-monospace, monospace" font-size="9.5">MediaSession + Workbox</text>
+  </g>
+
+  <!-- Col 2: Node Gateway + Watchdog -->
+  <g transform="translate(328, 64)">
+    <rect width="260" height="124" rx="14" fill="#0B1411" stroke="#FFFFFF" stroke-opacity="0.16" />
+    <text x="18" y="26" fill="#E5C07B" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">02 // GATEWAY (:3000)</text>
+    <text x="18" y="50" fill="#FFFFFF" font-family="-apple-system, sans-serif" font-size="15.5" font-weight="800">Node &#183; Express Proxy</text>
+    <text x="18" y="72" fill="#9BB0A7" font-family="-apple-system, sans-serif" font-size="11.5">Auto-Bootstrap backend/.venv</text>
+    <text x="18" y="90" fill="#9BB0A7" font-family="-apple-system, sans-serif" font-size="11.5">Health Watchdog (25s Loop)</text>
+    <text x="18" y="108" fill="#6F897F" font-family="ui-monospace, monospace" font-size="9.5">Daemon SIGHUP Safe &#183; SPA</text>
+  </g>
+
+  <!-- Col 3: FastAPI + Background Worker -->
+  <g transform="translate(624, 64)">
+    <rect width="260" height="124" rx="14" fill="#0B1411" stroke="#2EE6A6" stroke-opacity="0.38" />
+    <text x="18" y="26" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">03 // ENGINE (:8001)</text>
+    <text x="18" y="50" fill="#FFFFFF" font-family="-apple-system, sans-serif" font-size="15.5" font-weight="800">FastAPI + BG Worker</text>
+    <text x="18" y="72" fill="#9BB0A7" font-family="-apple-system, sans-serif" font-size="11.5">Timeline &amp; Queue Engine</text>
+    <text x="18" y="90" fill="#9BB0A7" font-family="-apple-system, sans-serif" font-size="11.5">Radio Refill &amp; Pre-Warm</text>
+    <text x="18" y="108" fill="#6F897F" font-family="ui-monospace, monospace" font-size="9.5">Atomic Disk Sessions</text>
+  </g>
+
+  <!-- Col 4: Catalog & Byte-Range Sources -->
+  <g transform="translate(920, 64)">
+    <rect width="248" height="124" rx="14" fill="#0B1411" stroke="#FFFFFF" stroke-opacity="0.16" />
+    <text x="18" y="26" fill="#7D968B" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">04 // MEDIA LAYER</text>
+    <text x="18" y="50" fill="#FFFFFF" font-family="-apple-system, sans-serif" font-size="15.5" font-weight="800">MusicProvider</text>
+    <text x="18" y="72" fill="#9BB0A7" font-family="-apple-system, sans-serif" font-size="11.5">ytmusicapi &#183; yt-dlp &#183; Pillow</text>
+    <text x="18" y="90" fill="#9BB0A7" font-family="-apple-system, sans-serif" font-size="11.5">HTTP 206 Byte-Range Cache</text>
+    <text x="18" y="108" fill="#6F897F" font-family="ui-monospace, monospace" font-size="9.5">Charts ID &#183; Lyrics &#183; RGB</text>
+  </g>
+
+  <!-- Bottom Row Desktop Host Card -->
+  <g transform="translate(920, 206)">
+    <rect width="248" height="68" rx="12" fill="#0F1B17" stroke="#E5C07B" stroke-opacity="0.38" />
+    <text x="18" y="24" fill="#E5C07B" font-family="ui-monospace, monospace" font-size="9.5" font-weight="700">WIN11 WRAPPER // ELECTRON</text>
+    <text x="18" y="46" fill="#FFFFFF" font-family="-apple-system, sans-serif" font-size="13.5" font-weight="700">Dynamic Notch &amp; Tray</text>
+  </g>
+
+  <g transform="translate(32, 286)" font-family="ui-monospace, monospace" font-size="10" fill="#6F897F">
+    <text x="0" y="12">STREAM PROBE: /api/stream/{id}/meta &#8594; AUTO FALLBACK TO YOUTUBE IFRAME WHEN BOT-CHALLENGED</text>
+  </g>
+</svg>
