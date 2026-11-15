@@ -1,5 +1,6 @@
+const fs = require('node:fs');
 const path = require('node:path');
-const { app, BrowserWindow, dialog, ipcMain, screen, session } = require('electron');
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen, session } = require('electron');
 
 if (process.platform !== 'win32') {
   app.whenReady().then(() => {
@@ -16,6 +17,8 @@ const FILLET_PADDING_PX = 14;
 
 let mainWindow = null;
 let notchWindow = null;
+let tray = null;
+let isQuitting = false;
 let lastNotchState = null;
 let notchHovered = false;
 
@@ -153,6 +156,13 @@ function createWindows() {
   mainWindow.on('blur', resync);
   mainWindow.on('minimize', resync);
   mainWindow.on('restore', resync);
+  mainWindow.on('close', (event) => {
+    if (!isQuitting && tray) {
+      event.preventDefault();
+      mainWindow.hide();
+      resync();
+    }
+  });
   mainWindow.on('closed', () => {
     mainWindow = null;
     if (notchWindow && !notchWindow.isDestroyed()) {
@@ -163,6 +173,40 @@ function createWindows() {
   notchWindow.on('closed', () => {
     notchWindow = null;
   });
+}
+
+function createBackgroundTray() {
+  if (tray) return;
+  const iconCandidates = [
+    path.join(__dirname, '..', 'public', 'soundclear-logo.png'),
+    path.join(__dirname, '..', 'public', 'pwa-192x192.png'),
+  ];
+  const iconPath = iconCandidates.find((p) => fs.existsSync(p));
+  const trayIcon = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
+  tray = new Tray(trayIcon);
+  tray.setToolTip('SoundClear — Berjalan di latar belakang');
+  const showMain = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindows();
+      return;
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  };
+  const menu = Menu.buildFromTemplate([
+    { label: 'Buka SoundClear', click: showMain },
+    { type: 'separator' },
+    {
+      label: 'Keluar Sepenuhnya',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(menu);
+  tray.on('double-click', showMain);
 }
 
 app.whenReady().then(() => {
@@ -181,6 +225,7 @@ app.whenReady().then(() => {
     },
   );
 
+  createBackgroundTray();
   createWindows();
 
   ipcMain.on('soundclear:notch-state', (_event, payload) => {
@@ -226,6 +271,12 @@ app.whenReady().then(() => {
   });
 });
 
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
 app.on('window-all-closed', () => {
-  app.quit();
+  if (isQuitting) {
+    app.quit();
+  }
 });

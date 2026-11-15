@@ -59,6 +59,21 @@ export default defineConfig(() => {
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
             {
+              urlPattern: /\/api\/(home|charts|moods)(\?.*)?$/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'soundclear-catalog-api-cache',
+                networkTimeoutSeconds: 4,
+                expiration: {
+                  maxEntries: 25,
+                  maxAgeSeconds: 60 * 60 * 24,
+                },
+                cacheableResponse: {
+                  statuses: [200],
+                },
+              },
+            },
+            {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',
               options: {

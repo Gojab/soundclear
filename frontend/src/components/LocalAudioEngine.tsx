@@ -715,13 +715,19 @@ export function LocalAudioEngine() {
           standby.load();
           return;
         }
-        revokeDeckUrl(graph.objectUrls, standbyIdx);
-        const streamUrl = buildStreamAudioUrl(nextInfo.key, {
+        const streamQueryMeta = {
           title: nextInfo.track.title,
           artist: formatArtists(nextInfo.track.artists),
           durationSeconds: nextInfo.track.durationSeconds,
           quality: targetStreamTier,
-        });
+        };
+        const probe = await fetchStreamAudioMeta(nextInfo.key, streamQueryMeta).catch(() => null);
+        if (decideOnlineStreamAction(probe) === 'use-youtube-iframe') {
+          graph.trackIds[standbyIdx] = nextInfo.key;
+          return;
+        }
+        revokeDeckUrl(graph.objectUrls, standbyIdx);
+        const streamUrl = buildStreamAudioUrl(nextInfo.key, streamQueryMeta);
         graph.trackIds[standbyIdx] = nextInfo.key;
         const standby = graph.decks[standbyIdx];
         standby.crossOrigin = 'anonymous';

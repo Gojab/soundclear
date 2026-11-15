@@ -281,7 +281,16 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
     crossfadeTargetId: null,
   };
 
-  ctx.addEventListener('statechange', notifyDiagnosticsListeners);
+  ctx.addEventListener('statechange', () => {
+    if (
+      sharedGraph &&
+      (sharedGraph.ctx.state === 'suspended' || (sharedGraph.ctx.state as string) === 'interrupted') &&
+      sharedGraph.decks.some((d) => !d.paused)
+    ) {
+      void sharedGraph.ctx.resume().catch(() => {});
+    }
+    notifyDiagnosticsListeners();
+  });
   installFirstGestureResume();
   notifyDiagnosticsListeners();
   return sharedGraph;
@@ -290,7 +299,7 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
 export async function resumeAudioContext(): Promise<AudioContextState | 'unavailable'> {
   const graph = ensureAudioGraph();
   if (!graph) return 'unavailable';
-  if (graph.ctx.state === 'suspended') {
+  if (graph.ctx.state === 'suspended' || (graph.ctx.state as string) === 'interrupted') {
     try {
       await graph.ctx.resume();
     } catch {
@@ -312,6 +321,16 @@ function installFirstGestureResume(): void {
   };
   ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((evt) => {
     window.addEventListener(evt, onGesture, { passive: true, capture: true });
+  });
+  document.addEventListener('visibilitychange', () => {
+    const graph = sharedGraph;
+    if (
+      graph &&
+      (graph.ctx.state === 'suspended' || (graph.ctx.state as string) === 'interrupted') &&
+      graph.decks.some((d) => !d.paused)
+    ) {
+      void graph.ctx.resume().then(notifyDiagnosticsListeners).catch(() => {});
+    }
   });
 }
 

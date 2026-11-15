@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import { fetchArtworkColor, fetchWatchPlaylist } from '../api/client';
+import {
+  beaconBackgroundSession,
+  buildBackgroundSessionPayload,
+  fetchArtworkColor,
+  fetchBackgroundSession,
+  fetchWatchPlaylist,
+  getOrCreateBackgroundSessionId,
+  syncBackgroundSession,
+} from '../api/client';
 import { db, type PersistedPlayerSession } from '../db/soundclearDb';
 import type {
   ActiveStreamMeta,
@@ -146,6 +154,48 @@ interface PlayerState {
 const DEFAULT_AMBIENT: AmbientColor = { r: 22, g: 48, b: 40 };
 
 let lastPersistAt = 0;
+let lastBackendSyncAt = 0;
+let unloadHooksInstalled = false;
+
+function buildBgPayloadFromState(state: PlayerState) {
+  const settings = useSettingsStore.getState();
+  const qualityTier =
+    state.selectedQualityOverride ??
+    (settings.localProfile.directMode ? 'lossless' : 'high');
+  return buildBackgroundSessionPayload({
+    sessionId: getOrCreateBackgroundSessionId(),
+    isPlaying: state.isPlaying,
+    currentTime: state.currentTime,
+    duration: state.duration,
+    playbackRate: state.playbackRate,
+    repeat: state.repeat,
+    shuffle: state.shuffle,
+    sourceLabel: state.sourceLabel,
+    quality: qualityTier,
+    currentTrack: state.currentTrack,
+    manualQueue: state.manualQueue,
+    sourceQueue: state.sourceQueue,
+    historyStack: state.historyStack,
+  });
+}
+
+function installBackgroundLifecycleSync(): void {
+  if (unloadHooksInstalled || typeof window === 'undefined') return;
+  unloadHooksInstalled = true;
+  const flushNow = () => {
+    const state = usePlayerStore.getState();
+    if (!state.hydrated || !state.currentTrack) return;
+    beaconBackgroundSession(buildBgPayloadFromState(state));
+  };
+  window.addEventListener('pagehide', flushNow);
+  window.addEventListener('beforeunload', flushNow);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushNow();
+    }
+  });
+}
+
 function persistPlayerSession(state: PlayerState, force = false): void {
   const now = Date.now();
   if (!force && now - lastPersistAt < 2500) return;
@@ -168,6 +218,11 @@ function persistPlayerSession(state: PlayerState, force = false): void {
     crossfadeSeconds: state.crossfadeSeconds,
   };
   void db.kvState.put({ key: 'player_session', value: payload }).catch(() => {});
+
+  if (typeof window !== 'undefined' && state.hydrated && (force || now - lastBackendSyncAt >= 5000)) {
+    lastBackendSyncAt = now;
+    void syncBackgroundSession(buildBgPayloadFromState(state)).catch(() => {});
+  }
 }
 
 let trackedPlayKey: string | null = null;
@@ -314,52 +369,120 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   bufferingStallCount: 0,
 
   hydrate: async () => {
+    installBackgroundLifecycleSync();
     try {
       const rec = await db.kvState.get('player_session');
       const settingsState = useSettingsStore.getState();
       const settingsRightPanel = settingsState.showRightPanel;
       const ytSound = settingsState.youtubeSound;
 
+      // Query server-tracked background session in case the backend kept advancing while Chrome was closed
+      let remoteSession: Awaited<ReturnType<typeof fetchBackgroundSession>>['session'] = null;
+      if (typeof window !== 'undefined') {
+        try {
+          const ctrl = new AbortController();
+          const tid = window.setTimeout(() => ctrl.abort(), 1200);
+          const remoteRes = await fetchBackgroundSession(
+            getOrCreateBackgroundSessionId(),
+            ctrl.signal,
+          );
+          window.clearTimeout(tid);
+          if (remoteRes.found && remoteRes.session?.currentTrack) {
+            remoteSession = remoteRes.session;
+          }
+        } catch {
+          // Non-fatal fallback to local IndexedDB session
+        }
+      }
+
       if (rec?.value && typeof rec.value === 'object') {
         const s = rec.value as Partial<PersistedPlayerSession>;
+        const activeTrack = remoteSession?.currentTrack ?? s.currentTrack ?? null;
+        const activeManualQueue = remoteSession?.manualQueue ?? (Array.isArray(s.queue) ? s.queue : []);
+        const activeSourceQueue =
+          remoteSession?.sourceQueue ?? (Array.isArray(s.sourceQueue) ? s.sourceQueue : []);
+        const activeSourceLabel = remoteSession?.sourceLabel ?? s.sourceLabel ?? null;
+        const activeCurrentTime =
+          remoteSession && typeof remoteSession.currentTime === 'number'
+            ? remoteSession.currentTime
+            : typeof s.currentTime === 'number'
+              ? s.currentTime
+              : 0;
+        const activeDuration =
+          remoteSession && typeof remoteSession.duration === 'number' && remoteSession.duration > 0
+            ? remoteSession.duration
+            : typeof s.duration === 'number'
+              ? s.duration
+              : 0;
+
         const rawVol =
           ytSound.startupVolumeMode === 'fixed'
             ? ytSound.startupFixedVolume
             : typeof s.volume === 'number'
               ? s.volume
               : 80;
-        const effectiveVol = isLocalTrack(s.currentTrack)
+        const effectiveVol = isLocalTrack(activeTrack)
           ? rawVol
           : Math.min(ytSound.maxVolumeLimit, rawVol);
-        const resumedTime =
-          ytSound.resumeLastPosition && typeof s.currentTime === 'number' ? s.currentTime : 0;
+        const resumedTime = ytSound.resumeLastPosition ? activeCurrentTime : 0;
 
         set({
           hydrated: true,
-          currentTrack: s.currentTrack ?? null,
-          manualQueue: Array.isArray(s.queue) ? s.queue : [],
-          sourceQueue: Array.isArray(s.sourceQueue) ? s.sourceQueue : [],
-          sourceLabel: s.sourceLabel ?? null,
+          currentTrack: activeTrack,
+          manualQueue: activeManualQueue,
+          sourceQueue: activeSourceQueue,
+          historyStack: remoteSession?.historyStack ?? [],
+          sourceLabel: activeSourceLabel,
           currentTime: resumedTime,
-          duration: typeof s.duration === 'number' ? s.duration : 0,
+          duration: activeDuration,
           volume: effectiveVol,
           lastNonZeroVolume: effectiveVol > 0 ? effectiveVol : 80,
           isMuted: Boolean(s.isMuted),
-          shuffle: Boolean(s.shuffle),
+          shuffle: remoteSession ? Boolean(remoteSession.shuffle) : Boolean(s.shuffle),
           smartShuffle: Boolean(s.smartShuffle),
-          repeat: s.repeat ?? 'off',
-          playbackRate: resolvePlaybackRateForTrack(s.currentTrack),
+          repeat: remoteSession?.repeat ?? s.repeat ?? 'off',
+          playbackRate: resolvePlaybackRateForTrack(activeTrack),
           crossfadeSeconds: resolveEffectiveCrossfadeSeconds(settingsState.localProfile),
-          pendingSeekSeconds: s.currentTrack && resumedTime > 2 ? resumedTime : null,
+          pendingSeekSeconds: activeTrack && resumedTime > 2 ? resumedTime : null,
           rightPanelOpen: settingsRightPanel,
-          isPlaying: Boolean(s.currentTrack && ytSound.autoStartOnOpen),
-          hasActiveSessionPlayback: Boolean(s.currentTrack && ytSound.autoStartOnOpen),
+          isPlaying: Boolean(activeTrack && (ytSound.autoStartOnOpen || remoteSession?.isPlaying)),
+          hasActiveSessionPlayback: Boolean(
+            activeTrack && (ytSound.autoStartOnOpen || remoteSession?.isPlaying),
+          ),
           notchManuallyHidden: false,
         });
 
-        if (s.currentTrack) {
-          void hydrateTrackContext(s.currentTrack, false, get, set);
+        if (activeTrack) {
+          void hydrateTrackContext(activeTrack, false, get, set);
         }
+      } else if (remoteSession?.currentTrack) {
+        const initialVol =
+          ytSound.startupVolumeMode === 'fixed'
+            ? Math.min(ytSound.maxVolumeLimit, ytSound.startupFixedVolume)
+            : Math.min(ytSound.maxVolumeLimit, 80);
+        const resumedTime = ytSound.resumeLastPosition ? remoteSession.currentTime : 0;
+        set({
+          hydrated: true,
+          currentTrack: remoteSession.currentTrack,
+          manualQueue: remoteSession.manualQueue,
+          sourceQueue: remoteSession.sourceQueue,
+          historyStack: remoteSession.historyStack ?? [],
+          sourceLabel: remoteSession.sourceLabel,
+          currentTime: resumedTime,
+          duration: remoteSession.duration,
+          volume: initialVol,
+          lastNonZeroVolume: initialVol > 0 ? initialVol : 80,
+          shuffle: remoteSession.shuffle,
+          repeat: remoteSession.repeat,
+          playbackRate: resolvePlaybackRateForTrack(remoteSession.currentTrack),
+          crossfadeSeconds: resolveEffectiveCrossfadeSeconds(settingsState.localProfile),
+          pendingSeekSeconds: resumedTime > 2 ? resumedTime : null,
+          rightPanelOpen: settingsRightPanel,
+          isPlaying: Boolean(ytSound.autoStartOnOpen || remoteSession.isPlaying),
+          hasActiveSessionPlayback: Boolean(ytSound.autoStartOnOpen || remoteSession.isPlaying),
+          notchManuallyHidden: false,
+        });
+        void hydrateTrackContext(remoteSession.currentTrack, false, get, set);
       } else {
         const initialVol =
           ytSound.startupVolumeMode === 'fixed'
@@ -603,12 +726,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     persistPlayerSession(get(), true);
   },
 
-  setIsPlaying: (playing) =>
+  setIsPlaying: (playing) => {
     set((state) => ({
       isPlaying: playing,
       notchManuallyHidden: playing ? false : state.notchManuallyHidden,
       hasActiveSessionPlayback: playing ? true : state.hasActiveSessionPlayback,
-    })),
+    }));
+    persistPlayerSession(get(), true);
+  },
 
   togglePlayPause: () => {
     if (!get().currentTrack) return;
@@ -620,6 +745,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         hasActiveSessionPlayback: nextPlaying ? true : state.hasActiveSessionPlayback,
       };
     });
+    persistPlayerSession(get(), true);
   },
 
   stopPlayback: () => {

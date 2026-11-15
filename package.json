@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "NODE_ENV=production node server.ts",
+    "start:bg": "bash scripts/background-server.sh start",
+    "stop:bg": "bash scripts/background-server.sh stop",
+    "status:bg": "bash scripts/background-server.sh status",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

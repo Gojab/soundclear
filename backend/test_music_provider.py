@@ -872,9 +872,11 @@ class MusicProviderTests(unittest.TestCase):
                     }
                 return {"playabilityStatus": {"status": "LOGIN_REQUIRED"}}
 
+        seen_opts = []
+
         class _BotBlockYDL:
-            def __init__(self, _opts):
-                pass
+            def __init__(self, opts):
+                seen_opts.append(opts)
 
             def __enter__(self):
                 return self
@@ -906,6 +908,7 @@ class MusicProviderTests(unittest.TestCase):
                     self.assertFalse(meta_json["available"])
                     self.assertEqual(meta_json["fallbackMode"], "youtube-iframe")
                     self.assertTrue(all("music.youtube.com/watch?v=" in u for u in seen_urls))
+                    self.assertTrue(seen_opts and "logger" in seen_opts[0] and seen_opts[0].get("quiet"))
 
                     stream_resp = client.get("/api/stream/dQw4w9WgXcQ?title=Monokrom&artist=Tulus")
                     self.assertEqual(stream_resp.status_code, 403)

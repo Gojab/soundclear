@@ -218,6 +218,25 @@ export function YouTubePlayerBridge() {
         // Unsupported action
       }
     }
+
+    const syncVisibilityPosition = () => {
+      const st = usePlayerStore.getState();
+      if ('setPositionState' in navigator.mediaSession && st.duration > 0 && Number.isFinite(st.currentTime)) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: st.duration,
+            playbackRate: st.playbackRate || 1,
+            position: Math.min(st.currentTime, st.duration),
+          });
+        } catch {
+          // Ignore
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', syncVisibilityPosition);
+    return () => {
+      document.removeEventListener('visibilitychange', syncVisibilityPosition);
+    };
   }, [currentTrack, isPlaying]);
 
   // Global keyboard shortcuts

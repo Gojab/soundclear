@@ -20,6 +20,17 @@ import requests
 from requests.adapters import HTTPAdapter
 from PIL import Image
 import yt_dlp
+
+
+class _SilentYtdlpLogger:
+    def debug(self, _msg: str) -> None:
+        return None
+
+    def warning(self, _msg: str) -> None:
+        return None
+
+    def error(self, _msg: str) -> None:
+        return None
 from ytmusicapi import YTMusic
 from ytmusicapi.exceptions import (
     YTMusicError,
@@ -2989,6 +3000,8 @@ class MusicProvider:
         ydl_opts: Dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
+            "no_color": True,
+            "logger": _SilentYtdlpLogger(),
             "nocheckcertificate": True,
             "socket_timeout": 12,
             "cachedir": False,
@@ -3018,7 +3031,7 @@ class MusicProvider:
             except Exception as exc:
                 last_exc = exc
                 err_str = str(exc).lower()
-                if "sign in to confirm" in err_str or "bot" in err_str or "login" in err_str:
+                if any(tok in err_str for tok in ("sign in to confirm", "not a bot", "bot", "login", "cookies")):
                     self._yt_bot_blocked_until = time.monotonic() + 300
                     raise MusicProviderError(
                         "Aliran audio langsung memerlukan verifikasi YouTube; beralih ke pemutar YouTube.",

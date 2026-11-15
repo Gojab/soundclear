@@ -69,3 +69,26 @@ test('fetchAudioBlobWithRangeSupport reassembles 206 Partial Content chunks into
     globalThis.fetch = originalFetch;
   }
 });
+
+test('buildBackgroundSessionPayload bounds queue slices and enforces playing invariants', async () => {
+  const mod = await import('./client');
+  const payload = mod.buildBackgroundSessionPayload({
+    sessionId: 'sc-test',
+    isPlaying: true,
+    currentTime: -5,
+    duration: 210,
+    playbackRate: 1.25,
+    repeat: 'all',
+    shuffle: true,
+    sourceLabel: 'Tangga Lagu Indonesia',
+    currentTrack: null,
+    manualQueue: [],
+    sourceQueue: [],
+  });
+  assert.equal(payload.sessionId, 'sc-test');
+  assert.equal(payload.isPlaying, false);
+  assert.equal(payload.currentTime, 0);
+  assert.equal(payload.duration, 210);
+  assert.equal(payload.playbackRate, 1.25);
+});
+

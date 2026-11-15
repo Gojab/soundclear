@@ -36,6 +36,8 @@ const VENV_PYTHON =
 const REQUIREMENTS_FILE = path.join(__dirname, 'backend', 'requirements.txt');
 
 let pythonProc: ChildProcess | null = null;
+let resolvedPythonBin: string | null = null;
+let watchdogTimer: NodeJS.Timeout | null = null;
 let shuttingDown = false;
 let pythonReady = false;
 let pythonInitError: string | null = null;
@@ -232,10 +234,12 @@ async function bootstrapPythonInBackground(): Promise<void> {
     }
 
     const pythonBin = await ensurePythonDependencies();
+    resolvedPythonBin = pythonBin;
     if (shuttingDown) return;
 
     if (await isPythonHealthy()) {
       notifyPythonReady();
+      startPythonWatchdog();
       return;
     }
 
@@ -243,6 +247,7 @@ async function bootstrapPythonInBackground(): Promise<void> {
     await waitForPythonHealth(30000);
     if (!shuttingDown) {
       notifyPythonReady();
+      startPythonWatchdog();
       console.log(`[soundclear] Python FastAPI music backend ready on ${PYTHON_HOST}:${PYTHON_PORT}`);
     }
   } catch (err) {
@@ -250,6 +255,22 @@ async function bootstrapPythonInBackground(): Promise<void> {
     pythonInitError = msg;
     console.error('[soundclear] Python backend initialization failed:', msg);
   }
+}
+
+function startPythonWatchdog(): void {
+  if (watchdogTimer) return;
+  watchdogTimer = setInterval(() => {
+    if (shuttingDown) return;
+    void isPythonHealthy().then((healthy) => {
+      if (healthy || shuttingDown) return;
+      pythonReady = false;
+      if (!pythonProc && resolvedPythonBin) {
+        console.warn('[soundclear] Watchdog mendeteksi backend Python offline; memulai ulang...');
+        startPythonBackend(resolvedPythonBin);
+      }
+    });
+  }, 25000);
+  watchdogTimer.unref();
 }
 
 function waitUntilPythonReady(res: Response, timeoutMs = 25000): Promise<boolean> {
@@ -453,10 +474,20 @@ function forwardToPython(req: Request, res: Response, targetPath: string): void 
 
 function cleanup(): void {
   shuttingDown = true;
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
+  }
   if (pythonProc) {
     pythonProc.kill('SIGTERM');
     pythonProc = null;
   }
+}
+
+if (process.env.SOUNDCLEAR_BACKGROUND === '1') {
+  process.on('SIGHUP', () => {
+    // Tetap hidup saat terminal/sesi shell induk ditutup dalam mode daemon latar belakang
+  });
 }
 
 process.on('SIGINT', () => {
@@ -489,10 +520,12 @@ async function startServer(): Promise<void> {
   }
 
   await new Promise<void>((resolve) => {
-    app.listen(PORT, HOST, () => {
+    const server = app.listen(PORT, HOST, () => {
       console.log(`[soundclear] Server running at http://${HOST}:${PORT}`);
       resolve();
     });
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
   });
 
   // Initialize Python backend asynchronously after port 3000 is open

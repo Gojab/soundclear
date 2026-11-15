@@ -5,6 +5,7 @@ import type {
   ArtistDetailResponse,
   ArtworkColorResponse,
   ChartsResponse,
+  ConcreteQualityTier,
   EpisodeDetailResponse,
   HomeResponse,
   LocalAudioProfile,
@@ -523,6 +524,126 @@ export async function fetchAudioBlobWithRangeSupport(
 
   return new Blob(chunks, { type: mime });
 }
+
+export interface BackgroundSessionPayload {
+  sessionId: string;
+  updatedAtMs?: number;
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  playbackRate: number;
+  repeat: 'off' | 'one' | 'all';
+  shuffle: boolean;
+  sourceLabel: string | null;
+  quality?: ConcreteQualityTier;
+  currentTrack: MediaItem | null;
+  manualQueue: MediaItem[];
+  sourceQueue: MediaItem[];
+  historyStack?: MediaItem[];
+}
+
+export interface BackgroundSessionResponse {
+  sessionId: string;
+  found: boolean;
+  session: BackgroundSessionPayload | null;
+}
+
+const BG_SESSION_STORAGE_KEY = 'soundclear_bg_session_id';
+
+export function getOrCreateBackgroundSessionId(): string {
+  if (typeof window === 'undefined') return 'default';
+  try {
+    const existing = window.localStorage.getItem(BG_SESSION_STORAGE_KEY);
+    if (existing && existing.trim()) return existing.trim();
+    const generated =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? `sc-${crypto.randomUUID()}`
+        : `sc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    window.localStorage.setItem(BG_SESSION_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    return 'default';
+  }
+}
+
+export function buildBackgroundSessionPayload(input: {
+  sessionId: string;
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  playbackRate: number;
+  repeat: 'off' | 'one' | 'all';
+  shuffle: boolean;
+  sourceLabel: string | null;
+  quality?: ConcreteQualityTier;
+  currentTrack: MediaItem | null;
+  manualQueue: MediaItem[];
+  sourceQueue: MediaItem[];
+  historyStack?: MediaItem[];
+}): BackgroundSessionPayload {
+  return {
+    sessionId: input.sessionId || 'default',
+    updatedAtMs: Date.now(),
+    isPlaying: Boolean(input.isPlaying && input.currentTrack),
+    currentTime: Number.isFinite(input.currentTime) ? Math.max(0, input.currentTime) : 0,
+    duration: Number.isFinite(input.duration) ? Math.max(0, input.duration) : 0,
+    playbackRate: input.playbackRate || 1,
+    repeat: input.repeat || 'off',
+    shuffle: Boolean(input.shuffle),
+    sourceLabel: input.sourceLabel ?? null,
+    quality: input.quality || 'high',
+    currentTrack: input.currentTrack ?? null,
+    manualQueue: (input.manualQueue || []).slice(0, 50),
+    sourceQueue: (input.sourceQueue || []).slice(0, 50),
+    historyStack: (input.historyStack || []).slice(0, 20),
+  };
+}
+
+export function fetchBackgroundSession(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<BackgroundSessionResponse> {
+  return requestJson<BackgroundSessionResponse>(
+    `/background/session?sessionId=${encodeURIComponent(sessionId || 'default')}`,
+    { signal },
+  );
+}
+
+export function syncBackgroundSession(
+  payload: BackgroundSessionPayload,
+): Promise<{ synced: boolean; sessionId: string; updatedAtMs: number; isPlaying: boolean }> {
+  return requestJson('/background/session', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function beaconBackgroundSession(payload: BackgroundSessionPayload): void {
+  if (typeof window === 'undefined') return;
+  const serialized = JSON.stringify(payload);
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      const blob = new Blob([serialized], { type: 'application/json' });
+      if (navigator.sendBeacon('/api/background/session', blob)) {
+        return;
+      }
+    }
+  } catch {
+    // Fallback to keepalive fetch
+  }
+  try {
+    void fetch('/api/background/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: serialized,
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // Ignore unload network failures
+  }
+}
+
+
 
 
 

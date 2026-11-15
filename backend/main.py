@@ -12,6 +12,9 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import json
+
+from backend.background_worker import SoundClearBackgroundManager
 from backend.copyright_guard import (
     COPYRIGHT_OWNER,
     CopyrightGuard,
@@ -28,13 +31,20 @@ load_dotenv()
 
 provider = MusicProvider(country="ID")
 copyright_guard = CopyrightGuard()
+background_manager = SoundClearBackgroundManager(provider)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if os.environ.get("SOUNDCLEAR_DISABLE_WARMUP") != "1" and not os.environ.get("VERCEL"):
+    is_vercel = bool(os.environ.get("VERCEL"))
+    if os.environ.get("SOUNDCLEAR_DISABLE_WARMUP") != "1" and not is_vercel:
         threading.Thread(target=provider.warmup, daemon=True).start()
-    yield
+    if os.environ.get("SOUNDCLEAR_DISABLE_BG_WORKER") != "1" and not is_vercel:
+        background_manager.start()
+    try:
+        yield
+    finally:
+        background_manager.stop()
 
 
 app = FastAPI(title="SoundClear API", version="3.0.0", lifespan=lifespan)
@@ -130,6 +140,7 @@ async def copyright_guard_error_handler(_request: Request, exc: CopyrightGuardEr
 @app.get("/api/health")
 def health() -> Dict[str, Any]:
     integrity = copyright_guard.verify_integrity()
+    bg = background_manager.get_status()
     return {
         "status": "ok" if integrity["valid"] else "copyright_violation",
         "service": "soundclear",
@@ -137,7 +148,51 @@ def health() -> Dict[str, Any]:
         "copyrightOwner": COPYRIGHT_OWNER,
         "copyrightProtected": True,
         "copyrightValid": integrity["valid"],
+        "backgroundWorkerRunning": bg["running"],
+        "backgroundActiveSessions": bg["activeSessions"],
     }
+
+
+@app.get("/api/background/status")
+def get_background_status() -> Dict[str, Any]:
+    return background_manager.get_status()
+
+
+@app.get("/api/background/session")
+def get_background_session(sessionId: str = Query(default="default")) -> Dict[str, Any]:
+    sess = background_manager.get_session(sessionId)
+    return {
+        "sessionId": sessionId,
+        "found": sess is not None,
+        "session": sess,
+    }
+
+
+@app.post("/api/background/session")
+async def post_background_session(request: Request) -> Dict[str, Any]:
+    raw_bytes = await request.body()
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Payload sesi latar belakang kosong.")
+    try:
+        payload = json.loads(raw_bytes.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Format JSON sesi tidak valid.") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload sesi harus berupa objek JSON.")
+
+    saved = background_manager.upsert_session(payload)
+    return {
+        "synced": True,
+        "sessionId": saved["sessionId"],
+        "updatedAtMs": saved["updatedAtMs"],
+        "isPlaying": saved["isPlaying"],
+    }
+
+
+@app.delete("/api/background/session")
+def delete_background_session(sessionId: str = Query(default="default")) -> Dict[str, Any]:
+    deleted = background_manager.delete_session(sessionId)
+    return {"deleted": deleted, "sessionId": sessionId}
 
 
 @app.get("/api/copyright")
