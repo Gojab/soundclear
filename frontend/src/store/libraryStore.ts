@@ -53,6 +53,7 @@ interface LibraryState {
   playHistory: PlayHistoryEntry[];
   recentSearches: RecentSearchEntry[];
   hiddenTrackIds: string[];
+  excludedTasteIds: string[];
   localFiles: LocalAudioFileRecord[];
   offlineDownloads: OfflineDownloadRecord[];
 
@@ -72,6 +73,11 @@ interface LibraryState {
     name: string,
     initialTrack?: MediaItem,
     options?: { description?: string; folderId?: string | null },
+  ) => LocalPlaylist;
+  createPlaylistWithTracks: (
+    name: string,
+    tracks: MediaItem[],
+    options?: { description?: string; coverUrl?: string | null; folderId?: string | null },
   ) => LocalPlaylist;
   updatePlaylist: (
     playlistId: string,
@@ -126,6 +132,10 @@ interface LibraryState {
   unhideTrack: (trackId: string) => void;
   isTrackHidden: (trackId: string | null | undefined) => boolean;
 
+  excludeFromTaste: (trackId: string) => void;
+  includeInTaste: (trackId: string) => void;
+  isExcludedFromTaste: (trackId: string | null | undefined) => boolean;
+
   importLocalFiles: (files: FileList | File[]) => Promise<{ imported: number; skipped: number }>;
   deleteLocalFile: (id: string) => Promise<void>;
 
@@ -157,6 +167,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   playHistory: [],
   recentSearches: [],
   hiddenTrackIds: [],
+  excludedTasteIds: [],
   localFiles: [],
   offlineDownloads: [],
 
@@ -178,6 +189,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       playHistory,
       recentSearches,
       hiddenRecs,
+      excludedTasteRec,
       localFiles,
       offlineDownloads,
     ] = await Promise.all([
@@ -191,6 +203,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       db.playHistory.orderBy('playedAt').reverse().toArray(),
       db.recentSearches.orderBy('searchedAt').reverse().toArray(),
       db.hiddenTracks.toArray(),
+      db.kvState.get('excluded_taste_ids'),
       db.localFiles.orderBy('addedAt').reverse().toArray(),
       db.offlineDownloads.orderBy('downloadedAt').reverse().toArray(),
     ]);
@@ -199,6 +212,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     for (const ep of epProgressRecs) {
       episodeProgress[ep.episodeId] = ep;
     }
+
+    const excludedTasteIds = Array.isArray(excludedTasteRec?.value)
+      ? excludedTasteRec.value.filter((v): v is string => typeof v === 'string' && v.length > 0)
+      : [];
 
     set({
       hydrated: true,
@@ -212,6 +229,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       playHistory,
       recentSearches,
       hiddenTrackIds: hiddenRecs.map((r) => r.id),
+      excludedTasteIds,
       localFiles,
       offlineDownloads,
     });
@@ -253,6 +271,33 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       updatedAt: now,
       lastPlayedAt: null,
       tracks: initialTrack ? [initialTrack] : [],
+    };
+    set((state) => ({ playlists: [newPlaylist, ...state.playlists] }));
+    void db.playlists.put(newPlaylist).catch(() => {});
+    return newPlaylist;
+  },
+
+  createPlaylistWithTracks: (name, tracks, options) => {
+    const now = Date.now();
+    const deduped: MediaItem[] = [];
+    const seen = new Set<string>();
+    for (const track of tracks) {
+      const key = normalizeTrackId(track);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(track);
+    }
+    const newPlaylist: LocalPlaylist = {
+      id: `pl_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      name: name.trim() || 'Mix Pilihan',
+      description: options?.description?.trim() || '',
+      coverUrl: options?.coverUrl ?? deduped[0]?.thumbnail ?? null,
+      folderId: options?.folderId ?? null,
+      pinned: false,
+      createdAt: now,
+      updatedAt: now,
+      lastPlayedAt: null,
+      tracks: deduped,
     };
     set((state) => ({ playlists: [newPlaylist, ...state.playlists] }));
     void db.playlists.put(newPlaylist).catch(() => {});
@@ -630,6 +675,25 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   isTrackHidden: (trackId) => {
     if (!trackId) return false;
     return get().hiddenTrackIds.includes(trackId);
+  },
+
+  excludeFromTaste: (trackId) => {
+    if (!trackId || get().excludedTasteIds.includes(trackId)) return;
+    const next = [trackId, ...get().excludedTasteIds];
+    set({ excludedTasteIds: next });
+    void db.kvState.put({ key: 'excluded_taste_ids', value: next }).catch(() => {});
+  },
+
+  includeInTaste: (trackId) => {
+    if (!trackId) return;
+    const next = get().excludedTasteIds.filter((id) => id !== trackId);
+    set({ excludedTasteIds: next });
+    void db.kvState.put({ key: 'excluded_taste_ids', value: next }).catch(() => {});
+  },
+
+  isExcludedFromTaste: (trackId) => {
+    if (!trackId) return false;
+    return get().excludedTasteIds.includes(trackId);
   },
 
   importLocalFiles: async (fileList) => {

@@ -41,7 +41,9 @@ import {
   LikedTracksPage,
   LocalPlaylistPage,
 } from './pages/LibraryPages';
+import { CreateMixPage } from './pages/CreateMixPage';
 import { MoodDetailPage, MoodsPage } from './pages/MoodsPage';
+import { MixDetailPage } from './pages/MixDetailPage';
 import { EpisodeDetailPage, PodcastDetailPage } from './pages/PodcastPages';
 import { RecapPage } from './pages/RecapPage';
 import { SearchPage } from './pages/SearchPage';
@@ -530,8 +532,10 @@ export default function App() {
             }}
           />
 
-          {/* Compact Mobile Header (shown on secondary mobile pages; Home uses IMG_4280 avatar+pills, Settings uses IMG_4281 back+title+search) */}
-          {currentRoute.name !== 'home' && currentRoute.name !== 'settings' && (
+          {/* Compact Mobile Header (shown on secondary mobile pages; Home, Search, and Settings use custom native headers) */}
+          {currentRoute.name !== 'home' &&
+            currentRoute.name !== 'settings' &&
+            currentRoute.name !== 'search' && (
             <header
               style={{ top: 'env(safe-area-inset-top, 0px)' }}
               className={`md:hidden sticky z-20 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.09] shrink-0 ${
@@ -563,16 +567,14 @@ export default function App() {
 
               <div className="flex items-center gap-2">
                 <PWAInstallButton variant="compact" />
-                {currentRoute.name !== 'search' && (
-                  <button
-                    type="button"
-                    onClick={() => navigate({ name: 'search' })}
-                    aria-label="Cari"
-                    className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
-                  >
-                    <Search className="w-4 h-4" strokeWidth={1.75} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => navigate({ name: 'search' })}
+                  aria-label="Cari"
+                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
+                >
+                  <Search className="w-4 h-4" strokeWidth={1.75} />
+                </button>
                 <button
                   type="button"
                   onClick={() => navigate({ name: 'settings' })}
@@ -604,6 +606,7 @@ export default function App() {
                 initialQuery={currentRoute.query}
                 initialFilter={currentRoute.filter}
                 onAddToPlaylist={openAddToPlaylistModal}
+                onOpenProfileDrawer={() => setMobileDrawerOpen(true)}
               />
             )}
 
@@ -685,6 +688,23 @@ export default function App() {
               />
             )}
             {currentRoute.name === 'shortcuts' && <ShortcutsPage />}
+
+            {currentRoute.name === 'mix' && (
+              <MixDetailPage
+                key={currentRoute.id}
+                id={currentRoute.id}
+                onAddToPlaylist={openAddToPlaylistModal}
+              />
+            )}
+
+            {currentRoute.name === 'create-mix' && (
+              <CreateMixPage
+                key={`${currentRoute.seedTrack?.id || ''}-${currentRoute.seedGenre || ''}`}
+                seedTrack={currentRoute.seedTrack}
+                seedGenre={currentRoute.seedGenre}
+                onAddToPlaylist={openAddToPlaylistModal}
+              />
+            )}
           </div>
 
           <Footer />
@@ -759,7 +779,7 @@ export default function App() {
 
       {/* Fullscreen Karaoke, Fullscreen Now Playing, and Top Notch Mini Player */}
       <FullscreenKaraokeModal />
-      <FullscreenNowPlayingModal />
+      <FullscreenNowPlayingModal onAddToPlaylist={openAddToPlaylistModal} />
       <NotchMiniPlayer />
 
       {/* Persistent Hidden Streaming Audio Bridge + Web Audio API Local Engine */}

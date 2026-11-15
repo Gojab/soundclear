@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ChevronRight,
   Clock,
   CornerDownRight,
   Loader2,
   Mic2,
+  MoreHorizontal,
+  Music2,
   Play,
   Radio,
   Search,
@@ -13,6 +14,8 @@ import {
   X,
 } from 'lucide-react';
 import {
+  fetchCharts,
+  fetchHome,
   fetchMoods,
   fetchSearch,
   fetchSongRelated,
@@ -23,6 +26,7 @@ import { ArtworkImage } from '../components/ArtworkImage';
 import { MediaCard } from '../components/MediaCard';
 import { CardGridSkeleton, ErrorBanner, TrackListSkeleton } from '../components/Skeletons';
 import { TrackRow } from '../components/TrackRow';
+import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
@@ -36,11 +40,19 @@ import {
   isExcludedRegionalItem,
   isExcludedRegionalText,
 } from '../utils/playerLogic';
+import {
+  buildAllBrowseCategoryCards,
+  buildQuickBrowseCards,
+  pickDiscoverSomethingElse,
+  pickSearchSpotlight,
+  type BrowseCategoryCard,
+} from '../utils/searchBrowseLogic';
 
 interface SearchPageProps {
   initialQuery?: string;
   initialFilter?: SearchFilter;
   onAddToPlaylist: (track: MediaItem) => void;
+  onOpenProfileDrawer?: () => void;
 }
 
 const FILTER_TABS: Array<{ id: SearchFilter; label: string }> = [
@@ -58,6 +70,7 @@ export function SearchPage({
   initialQuery = '',
   initialFilter = 'all',
   onAddToPlaylist,
+  onOpenProfileDrawer,
 }: SearchPageProps) {
   const [inputValue, setInputValue] = useState(initialQuery);
   const [debouncedInput, setDebouncedInput] = useState(initialQuery);
@@ -73,12 +86,14 @@ export function SearchPage({
   const setRightPanelOpen = usePlayerStore((s) => s.setRightPanelOpen);
   const navigate = useNavigationStore((s) => s.navigate);
   const navigateToItem = useNavigationStore((s) => s.navigateToItem);
+  const openContextMenu = useContextMenuStore((s) => s.openMenu);
 
   const recentSearches = useLibraryStore((s) => s.recentSearches);
   const addRecentSearch = useLibraryStore((s) => s.addRecentSearch);
   const removeRecentSearch = useLibraryStore((s) => s.removeRecentSearch);
   const clearRecentSearches = useLibraryStore((s) => s.clearRecentSearches);
   const hiddenTrackIds = useLibraryStore((s) => s.hiddenTrackIds);
+  const excludedTasteIds = useLibraryStore((s) => s.excludedTasteIds);
   const hideExplicit = useSettingsStore((s) => s.hideExplicit);
 
   useEffect(() => {
@@ -151,6 +166,18 @@ export function SearchPage({
     enabled: !submittedQuery,
   });
 
+  const chartsQuery = useQuery({
+    queryKey: ['charts', 'ID'],
+    queryFn: ({ signal }) => fetchCharts('ID', signal),
+    enabled: !submittedQuery,
+  });
+
+  const homeQuery = useQuery({
+    queryKey: ['home'],
+    queryFn: ({ signal }) => fetchHome(signal),
+    enabled: !submittedQuery,
+  });
+
   const runSearch = (q: string, nextFilter?: SearchFilter) => {
     const clean = q.trim();
     if (!clean) return;
@@ -170,10 +197,10 @@ export function SearchPage({
     runSearch(inputValue);
   };
 
-  const hiddenSet = new Set(hiddenTrackIds);
+  const blockedSet = new Set([...hiddenTrackIds, ...excludedTasteIds]);
   const filterSafeItem = (item: MediaItem) => {
     const k = getPlayableVideoId(item) || item.id;
-    if (hiddenSet.has(k)) return false;
+    if (blockedSet.has(k)) return false;
     if (hideExplicit && item.isExplicit) return false;
     if (isExcludedRegionalItem(item)) return false;
     return true;
@@ -189,6 +216,62 @@ export function SearchPage({
     () => (followUpSuggestQuery.data?.suggestions ?? []).filter((s) => !isExcludedRegionalText(s)),
     [followUpSuggestQuery.data],
   );
+
+  const safeChartSongs = useMemo(
+    () => (chartsQuery.data?.songs ?? []).filter(filterSafeItem),
+    [chartsQuery.data?.songs, hiddenTrackIds, excludedTasteIds, hideExplicit],
+  );
+
+  const safeHomeSections = useMemo(
+    () =>
+      (homeQuery.data?.sections ?? []).map((sec) => ({
+        ...sec,
+        items: sec.items.filter(filterSafeItem),
+      })),
+    [homeQuery.data?.sections, hiddenTrackIds, excludedTasteIds, hideExplicit],
+  );
+
+  const quickBrowseCards = useMemo(
+    () =>
+      buildQuickBrowseCards({
+        moodGroups: moodsQuery.data?.groups ?? [],
+        chartSongs: safeChartSongs,
+        homeSections: safeHomeSections,
+      }),
+    [moodsQuery.data?.groups, safeChartSongs, safeHomeSections],
+  );
+
+  const allBrowseCards = useMemo(
+    () =>
+      buildAllBrowseCategoryCards({
+        moodGroups: moodsQuery.data?.groups ?? [],
+        chartSongs: safeChartSongs,
+        homeSections: safeHomeSections,
+      }),
+    [moodsQuery.data?.groups, safeChartSongs, safeHomeSections],
+  );
+
+  const spotlight = useMemo(
+    () => pickSearchSpotlight(safeChartSongs, safeHomeSections),
+    [safeChartSongs, safeHomeSections],
+  );
+
+  const discoverMoreItems = useMemo(
+    () => pickDiscoverSomethingElse(safeChartSongs, safeHomeSections, spotlight?.item.id),
+    [safeChartSongs, safeHomeSections, spotlight?.item.id],
+  );
+
+  const handleBrowseCardClick = (card: BrowseCategoryCard) => {
+    if (card.action.kind === 'mood') {
+      navigate({ name: 'mood-detail', params: card.action.params, title: card.action.title });
+    } else if (card.action.kind === 'mix') {
+      navigate({ name: 'mix', id: card.action.id });
+    } else if (card.action.kind === 'library') {
+      navigate({ name: 'library' });
+    } else {
+      runSearch(card.action.query, card.action.filter);
+    }
+  };
 
   const topResult = filter === 'all' && items.length > 0 ? items[0] : null;
   const remainingItems = topResult ? items.slice(1) : items;
@@ -252,7 +335,7 @@ export function SearchPage({
       if (out.length >= 6) break;
     }
     return out;
-  }, [items, relatedFollowUpQuery.data, watchFollowUpQuery.data, hiddenTrackIds, hideExplicit]);
+  }, [items, relatedFollowUpQuery.data, watchFollowUpQuery.data, hiddenTrackIds, excludedTasteIds, hideExplicit]);
 
   const relatedFollowUpCollections = useMemo(() => {
     const existingIds = new Set(items.map((it) => it.id));
@@ -270,18 +353,44 @@ export function SearchPage({
       if (out.length >= 5) break;
     }
     return out;
-  }, [items, relatedFollowUpQuery.data, hiddenTrackIds, hideExplicit]);
+  }, [items, relatedFollowUpQuery.data, hiddenTrackIds, excludedTasteIds, hideExplicit]);
 
   return (
     <div className="space-y-6">
+      {/* Top Spotify-style Cari Header & White Search Bar */}
       <div className="space-y-4">
-        <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight">Cari Musik & Podcast</h1>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {onOpenProfileDrawer && (
+              <button
+                type="button"
+                onClick={onOpenProfileDrawer}
+                aria-label="Buka menu profil"
+                className="md:hidden w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0 shadow-md shadow-[#01BA53]/20"
+              >
+                S
+              </button>
+            )}
+            <h1 className="text-2xl font-extrabold text-[#E8FFF3] tracking-tight">Cari</h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate({ name: 'moods' })}
+            className="text-xs font-semibold text-[#19EE8A] hover:underline"
+          >
+            Semua Mood
+          </button>
+        </div>
 
-        <div ref={searchBoxRef} className="relative max-w-2xl">
-          <form onSubmit={handleSubmit} className="relative flex items-center">
+        {/* Sticky Crisp White Search Box matching IMG_4319 */}
+        <div
+          ref={searchBoxRef}
+          className="sticky top-0 z-20 pt-1 pb-1"
+        >
+          <form onSubmit={handleSubmit} className="relative flex items-center max-w-2xl">
             <Search
-              className="w-4 h-4 text-[#B3F7D1]/50 absolute left-3.5 pointer-events-none"
-              strokeWidth={1.75}
+              className="w-5 h-5 text-[#121212] absolute left-3.5 pointer-events-none"
+              strokeWidth={2.2}
             />
             <input
               type="text"
@@ -292,9 +401,11 @@ export function SearchPage({
                 setShowSuggestions(true);
               }}
               onFocus={() => setShowSuggestions(true)}
-              placeholder="Cari lagu, artis, album, playlist, atau podcast..."
-              aria-label="Cari lagu, artis, album, playlist, atau podcast"
-              className="w-full h-11 pl-10 pr-24 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-sm text-[#E8FFF3] placeholder:text-[#B3F7D1]/45 focus:outline-none focus:border-[#19EE8A]"
+              placeholder="Apa yang ingin kamu dengarkan?"
+              aria-label="Apa yang ingin kamu dengarkan?"
+              className={`w-full h-12 pl-11 rounded-lg bg-white text-[14px] sm:text-[15px] font-medium text-[#121212] placeholder:text-[#525252] shadow-lg focus:outline-none focus:ring-2 focus:ring-[#19EE8A] ${
+                inputValue ? 'pr-24' : 'pr-4'
+              }`}
             />
             {inputValue && (
               <button
@@ -307,17 +418,19 @@ export function SearchPage({
                   navigate({ name: 'search', query: '', filter });
                 }}
                 aria-label="Bersihkan pencarian"
-                className="absolute right-16 w-7 h-7 rounded-lg flex items-center justify-center text-[#B3F7D1]/55 hover:text-[#E8FFF3]"
+                className="absolute right-16 w-8 h-8 rounded-full flex items-center justify-center text-[#525252] hover:text-[#121212] hover:bg-black/5"
               >
-                <X className="w-4 h-4" strokeWidth={1.75} />
+                <X className="w-4 h-4" strokeWidth={2.2} />
               </button>
             )}
-            <button
-              type="submit"
-              className="absolute right-1.5 px-3 py-1.5 rounded-lg bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
-            >
-              Cari
-            </button>
+            {inputValue.trim().length > 0 && (
+              <button
+                type="submit"
+                className="absolute right-1.5 px-3 py-1.5 rounded-md bg-[#0F1F17] text-[#19EE8A] text-xs font-bold hover:brightness-110 transition-all"
+              >
+                Cari
+              </button>
+            )}
           </form>
 
           {showSuggestions &&
@@ -326,7 +439,7 @@ export function SearchPage({
               <div
                 role="listbox"
                 aria-label="Saran pencarian"
-                className="absolute left-0 right-0 top-12 z-20 rounded-xl p-1.5 bg-[#0B0F0D]/88 backdrop-blur-2xl border border-white/[0.14] shadow-2xl"
+                className="absolute left-0 right-0 max-w-2xl top-14 z-30 rounded-xl p-1.5 bg-[#0B0F0D]/95 backdrop-blur-2xl border border-white/[0.14] shadow-2xl"
               >
                 {filteredSuggestions.map((suggestion) => (
                   <button
@@ -335,9 +448,9 @@ export function SearchPage({
                     role="option"
                     aria-selected={false}
                     onClick={() => runSearch(suggestion)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-sm text-[#E8FFF3]/90 hover:bg-white/[0.1] hover:text-[#E8FFF3] transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm text-[#E8FFF3]/90 hover:bg-white/[0.1] hover:text-[#E8FFF3] transition-colors"
                   >
-                    <Search className="w-3.5 h-3.5 text-[#B3F7D1]/45 shrink-0" strokeWidth={1.75} />
+                    <Search className="w-4 h-4 text-[#B3F7D1]/55 shrink-0" strokeWidth={1.9} />
                     <span className="truncate">{suggestion}</span>
                   </button>
                 ))}
@@ -345,75 +458,189 @@ export function SearchPage({
             )}
         </div>
 
-        {/* Filter Chips */}
-        <div
-          role="tablist"
-          aria-label="Filter hasil pencarian"
-          className="flex items-center gap-1.5 overflow-x-auto pb-1"
-        >
-          {FILTER_TABS.map((tab) => {
-            const active = filter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => {
-                  setFilter(tab.id);
-                  if (submittedQuery && tab.id !== filter) {
-                    navigate({ name: 'search', query: submittedQuery, filter: tab.id });
-                  }
-                }}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-                  active
-                    ? 'bg-sc-gradient text-[#0F1F17] font-semibold'
-                    : 'bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] text-[#B3F7D1]/75 hover:text-[#E8FFF3] hover:bg-white/[0.1]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Filter Chips & Follow-up only shown when actively searching */}
+        {submittedQuery && (
+          <>
+            <div
+              role="tablist"
+              aria-label="Filter hasil pencarian"
+              className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none"
+            >
+              {FILTER_TABS.map((tab) => {
+                const active = filter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => {
+                      setFilter(tab.id);
+                      if (submittedQuery && tab.id !== filter) {
+                        navigate({ name: 'search', query: submittedQuery, filter: tab.id });
+                      }
+                    }}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
+                      active
+                        ? 'bg-sc-gradient text-[#0F1F17] font-semibold'
+                        : 'bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.1]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
 
-        {/* Inline Follow-up Query Chips right below filter tabs when searching */}
-        {submittedQuery && followUpChips.length > 0 && (
-          <div
-            aria-label="Follow-up pencarian"
-            className="flex items-center gap-2 flex-wrap pt-1"
-          >
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#B3F7D1]/50 mr-0.5">
-              Follow-up:
-            </span>
-            {followUpChips.slice(0, 6).map((chip) => (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => runSearch(chip.query, chip.filter)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.055] backdrop-blur-xl hover:bg-[#19EE8A]/15 border border-white/[0.11] hover:border-[#19EE8A]/45 text-xs text-[#E8FFF3]/85 hover:text-[#E8FFF3] transition-colors"
+            {followUpChips.length > 0 && (
+              <div
+                aria-label="Follow-up pencarian"
+                className="flex items-center gap-2 flex-wrap pt-1"
               >
-                <CornerDownRight className="w-3 h-3 text-[#19EE8A] shrink-0" strokeWidth={2} />
-                <span className="truncate max-w-[220px]">{chip.label}</span>
-              </button>
-            ))}
-          </div>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#B3F7D1]/50 mr-0.5">
+                  Follow-up:
+                </span>
+                {followUpChips.slice(0, 6).map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => runSearch(chip.query, chip.filter)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.055] backdrop-blur-xl hover:bg-[#19EE8A]/15 border border-white/[0.11] hover:border-[#19EE8A]/45 text-xs text-[#E8FFF3]/85 hover:text-[#E8FFF3] transition-colors"
+                  >
+                    <CornerDownRight className="w-3 h-3 text-[#19EE8A] shrink-0" strokeWidth={2} />
+                    <span className="truncate max-w-[220px]">{chip.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {!submittedQuery ? (
-        <div className="space-y-8">
+        <div className="space-y-6">
+          {/* Top 6 Compact Colored Quick-Access Cards (IMG_4319 2-col mobile / 3x2 desktop) */}
+          <section aria-label="Mulai jelajahi" className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {quickBrowseCards.map((card) => (
+              <button
+                key={card.id}
+                type="button"
+                onClick={() => handleBrowseCardClick(card)}
+                style={{ backgroundColor: card.bgColor }}
+                className="group relative h-[64px] rounded-lg overflow-hidden p-3 text-left transition-transform active:scale-[0.98] hover:brightness-110 shadow-md"
+              >
+                <span className="relative z-10 block text-[13px] sm:text-sm font-bold text-white leading-tight max-w-[66%] drop-shadow-sm">
+                  {card.title}
+                </span>
+                <div
+                  aria-hidden="true"
+                  className="absolute -right-2 -bottom-2 w-13 h-13 rounded-md overflow-hidden rotate-[24deg] shadow-xl bg-black/30 border border-white/15 transition-transform duration-200 group-hover:rotate-[18deg] group-hover:scale-105"
+                >
+                  {card.thumbnail ? (
+                    <ArtworkImage
+                      src={card.thumbnail}
+                      alt=""
+                      className="w-full h-full"
+                      roundedClass="rounded-none"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/70">
+                      <Music2 className="w-5 h-5" />
+                    </div>
+                  )}
+                </div>
+              </button>
+            ))}
+          </section>
+
+          {/* Featured Spotlight Release Banner (IMG_4319 middle card) */}
+          {spotlight && (
+            <section aria-label="Rilisan pilihan">
+              <div className="relative rounded-2xl overflow-hidden min-h-[210px] sm:min-h-[240px] border border-white/[0.12] shadow-2xl group">
+                <ArtworkImage
+                  src={spotlight.item.thumbnail}
+                  alt={spotlight.item.title}
+                  className="absolute inset-0 w-full h-full"
+                  roundedClass="rounded-none"
+                />
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/45 to-black/35"
+                />
+
+                <div className="relative z-10 h-full min-h-[210px] sm:min-h-[240px] p-4 sm:p-5 flex flex-col justify-between">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-white drop-shadow">
+                      {spotlight.artistLine}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openContextMenu(e.clientX, e.clientY, spotlight.item, {
+                          onAddToPlaylist,
+                        });
+                      }}
+                      aria-label={`Opsi untuk ${spotlight.item.title}`}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white/90 hover:bg-black/40 transition-colors"
+                    >
+                      <MoreHorizontal className="w-5 h-5" strokeWidth={2} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-end justify-between gap-4 pt-10">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight truncate drop-shadow">
+                        {spotlight.item.title}
+                      </h2>
+                      <p className="text-xs text-white/80 line-clamp-2 max-w-xl leading-relaxed">
+                        {spotlight.description}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => playTrack(spotlight.item)}
+                      aria-label={`Putar ${spotlight.item.title}`}
+                      className="w-11 h-11 rounded-full bg-white text-[#0F1F17] flex items-center justify-center shrink-0 shadow-xl hover:scale-105 hover:bg-[#19EE8A] transition-all"
+                    >
+                      <Play className="w-5 h-5 fill-current ml-0.5" strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Temukan sesuatu yang lain (IMG_4319 bottom strip) */}
+          {discoverMoreItems.length > 0 && (
+            <section aria-labelledby="discover-other-heading" className="space-y-3">
+              <h2 id="discover-other-heading" className="text-lg font-extrabold text-[#E8FFF3] tracking-tight">
+                Temukan sesuatu yang lain
+              </h2>
+              <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-3 overflow-x-auto md:overflow-visible pb-1 scrollbar-none snap-x [&>*]:w-[136px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+                {discoverMoreItems.map((item, idx) => (
+                  <MediaCard
+                    key={`disc-${item.id}-${idx}`}
+                    item={item}
+                    onAddToPlaylist={onAddToPlaylist}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Pencarian Terakhir */}
           {recentSearches.length > 0 && (
-            <section aria-labelledby="recent-searches-heading" className="space-y-3">
+            <section aria-labelledby="recent-searches-heading" className="space-y-2.5">
               <div className="flex items-center justify-between gap-4">
-                <h2 id="recent-searches-heading" className="text-base font-semibold text-[#E8FFF3]">
+                <h2 id="recent-searches-heading" className="text-base font-bold text-[#E8FFF3]">
                   Pencarian Terakhir
                 </h2>
                 <button
                   type="button"
                   onClick={clearRecentSearches}
-                  className="inline-flex items-center gap-1 text-xs text-[#B3F7D1]/55 hover:text-[#E8FFF3] transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-[#B3F7D1]/60 hover:text-[#E8FFF3] transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                   Hapus semua
@@ -449,46 +676,48 @@ export function SearchPage({
             </section>
           )}
 
-          {/* Jelajahi Semua Kategori */}
-          <section aria-labelledby="browse-categories-heading" className="space-y-4">
-            <h2 id="browse-categories-heading" className="text-base font-semibold text-[#E8FFF3]">
-              Jelajahi Semua Kategori
+          {/* Jelajahi Semua Kategori (IMG_4320, IMG_4321, IMG_4322 colored tilted cards) */}
+          <section aria-labelledby="browse-categories-heading" className="space-y-3">
+            <h2 id="browse-categories-heading" className="text-lg font-extrabold text-[#E8FFF3] tracking-tight">
+              Jelajahi semua
             </h2>
-            {moodsQuery.isLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 animate-pulse">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="h-12 rounded-xl bg-white/[0.06]" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {moodsQuery.data?.groups.map((group) => (
-                  <div key={group.title} className="space-y-2.5">
-                    <h3 className="text-xs font-semibold text-[#B3F7D1]/60">{group.title}</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                      {group.items.map((cat) => (
-                        <button
-                          key={cat.params}
-                          type="button"
-                          onClick={() =>
-                            navigate({ name: 'mood-detail', params: cat.params, title: cat.title })
-                          }
-                          className="glass-card rounded-xl px-3.5 py-3 flex items-center justify-between gap-2 text-left group hover:bg-white/[0.1] transition-colors"
-                        >
-                          <span className="text-xs sm:text-sm font-medium text-[#E8FFF3] truncate">
-                            {cat.title}
-                          </span>
-                          <ChevronRight
-                            className="w-4 h-4 text-[#B3F7D1]/40 group-hover:text-[#19EE8A] shrink-0"
-                            strokeWidth={1.75}
-                          />
-                        </button>
-                      ))}
-                    </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {allBrowseCards.map((card) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  onClick={() => handleBrowseCardClick(card)}
+                  style={{ backgroundColor: card.bgColor }}
+                  className="group relative h-[106px] sm:h-[118px] rounded-xl overflow-hidden p-3.5 text-left transition-transform active:scale-[0.98] hover:brightness-110 shadow-lg"
+                >
+                  <span className="relative z-10 block text-[15px] sm:text-base font-bold text-white leading-snug max-w-[64%] drop-shadow-sm">
+                    {card.title}
+                  </span>
+                  <div
+                    aria-hidden="true"
+                    className="absolute -right-2 -bottom-2 w-[68px] h-[68px] sm:w-[76px] sm:h-[76px] rounded-md overflow-hidden rotate-[24deg] shadow-2xl bg-black/30 border border-white/15 transition-transform duration-200 group-hover:rotate-[18deg] group-hover:scale-105"
+                  >
+                    {card.thumbnail ? (
+                      <ArtworkImage
+                        src={card.thumbnail}
+                        alt=""
+                        className="w-full h-full"
+                        roundedClass="rounded-none"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white/75">
+                        <Music2 className="w-6 h-6" />
+                      </div>
+                    )}
+                    {card.badgeText && (
+                      <span className="absolute bottom-1 left-1 right-1 bg-black/75 text-[7px] font-extrabold tracking-wider text-white uppercase text-center py-0.5 rounded-sm truncate px-0.5">
+                        {card.badgeText}
+                      </span>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                </button>
+              ))}
+            </div>
           </section>
         </div>
       ) : searchQuery.isLoading ? (

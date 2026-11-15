@@ -9,7 +9,9 @@ import {
   filterHomeMediaItems,
   findActiveLyricIndex,
   formatArtists,
+  formatNegativeRemaining,
   formatTime,
+  getEffectiveThumbnail,
   getPlayableVideoId,
   getTrackUniqueId,
   hasPlayableOfflineAudio,
@@ -18,12 +20,14 @@ import {
   isExcludedRegionalText,
   isKoploOrDangdutItem,
   isLocalTrack,
+  isMissingYouTubeThumbnail,
   isPlayableTrack,
   isYouTubeVideoId,
   mergeWatchTracksIntoQueue,
   normalizeRouteId,
   parseDeepLinkSearch,
   podcastEpisodesToMediaItems,
+  shouldCropYouTubeLetterbox,
 } from './playerLogic';
 import type { ArtistDetailResponse, LyricLine, MediaItem, PodcastEpisode } from '../types/music';
 
@@ -363,4 +367,33 @@ test('isKoploOrDangdutItem and diversifyIndonesianTracks keep Indonesian trendin
     diversified.map((t) => t.id),
     ['p1', 'p2', 'p3', 'k1'],
   );
+});
+
+test('getEffectiveThumbnail upgrades small cached art when not dataSaver and handles letterbox/missing ytimg', () => {
+  assert.equal(
+    getEffectiveThumbnail('https://lh3.googleusercontent.com/abc=w60-h60-l90-rj', false),
+    'https://lh3.googleusercontent.com/abc=w544-h544-l90-rj',
+  );
+  assert.equal(
+    getEffectiveThumbnail('https://lh3.googleusercontent.com/abc=w544-h544-l90-rj', true),
+    'https://lh3.googleusercontent.com/abc=w120-h120-l90-rj',
+  );
+  assert.equal(
+    getEffectiveThumbnail('https://i.ytimg.com/vi/abc12345678/default.jpg', false),
+    'https://i.ytimg.com/vi/abc12345678/hqdefault.jpg',
+  );
+  assert.equal(
+    isMissingYouTubeThumbnail('https://i.ytimg.com/vi/abc12345678/hqdefault.jpg', 120, 90),
+    true,
+  );
+  assert.equal(
+    shouldCropYouTubeLetterbox('https://i.ytimg.com/vi/abc12345678/hqdefault.jpg', 480, 360),
+    true,
+  );
+  assert.equal(
+    shouldCropYouTubeLetterbox('https://lh3.googleusercontent.com/abc=w544-h544-l90-rj', 544, 544),
+    false,
+  );
+  assert.equal(formatNegativeRemaining(60, 242), '-3:02');
+  assert.equal(formatNegativeRemaining(0, 0), '-0:00');
 });

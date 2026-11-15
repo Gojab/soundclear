@@ -266,8 +266,8 @@ def moods() -> Dict[str, Any]:
 
 
 @app.get("/api/moods/{params}")
-def mood_playlists(params: str) -> Dict[str, Any]:
-    return provider.get_mood_playlists(params)
+def mood_playlists(params: str, title: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return provider.get_mood_playlists(params, title=title)
 
 
 @app.get("/api/artist/{artist_id}")

@@ -20,11 +20,13 @@ import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { HomeSectionId, MediaItem } from '../types/music';
 import { resolveTargetStreamQuality } from '../utils/audioMath';
+import { buildDailyMixes } from '../utils/mixLogic';
 import {
   diversifyIndonesianTracks,
   filterHomeMediaItems,
   formatArtists,
   getPlayableVideoId,
+  getTrackUniqueId,
   isExcludedRegionalItem,
   isExcludedRegionalText,
 } from '../utils/playerLogic';
@@ -61,6 +63,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
   const savedPodcasts = useLibraryStore((s) => s.savedPodcasts);
   const followedArtists = useLibraryStore((s) => s.followedArtists);
   const hiddenTrackIds = useLibraryStore((s) => s.hiddenTrackIds);
+  const excludedTasteIds = useLibraryStore((s) => s.excludedTasteIds);
   const hideExplicit = useSettingsStore((s) => s.hideExplicit);
   const homeSectionOrder = useSettingsStore((s) => s.homeSectionOrder);
   const localProfile = useSettingsStore((s) => s.localProfile);
@@ -95,10 +98,11 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
   });
 
   const filterList = (list: MediaItem[]) => {
-    const hiddenSet = new Set(hiddenTrackIds);
+    const blockedSet = new Set([...hiddenTrackIds, ...excludedTasteIds]);
     const safe = list.filter((item) => {
-      const key = getPlayableVideoId(item) || item.id;
-      if (hiddenSet.has(key)) return false;
+      const key = getTrackUniqueId(item) || getPlayableVideoId(item) || item.id;
+      const vid = getPlayableVideoId(item);
+      if (blockedSet.has(key) || (vid && blockedSet.has(vid))) return false;
       if (hideExplicit && item.isExplicit) return false;
       if (isExcludedRegionalItem(item)) return false;
       return true;
@@ -124,7 +128,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
       if (out.length >= 10) break;
     }
     return filterList(out);
-  }, [playHistory, currentTrack, hiddenTrackIds, hideExplicit, categoryTab]);
+  }, [playHistory, currentTrack, hiddenTrackIds, excludedTasteIds, hideExplicit, categoryTab]);
 
   // Sering diputar & Putar ulang
   const frequentTracks = useMemo(() => {
@@ -142,7 +146,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
       .sort((a, b) => b.count - a.count)
       .map((x) => x.track);
     return filterList(sorted).slice(0, 10);
-  }, [playHistory, hiddenTrackIds, hideExplicit, categoryTab]);
+  }, [playHistory, hiddenTrackIds, excludedTasteIds, hideExplicit, categoryTab]);
 
   const hasPersonalSeed = continueTracks.length > 0 || likedTracks.length > 0;
   const chartSongsRaw = filterList(chartsQuery.data?.songs ?? []);
@@ -182,6 +186,44 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
       staleTime: 1000 * 60 * 10,
     })),
   });
+
+  const watchTracksBySeed = useMemo(() => {
+    const map: Record<string, MediaItem[]> = {};
+    if (seedVideoId && dailyMixQuery.data?.tracks) {
+      map[seedVideoId] = dailyMixQuery.data.tracks;
+    }
+    mixSeedTracks.forEach((seed, idx) => {
+      const tracks = forYouMixQueries[idx]?.data?.tracks;
+      if (tracks && tracks.length > 0) {
+        map[seed.videoId] = tracks;
+      }
+    });
+    return map;
+  }, [seedVideoId, dailyMixQuery.data?.tracks, mixSeedTracks, forYouMixQueries]);
+
+  const spotifyStyleMixes = useMemo(
+    () =>
+      buildDailyMixes({
+        chartSongs: chartsQuery.data?.songs ?? [],
+        homeSections: homeQuery.data?.sections ?? [],
+        likedTracks,
+        playHistory,
+        hiddenTrackIds,
+        excludedTasteIds,
+        hideExplicit,
+        watchTracksBySeed,
+      }),
+    [
+      chartsQuery.data?.songs,
+      homeQuery.data?.sections,
+      likedTracks,
+      playHistory,
+      hiddenTrackIds,
+      excludedTasteIds,
+      hideExplicit,
+      watchTracksBySeed,
+    ],
+  );
 
   const followedToFetch = followedArtists.slice(0, 4);
   const followedArtistQueries = useQueries({
@@ -468,63 +510,96 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
         );
 
       case 'for_you_mix':
-        if (mixSeedTracks.length === 0) return null;
+        if (spotifyStyleMixes.length === 0) {
+          if (chartsQuery.isLoading || homeQuery.isLoading) {
+            return (
+              <section key="for_you_mix" aria-labelledby="foryou-heading" className="space-y-3">
+                <h2 id="foryou-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
+                  Dibuat Untukmu
+                </h2>
+                <CardGridSkeleton count={5} />
+              </section>
+            );
+          }
+          return null;
+        }
         return (
           <section key="for_you_mix" aria-labelledby="foryou-heading" className="space-y-3">
-            <h2 id="foryou-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
-              Mix Untukmu
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {mixSeedTracks.map((seed, idx) => {
-                const q = forYouMixQueries[idx];
-                const tracks = filterList(q?.data?.tracks ?? []).slice(0, 5);
-                const cover = tracks[0]?.thumbnail;
-                return (
-                  <div
-                    key={seed.videoId}
-                    className="rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.095] border border-white/[0.11] p-4 flex flex-col justify-between gap-3 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-[#E8FFF3] truncate">{seed.label}</p>
-                        <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5">
-                          {tracks.length > 0
-                            ? tracks
-                                .slice(0, 3)
-                                .map((t) => t.title)
-                                .join(' · ')
-                            : 'Memuat mix...'}
-                        </p>
-                      </div>
-                      {tracks.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => playTrackList(tracks, 0, seed.label)}
-                          aria-label={`Putar ${seed.label}`}
-                          className="w-10 h-10 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center shrink-0 hover:brightness-105"
-                        >
-                          <Play className="w-4 h-4 fill-current ml-0.5" strokeWidth={2} />
-                        </button>
-                      )}
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 id="foryou-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
+                  Dibuat Untukmu
+                </h2>
+                <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                  Mix harian dan pilihan musik yang disusun sesuai selera dengarmu
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate({ name: 'create-mix' })}
+                className="text-xs font-semibold text-[#19EE8A] hover:underline whitespace-nowrap shrink-0"
+              >
+                Buat Mix
+              </button>
+            </div>
+            <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2.5 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[162px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+              {spotifyStyleMixes.map((mix) => (
+                <div
+                  key={mix.id}
+                  className="group relative rounded-xl p-2 sm:p-2.5 bg-white/[0.045] hover:bg-white/[0.09] border border-white/[0.09] transition-colors cursor-pointer"
+                  onClick={() => navigate({ name: 'mix', id: mix.id })}
+                >
+                  <div className="relative aspect-square rounded-lg overflow-hidden mb-2.5 bg-[#090F0C] border border-white/[0.08]">
+                    <ArtworkImage
+                      src={mix.coverArt}
+                      alt={mix.title}
+                      className="w-full h-full group-hover:scale-105 transition-transform duration-300"
+                      roundedClass="rounded-none"
+                    />
+                    {/* Left Spotify-style mix accent bar */}
+                    <div
+                      aria-hidden="true"
+                      style={{ backgroundColor: mix.accentColor }}
+                      className="absolute left-0 top-0 bottom-0 w-1.5 z-10"
+                    />
+                    {/* Bottom vignette + number badge */}
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/90 via-black/45 to-transparent z-10"
+                    />
+                    <div className="absolute top-2 left-3 z-20 inline-flex items-center px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm border border-white/15">
+                      <span
+                        style={{ color: mix.badgeTextColor }}
+                        className="text-[10px] font-extrabold tracking-wider uppercase font-mono-num"
+                      >
+                        Mix {mix.numberLabel}
+                      </span>
                     </div>
-                    {cover && tracks.length > 0 && (
-                      <div className="space-y-1">
-                        {tracks.slice(0, 3).map((t, tIdx) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => playTrackList(tracks, tIdx, seed.label)}
-                            className="w-full text-left text-xs text-[#B3F7D1]/75 hover:text-[#E8FFF3] truncate py-0.5"
-                          >
-                            <span className="text-[#B3F7D1]/45 font-mono-num mr-2">{tIdx + 1}.</span>
-                            {t.title}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="absolute bottom-2.5 left-3 right-11 z-20 flex items-baseline justify-between gap-1">
+                      <span className="text-sm font-extrabold text-white tracking-tight truncate drop-shadow">
+                        {mix.title}
+                      </span>
+                    </div>
+                    {mix.tracks.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playTrackList(mix.tracks, 0, mix.title);
+                        }}
+                        aria-label={`Putar ${mix.title}`}
+                        className="absolute bottom-2 right-2 z-20 w-9 h-9 rounded-full bg-sc-gradient text-[#0F1F17] shadow-lg shadow-black/60 flex items-center justify-center opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 focus-visible:opacity-100"
+                      >
+                        <Play className="w-4 h-4 fill-current ml-0.5" strokeWidth={2} />
+                      </button>
                     )}
                   </div>
-                );
-              })}
+                  <p className="text-sm font-semibold text-[#E8FFF3] truncate">{mix.title}</p>
+                  <p className="text-xs text-[#B3F7D1]/65 line-clamp-2 mt-0.5 leading-snug">
+                    {mix.subtitle}
+                  </p>
+                </div>
+              ))}
             </div>
           </section>
         );

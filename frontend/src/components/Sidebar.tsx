@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ArrowUpDown,
+  Disc3,
   Heart,
   Library,
   ListMusic,
@@ -116,6 +117,19 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
         </button>
 
         <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => navigate({ name: 'create-mix' })}
+            aria-label="Buat mix baru"
+            title="Buat mix baru"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              currentRoute.name === 'create-mix'
+                ? 'bg-[#19EE8A]/20 text-[#19EE8A]'
+                : 'text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09]'
+            }`}
+          >
+            <Disc3 className="w-4 h-4" strokeWidth={2} />
+          </button>
           <button
             type="button"
             onClick={onOpenCreatePlaylist}
@@ -391,13 +405,22 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               <p className="text-xs text-[#B3F7D1]/65 leading-relaxed">
                 Simpan lagu favorit, album, dan artis agar selalu siap diputar.
               </p>
-              <button
-                type="button"
-                onClick={onOpenCreatePlaylist}
-                className="px-3.5 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-transform"
-              >
-                Buat playlist
-              </button>
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={onOpenCreatePlaylist}
+                  className="px-3.5 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-transform"
+                >
+                  Buat playlist
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate({ name: 'create-mix' })}
+                  className="px-3 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-[#E8FFF3] text-xs font-semibold transition-colors"
+                >
+                  Buat Mix
+                </button>
+              </div>
             </div>
           )}
       </div>

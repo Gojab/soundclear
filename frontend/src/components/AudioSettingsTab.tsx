@@ -10,7 +10,6 @@ import {
   RefreshCw,
   RotateCcw,
   Sliders,
-  Sparkles,
   Trash2,
   Volume2,
   VolumeX,
@@ -344,7 +343,7 @@ export function AudioSettingsTab() {
             }}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
           >
-            <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
+            <Sliders className="w-3.5 h-3.5" strokeWidth={2} />
             Aktifkan Semua DSP
           </button>
           <button

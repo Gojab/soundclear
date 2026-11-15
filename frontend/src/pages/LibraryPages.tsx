@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
+  Disc3,
   Download,
   Edit3,
   Folder,
@@ -301,6 +302,14 @@ export function LibraryOverviewPage({
           >
             <FolderPlus className="w-3.5 h-3.5" strokeWidth={1.75} />
             Folder Baru
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate({ name: 'create-mix' })}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors whitespace-nowrap shrink-0"
+          >
+            <Disc3 className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.9} />
+            Buat Mix
           </button>
           <button
             type="button"

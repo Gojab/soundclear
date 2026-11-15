@@ -288,6 +288,19 @@ export function GlobalTrackContextMenu({
                   <button
                     type="button"
                     role="menuitem"
+                    onClick={() => {
+                      navigate({ name: 'create-mix', seedTrack: track });
+                      closeMenu();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
+                  >
+                    <Disc3 className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.75} />
+                    <span>Buat Mix dari lagu ini</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
                     onClick={() => openCredits(track)}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
                   >

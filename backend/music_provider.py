@@ -54,6 +54,9 @@ ALLOWED_ARTWORK_HOSTS = {
     "music.youtube.com",
 }
 
+LRCLIB_API_BASE = "https://lrclib.net/api"
+LRCLIB_USER_AGENT = "SoundClear/3.0 (https://soundclear.app)"
+
 CJK_HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 JAPANESE_KANA_RE = re.compile(r"[\u3040-\u30ff\u31f0-\u31ff\uff65-\uff9f]")
 KOREAN_HANGUL_RE = re.compile(r"[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]")
@@ -626,6 +629,9 @@ def upgrade_thumbnail_url(url: Optional[str]) -> Optional[str]:
             m_s = GOOGLEUSERCONTENT_S_RE.search(clean)
             if m_s and int(m_s.group(1)) < 544:
                 clean = GOOGLEUSERCONTENT_S_RE.sub("=s544", clean, count=1)
+    elif host.endswith("ytimg.com") and not parsed.query:
+        if clean.endswith("/default.jpg") or clean.endswith("/0.jpg"):
+            clean = clean.rsplit("/", 1)[0] + "/hqdefault.jpg"
     return clean
 
 
@@ -652,17 +658,29 @@ def pick_largest_thumbnail(
         return upgrade_thumbnail_url(node)
 
     best_url: Optional[str] = None
-    best_area = -1
+    best_score = -1
     for item in candidates:
         url = item.get("url")
         if not isinstance(url, str) or not url.strip():
             continue
         try:
-            area = int(item.get("width") or 0) * int(item.get("height") or 0)
+            w = int(item.get("width") or 0)
+            h = int(item.get("height") or 0)
+            area = w * h
         except (TypeError, ValueError):
-            area = 0
-        if area >= best_area:
-            best_area = area
+            w, h, area = 0, 0, 0
+        # Google album artwork URLs (=w120-h120 / =s120) upgrade cleanly to 544x544 square art
+        is_google = "googleusercontent.com" in url or "ggpht.com" in url
+        is_square = w > 0 and w == h
+        if is_google and (GOOGLEUSERCONTENT_WH_RE.search(url) or GOOGLEUSERCONTENT_S_RE.search(url)):
+            effective_area = max(area, 544 * 544)
+        else:
+            effective_area = area
+        square_bonus = 1 if is_square else 0
+        google_bonus = 1 if is_google else 0
+        score = effective_area * 10 + square_bonus * 2 + google_bonus
+        if score >= best_score:
+            best_score = score
             best_url = url
 
     return upgrade_thumbnail_url(best_url or fallback)
@@ -1546,24 +1564,51 @@ class MusicProvider:
         self._cache.set(cache_key, result, ttl_seconds=600)
         return result
 
-    def get_mood_playlists(self, params: str) -> Dict[str, Any]:
+    def _resolve_mood_title(self, params: str, explicit_title: Optional[str]) -> str:
+        if explicit_title and explicit_title.strip():
+            return explicit_title.strip()
+        try:
+            moods_data = self.get_moods()
+            for group in moods_data.get("groups", []):
+                for item in group.get("items", []):
+                    if item.get("params") == params and item.get("title"):
+                        return str(item["title"]).strip()
+        except Exception:
+            pass
+        return "pop hits"
+
+    def get_mood_playlists(self, params: str, title: Optional[str] = None) -> Dict[str, Any]:
         clean = (params or "").strip()
         if not clean:
             raise MusicProviderError("Parameter kategori mood tidak valid.", 400)
 
-        cache_key = f"mood_pl:{clean}"
+        cache_key = f"mood_pl:{clean}:{(title or '').strip().lower()}"
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
-        raw = self._call_with_retry(lambda: self._gateway.get_mood_playlists(clean))
         playlists: List[Dict[str, Any]] = []
-        for entry in raw:
-            norm = normalize_yt_item(entry, default_type="playlist")
-            if norm and not _is_excluded_catalog_item(norm):
-                playlists.append(norm)
+        try:
+            raw = self._call_with_retry(lambda: self._gateway.get_mood_playlists(clean))
+            for entry in raw:
+                norm = normalize_yt_item(entry, default_type="playlist")
+                if norm and not _is_excluded_catalog_item(norm):
+                    playlists.append(norm)
+        except MusicProviderError:
+            playlists = []
 
-        result = {"params": clean, "playlists": playlists}
+        resolved_title = self._resolve_mood_title(clean, title)
+        if not playlists:
+            if not _is_excluded_regional_text(resolved_title):
+                try:
+                    searched = self.search(f"{resolved_title} playlist", filter="playlists")
+                    for item in searched.get("items", []):
+                        if not _is_excluded_catalog_item(item):
+                            playlists.append(item)
+                except MusicProviderError:
+                    playlists = []
+
+        result = {"params": clean, "title": resolved_title, "playlists": playlists}
         self._cache.set(cache_key, result)
         return result
 
@@ -1845,6 +1890,116 @@ class MusicProvider:
             "plainText": None,
         }
 
+    def _lrclib_request_json(self, path: str, params: Dict[str, Any]) -> Any:
+        url = f"{LRCLIB_API_BASE}/{path.lstrip('/')}"
+        headers = {"User-Agent": LRCLIB_USER_AGENT, "Accept": "application/json"}
+        try:
+            resp = self._http_get(url, params=params, headers=headers, timeout=8)
+        except Exception:
+            return None
+        status = int(getattr(resp, "status_code", 500) or 500)
+        if status >= 400:
+            return None
+        try:
+            if callable(getattr(resp, "json", None)):
+                return resp.json()
+            raw_text = getattr(resp, "text", None)
+            if isinstance(raw_text, str) and raw_text.strip():
+                return json.loads(raw_text)
+            raw_bytes = getattr(resp, "content", b"")
+            if raw_bytes:
+                return json.loads(raw_bytes.decode("utf-8"))
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
+    def _pick_best_lrclib_record(
+        candidates: List[Mapping[str, Any]],
+        *,
+        target_title: str,
+        target_artist: str,
+        duration_seconds: Optional[int],
+    ) -> Optional[Mapping[str, Any]]:
+        if not candidates:
+            return None
+        t_low = target_title.strip().lower()
+        a_low = target_artist.strip().lower()
+        best_item: Optional[Mapping[str, Any]] = None
+        best_score = -10_000.0
+
+        for item in candidates:
+            if not isinstance(item, Mapping):
+                continue
+            has_synced = bool(isinstance(item.get("syncedLyrics"), str) and item["syncedLyrics"].strip())
+            has_plain = bool(isinstance(item.get("plainLyrics"), str) and item["plainLyrics"].strip())
+            is_inst = bool(item.get("instrumental"))
+            if not has_synced and not has_plain and not is_inst:
+                continue
+
+            score = 0.0
+            if has_synced:
+                score += 120.0
+            elif has_plain:
+                score += 60.0
+            elif is_inst:
+                score += 10.0
+
+            cand_track = str(item.get("trackName") or item.get("name") or "").strip().lower()
+            cand_artist = str(item.get("artistName") or "").strip().lower()
+            if t_low and cand_track:
+                if cand_track == t_low:
+                    score += 50.0
+                elif t_low in cand_track or cand_track in t_low:
+                    score += 25.0
+            if a_low and cand_artist:
+                if cand_artist == a_low:
+                    score += 40.0
+                elif a_low in cand_artist or cand_artist in a_low:
+                    score += 20.0
+
+            if duration_seconds and duration_seconds > 0 and item.get("duration") is not None:
+                try:
+                    diff = abs(float(item["duration"]) - float(duration_seconds))
+                    if diff <= 3:
+                        score += 35.0
+                    elif diff <= 10:
+                        score += 15.0
+                    elif diff > 30:
+                        score -= min(80.0, diff * 0.5)
+                except (TypeError, ValueError):
+                    pass
+
+            if score > best_score:
+                best_score = score
+                best_item = item
+
+        return best_item
+
+    @staticmethod
+    def _format_lrclib_response(record: Mapping[str, Any], fallback_id: str = "") -> Dict[str, Any]:
+        synced_raw = record.get("syncedLyrics")
+        plain_raw = record.get("plainLyrics")
+        lines = parse_lrc_lyrics(synced_raw) if isinstance(synced_raw, str) else []
+        has_timestamps = len(lines) > 0
+        plain_text: Optional[str] = None
+        if isinstance(plain_raw, str) and plain_raw.strip():
+            plain_text = plain_raw.strip()
+        elif lines:
+            plain_text = "\n".join(line["text"] for line in lines if line.get("text"))
+        elif record.get("instrumental"):
+            plain_text = "Lagu instrumental."
+
+        rec_id = record.get("id")
+        browse_id = f"lrclib:{rec_id}" if rec_id is not None else fallback_id
+        return {
+            "browseId": browse_id,
+            "hasTimestamps": has_timestamps,
+            "source": "LRCLIB" if (has_timestamps or plain_text) else None,
+            "lines": lines,
+            "plainText": plain_text,
+        }
+
     def get_lyrics(
         self,
         browse_id: str = "",
@@ -1860,103 +2015,102 @@ class MusicProvider:
             clean_id = ""
         clean_title = (title or "").strip()
         clean_artist = (artist or "").strip()
+        clean_album = (album or "").strip()
         clean_vid = (video_id or "").strip()
 
         if not clean_id and not clean_vid and not clean_title:
-            raise MusicProviderError("ID lirik, ID lagu, atau judul lagu wajib diisi.", 400)
+            raise MusicProviderError("ID lagu atau judul lagu wajib diisi.", 400)
 
+        # If called only with videoId without title, look up track title/artist metadata
+        if not clean_title and clean_vid:
+            try:
+                watch = self.get_watch_playlist(clean_vid, radio=False, limit=3)
+                matched = next(
+                    (
+                        t
+                        for t in watch.get("tracks") or []
+                        if t.get("videoId") == clean_vid or t.get("id") == clean_vid
+                    ),
+                    (watch.get("tracks") or [None])[0],
+                )
+                if isinstance(matched, Mapping):
+                    clean_title = str(matched.get("title") or "").strip()
+                    if not clean_artist:
+                        clean_artist = ", ".join(
+                            str(a.get("name")).strip()
+                            for a in (matched.get("artists") or [])
+                            if isinstance(a, Mapping) and a.get("name")
+                        )
+                    if not clean_album and isinstance(matched.get("album"), Mapping):
+                        clean_album = str(matched["album"].get("name") or "").strip()
+                    if not duration_seconds and matched.get("durationSeconds"):
+                        duration_seconds = int(matched["durationSeconds"])
+            except Exception:
+                pass
+
+        if not clean_title:
+            return self._empty_lyrics_response(clean_id)
+
+        q_title = _clean_track_title_for_query(clean_title)
+        q_artist = _clean_artist_for_query(clean_artist)
+        dur_key = int(duration_seconds) if duration_seconds and duration_seconds > 0 else 0
         cache_key = (
-            f"lyrics:{clean_id}:{clean_vid}:{clean_title.lower()}:"
-            f"{clean_artist.lower()}"
+            f"lrclib:{q_title.lower()}:{q_artist.lower()}:{clean_album.lower()}:{dur_key}"
         )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
-        target_browse_id = clean_id
-        resolved_vid = clean_vid
+        record: Optional[Mapping[str, Any]] = None
 
-        # Lookup lyrics browseId strictly via YouTube Music (ytmusicapi)
-        if not target_browse_id and not resolved_vid and clean_title:
-            clean_q_title = _clean_track_title_for_query(clean_title)
-            clean_q_artist = _clean_artist_for_query(clean_artist)
-            query = f"{clean_q_artist} {clean_q_title}".strip()
-            if query and not _is_excluded_regional_text(query):
-                try:
-                    hits = self._call_with_retry(
-                        lambda: self._gateway.search(query, filter="songs", limit=3)
-                    )
-                    for hit in hits:
-                        vid_cand = hit.get("videoId") if isinstance(hit, Mapping) else None
-                        if isinstance(vid_cand, str) and VIDEO_ID_RE.fullmatch(vid_cand.strip()):
-                            resolved_vid = vid_cand.strip()
-                            break
-                except MusicProviderError:
-                    resolved_vid = ""
+        # 1. Exact lookup via LRCLIB /api/get (requires track_name and artist_name per LRCLIB docs)
+        if q_title and q_artist:
+            get_params: Dict[str, Any] = {
+                "track_name": q_title,
+                "artist_name": q_artist,
+            }
+            if clean_album:
+                get_params["album_name"] = clean_album
+            if dur_key > 0:
+                get_params["duration"] = dur_key
 
-        if not target_browse_id and resolved_vid:
-            try:
-                watch = self.get_watch_playlist(resolved_vid, radio=False, limit=1)
-                lb = watch.get("lyricsBrowseId")
-                if isinstance(lb, str) and lb.strip():
-                    target_browse_id = lb.strip()
-            except MusicProviderError:
-                target_browse_id = ""
+            exact = self._lrclib_request_json("get", get_params)
+            if isinstance(exact, Mapping) and (
+                exact.get("syncedLyrics") or exact.get("plainLyrics") or exact.get("instrumental")
+            ):
+                record = exact
 
-        if not target_browse_id:
-            empty_res = self._empty_lyrics_response("")
+        # 2. Fallback to LRCLIB /api/search if exact lookup missed
+        if record is None:
+            search_candidates: List[Mapping[str, Any]] = []
+            if q_title and q_artist:
+                res = self._lrclib_request_json(
+                    "search",
+                    {"track_name": q_title, "artist_name": q_artist},
+                )
+                if isinstance(res, list):
+                    search_candidates.extend(c for c in res if isinstance(c, Mapping))
+
+            if not search_candidates:
+                q_str = f"{q_artist} {q_title}".strip()
+                if q_str:
+                    res = self._lrclib_request_json("search", {"q": q_str})
+                    if isinstance(res, list):
+                        search_candidates.extend(c for c in res if isinstance(c, Mapping))
+
+            record = self._pick_best_lrclib_record(
+                search_candidates,
+                target_title=q_title,
+                target_artist=q_artist,
+                duration_seconds=duration_seconds,
+            )
+
+        if record is None:
+            empty_res = self._empty_lyrics_response(clean_id)
             self._cache.set(cache_key, empty_res, ttl_seconds=600)
             return empty_res
 
-        raw = None
-        try:
-            raw = self._call_with_retry(lambda: self._gateway.get_lyrics(target_browse_id, timestamps=True))
-        except MusicProviderError:
-            raw = None
-
-        if not raw:
-            try:
-                raw = self._call_with_retry(lambda: self._gateway.get_lyrics(target_browse_id, timestamps=False))
-            except MusicProviderError:
-                raw = None
-
-        if not raw:
-            empty_res = self._empty_lyrics_response(target_browse_id)
-            self._cache.set(cache_key, empty_res, ttl_seconds=600)
-            return empty_res
-
-        has_timestamps = bool(raw.get("hasTimestamps"))
-        raw_lyrics = raw.get("lyrics")
-        source = sanitize_brand_name(raw.get("source")) if isinstance(raw.get("source"), str) else raw.get("source")
-        lines: List[Dict[str, Any]] = []
-        plain_text: Optional[str] = None
-
-        if has_timestamps and isinstance(raw_lyrics, list):
-            text_chunks: List[str] = []
-            for entry in raw_lyrics:
-                if isinstance(entry, Mapping):
-                    text = str(entry.get("text") or "").strip()
-                    start_ms = int(entry.get("start_time") or entry.get("startTimeMs") or 0)
-                    end_ms = int(entry.get("end_time") or entry.get("endTimeMs") or start_ms + 3000)
-                else:
-                    text = str(getattr(entry, "text", "") or "").strip()
-                    start_ms = int(getattr(entry, "start_time", 0) or 0)
-                    end_ms = int(getattr(entry, "end_time", start_ms + 3000) or (start_ms + 3000))
-                if text:
-                    lines.append({"text": text, "startTimeMs": start_ms, "endTimeMs": end_ms})
-                    text_chunks.append(text)
-            plain_text = "\n".join(text_chunks) if text_chunks else None
-        elif isinstance(raw_lyrics, str) and raw_lyrics.strip():
-            has_timestamps = False
-            plain_text = raw_lyrics.strip()
-
-        result = {
-            "browseId": target_browse_id,
-            "hasTimestamps": has_timestamps and len(lines) > 0,
-            "source": source,
-            "lines": lines,
-            "plainText": plain_text,
-        }
+        result = self._format_lrclib_response(record, fallback_id=clean_id)
         self._cache.set(cache_key, result, ttl_seconds=600)
         return result
 

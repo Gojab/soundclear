@@ -5,7 +5,6 @@ import {
   Layers,
   Palette,
   RotateCcw,
-  Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -302,7 +301,7 @@ export function BackgroundSettingsSection() {
       {customBackground.mode === 'ambient' && (
         <section className="glass-card rounded-2xl p-5 flex items-start gap-3">
           <div className="w-9 h-9 rounded-xl bg-[#19EE8A]/15 text-[#19EE8A] flex items-center justify-center shrink-0">
-            <Sparkles className="w-4.5 h-4.5" strokeWidth={2} />
+            <Palette className="w-4.5 h-4.5" strokeWidth={2} />
           </div>
           <div>
             <h3 className="text-sm font-bold text-[#E8FFF3]">Latar Sampul Lagu Aktif</h3>

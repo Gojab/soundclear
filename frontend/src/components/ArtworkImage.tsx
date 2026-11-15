@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { Disc3, Headphones, Music, Podcast, User } from 'lucide-react';
 import { useSettingsStore } from '../store/settingsStore';
 import type { MediaItemType } from '../types/music';
-import { getEffectiveThumbnail } from '../utils/playerLogic';
+import {
+  getEffectiveThumbnail,
+  isMissingYouTubeThumbnail,
+  shouldCropYouTubeLetterbox,
+} from '../utils/playerLogic';
 
 interface ArtworkImageProps {
   src?: string | null;
@@ -20,11 +24,13 @@ export function ArtworkImage({
   roundedClass = 'rounded-xl',
 }: ArtworkImageProps) {
   const [failed, setFailed] = useState(false);
+  const [cropLetterbox, setCropLetterbox] = useState(false);
   const dataSaver = useSettingsStore((s) => s.dataSaver);
   const resolvedSrc = getEffectiveThumbnail(src, dataSaver);
 
   useEffect(() => {
     setFailed(false);
+    setCropLetterbox(false);
   }, [resolvedSrc]);
 
   if (!resolvedSrc || failed) {
@@ -49,13 +55,27 @@ export function ArtworkImage({
   }
 
   return (
-    <img
-      src={resolvedSrc}
-      alt={alt}
-      referrerPolicy="no-referrer"
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className={`${className} ${roundedClass} object-cover bg-white/[0.04] shrink-0`}
-    />
+    <div className={`${className} ${roundedClass} overflow-hidden bg-white/[0.04] shrink-0`}>
+      <img
+        src={resolvedSrc}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        loading="lazy"
+        onLoad={(e) => {
+          const img = e.currentTarget;
+          if (isMissingYouTubeThumbnail(resolvedSrc, img.naturalWidth, img.naturalHeight)) {
+            setFailed(true);
+            return;
+          }
+          setCropLetterbox(
+            shouldCropYouTubeLetterbox(resolvedSrc, img.naturalWidth, img.naturalHeight),
+          );
+        }}
+        onError={() => setFailed(true)}
+        className={`w-full h-full object-cover object-center transition-transform duration-200 ${
+          cropLetterbox ? 'scale-[1.35]' : ''
+        }`}
+      />
+    </div>
   );
 }

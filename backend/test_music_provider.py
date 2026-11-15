@@ -12,10 +12,12 @@ from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
 import backend.main as main_app
 from backend.music_provider import (
     ALLOWED_ARTWORK_HOSTS,
+    LRCLIB_API_BASE,
     MusicProvider,
     MusicProviderError,
     TTLCache,
     pick_largest_thumbnail,
+    upgrade_thumbnail_url,
 )
 
 
@@ -30,6 +32,7 @@ class FakeLyricLine:
 class FakeYTMusicGateway:
     def __init__(self) -> None:
         self.search_calls = 0
+        self.lyrics_calls = 0
         self.fail_times = 0
         self.raise_user_error = False
 
@@ -207,16 +210,8 @@ class FakeYTMusicGateway:
         }
 
     def get_lyrics(self, browse_id: str, timestamps: bool = True):
-        if browse_id == "PLAIN_LYRICS":
-            return {"lyrics": "Baris satu\nBaris dua", "source": "SoundClear", "hasTimestamps": False}
-        return {
-            "hasTimestamps": True,
-            "source": "LyricFind",
-            "lyrics": [
-                FakeLyricLine(text="Hari-hari berulang", start_time=1000, end_time=4000, id=0),
-                FakeLyricLine(text="Langkah terasa tenang", start_time=4000, end_time=7500, id=1),
-            ],
-        }
+        self.lyrics_calls += 1
+        raise AssertionError("ytmusicapi get_lyrics must NOT be called; only LRCLIB API is allowed")
 
     def get_song(self, video_id: str):
         return {"playabilityStatus": {"status": "LOGIN_REQUIRED"}}
@@ -318,9 +313,46 @@ class MusicProviderTests(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("Permintaan tidak valid", ctx.exception.message)
 
-    def test_album_artist_playlist_charts_watch_and_lyrics(self) -> None:
+    def test_album_artist_playlist_charts_watch_and_lrclib_lyrics(self) -> None:
         gw = FakeYTMusicGateway()
-        provider = MusicProvider(gateway=gw, sleep_fn=lambda _d: None)  # type: ignore[arg-type]
+
+        class _FakeJsonResp:
+            def __init__(self, status_code: int, payload) -> None:
+                self.status_code = status_code
+                self._payload = payload
+
+            def json(self):
+                return self._payload
+
+        def fake_http_get(url: str, params=None, headers=None, timeout=8):
+            self.assertTrue(url.startswith(LRCLIB_API_BASE))
+            params = params or {}
+            if url.endswith("/get") and params.get("track_name") == "Hati-Hati di Jalan":
+                return _FakeJsonResp(
+                    200,
+                    {
+                        "id": 901,
+                        "trackName": "Hati-Hati di Jalan",
+                        "artistName": "Tulus",
+                        "duration": 242,
+                        "syncedLyrics": "[00:01.00] Hari-hari berulang\n[00:04.00] Langkah terasa tenang",
+                        "plainLyrics": "Hari-hari berulang\nLangkah terasa tenang",
+                    },
+                )
+            if url.endswith("/get") and params.get("track_name") == "Lagu Polos":
+                return _FakeJsonResp(
+                    200,
+                    {
+                        "id": 902,
+                        "trackName": "Lagu Polos",
+                        "artistName": "Tulus",
+                        "syncedLyrics": None,
+                        "plainLyrics": "Baris satu\nBaris dua",
+                    },
+                )
+            return _FakeJsonResp(404, {"message": "Not found"})
+
+        provider = MusicProvider(gateway=gw, http_get_fn=fake_http_get, sleep_fn=lambda _d: None)  # type: ignore[arg-type]
 
         alb = provider.get_album("OLAK5uy_dummy123")
         self.assertEqual(alb["id"], "MPREb_RVAbNZdUasD")
@@ -337,19 +369,57 @@ class MusicProviderTests(unittest.TestCase):
         self.assertEqual(watch["lyricsBrowseId"], "MPLYt_RVAbNZdUasD-1")
         self.assertEqual(watch["tracks"][0]["thumbnail"], "https://lh3.googleusercontent.com/w544=w544-h544-l90-rj")
 
-        timed = provider.get_lyrics("MPLYt_RVAbNZdUasD-1")
+        timed = provider.get_lyrics(title="Hati-Hati di Jalan", artist="Tulus", duration_seconds=242)
         self.assertTrue(timed["hasTimestamps"])
+        self.assertEqual(timed["source"], "LRCLIB")
         self.assertEqual(len(timed["lines"]), 2)
         self.assertEqual(timed["lines"][0]["startTimeMs"], 1000)
 
-        plain = provider.get_lyrics("PLAIN_LYRICS")
+        plain = provider.get_lyrics(title="Lagu Polos", artist="Tulus")
         self.assertFalse(plain["hasTimestamps"])
+        self.assertEqual(plain["source"], "LRCLIB")
         self.assertEqual(plain["plainText"], "Baris satu\nBaris dua")
+        self.assertEqual(gw.lyrics_calls, 0)
+
+        # Thumbnail selection & upgrade checks
+        picked = pick_largest_thumbnail(
+            [
+                {"url": "https://i.ytimg.com/vi/abc12345678/hqdefault.jpg", "width": 480, "height": 360},
+                {"url": "https://lh3.googleusercontent.com/sq=w120-h120-l90-rj", "width": 120, "height": 120},
+            ]
+        )
+        self.assertEqual(picked, "https://lh3.googleusercontent.com/sq=w544-h544-l90-rj")
+        self.assertEqual(
+            upgrade_thumbnail_url("https://i.ytimg.com/vi/abc12345678/default.jpg"),
+            "https://i.ytimg.com/vi/abc12345678/hqdefault.jpg",
+        )
 
     def test_artwork_color_and_fastapi_routes(self) -> None:
         buf = io.BytesIO()
         Image.new("RGB", (24, 24), (46, 200, 150)).save(buf, format="JPEG")
-        fake_resp = type("Resp", (), {"status_code": 200, "content": buf.getvalue()})()
+        img_bytes = buf.getvalue()
+
+        class _FakeResp:
+            def __init__(self, status_code: int, content: bytes = b"", payload=None) -> None:
+                self.status_code = status_code
+                self.content = content
+                self._payload = payload
+
+            def json(self):
+                return self._payload
+
+        def fake_http_get(url: str, params=None, headers=None, timeout=8):
+            if url.startswith(LRCLIB_API_BASE):
+                return _FakeResp(
+                    200,
+                    payload={
+                        "id": 77,
+                        "trackName": "Hati-Hati di Jalan",
+                        "artistName": "Tulus",
+                        "syncedLyrics": "[00:01.00] Hari-hari berulang\n[00:04.00] Langkah terasa tenang",
+                    },
+                )
+            return _FakeResp(200, content=img_bytes)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             settings_path = os.path.join(tmpdir, "audio_settings.json")
@@ -357,7 +427,7 @@ class MusicProviderTests(unittest.TestCase):
             try:
                 provider = MusicProvider(
                     gateway=FakeYTMusicGateway(),  # type: ignore[arg-type]
-                    http_get_fn=lambda *_a, **_kw: fake_resp,
+                    http_get_fn=fake_http_get,
                     audio_settings_file=settings_path,
                 )
                 main_app.provider = provider
@@ -373,7 +443,12 @@ class MusicProviderTests(unittest.TestCase):
                 self.assertEqual(client.get("/api/album/MPREb_RVAbNZdUasD").json()["title"], "Manusia")
                 self.assertEqual(client.get("/api/playlist/PL123").json()["title"], "Top Indonesia")
                 self.assertEqual(client.get("/api/watch/5F28ye50-Kc?radio=true").status_code, 200)
-                self.assertEqual(client.get("/api/lyrics/MPLYt_RVAbNZdUasD-1").json()["hasTimestamps"], True)
+                lyrics_resp = client.get(
+                    "/api/lyrics/MPLYt_RVAbNZdUasD-1?title=Hati-Hati+di+Jalan&artist=Tulus"
+                )
+                self.assertEqual(lyrics_resp.status_code, 200)
+                self.assertEqual(lyrics_resp.json()["hasTimestamps"], True)
+                self.assertEqual(lyrics_resp.json()["source"], "LRCLIB")
                 self.assertEqual(client.get("/api/account/status").json()["authenticated"], False)
 
                 # Stream extraction/download routes must not exist
@@ -595,7 +670,9 @@ class MusicProviderTests(unittest.TestCase):
         self.assertEqual(provider.search("Arijit Singh Tum Hi Ho", None, 20)["items"], [])
         self.assertEqual(provider.suggest("YOASOBI")["suggestions"], [])
 
-    def test_ytmusic_only_lyrics_auto_watch_lookup_and_empty_200(self) -> None:
+    def test_lrclib_only_lyrics_search_fallback_and_empty_200(self) -> None:
+        seen_urls = []
+
         class LyricsEdgeGateway(FakeYTMusicGateway):
             def get_watch_playlist(self, video_id=None, playlist_id=None, radio=True, limit=25):
                 if video_id == "noLyricsVid1":
@@ -607,36 +684,100 @@ class MusicProviderTests(unittest.TestCase):
                     }
                 return super().get_watch_playlist(video_id=video_id, playlist_id=playlist_id, radio=radio, limit=limit)
 
+        class _FakeJsonResp:
+            def __init__(self, status_code: int, payload) -> None:
+                self.status_code = status_code
+                self._payload = payload
+
+            def json(self):
+                return self._payload
+
+        def fake_lrclib_http(url: str, params=None, headers=None, timeout=8):
+            seen_urls.append(url)
+            self.assertTrue(url.startswith("https://lrclib.net/api/"))
+            params = params or {}
+            if url.endswith("/get"):
+                # Force fallback to /search when title matches "SearchFallback" or plain videoId lookup
+                if params.get("track_name") == "Hati-Hati di Jalan":
+                    return _FakeJsonResp(
+                        200,
+                        {
+                            "id": 1001,
+                            "trackName": "Hati-Hati di Jalan",
+                            "artistName": "Tulus",
+                            "duration": 242,
+                            "syncedLyrics": "[00:01.00] Hari-hari berulang\n[00:04.00] Langkah terasa tenang",
+                        },
+                    )
+                return _FakeJsonResp(404, {"message": "Not Found"})
+            if url.endswith("/search"):
+                q = f"{params.get('track_name', '')} {params.get('q', '')}".lower()
+                if "monokrom" in q:
+                    return _FakeJsonResp(
+                        200,
+                        [
+                            {
+                                "id": 2001,
+                                "trackName": "Monokrom",
+                                "artistName": "Tulus",
+                                "duration": 215,
+                                "plainLyrics": "Lembaran foto hitam putih",
+                            },
+                            {
+                                "id": 2002,
+                                "trackName": "Monokrom",
+                                "artistName": "Tulus",
+                                "duration": 216,
+                                "syncedLyrics": "[00:02.50] Lembaran foto hitam putih\n[00:06.00] Aku kembali",
+                            },
+                        ],
+                    )
+                return _FakeJsonResp(200, [])
+            return _FakeJsonResp(404, {})
+
         with tempfile.TemporaryDirectory() as tmpdir:
             orig_provider = main_app.provider
             try:
+                gw = LyricsEdgeGateway()
                 provider = MusicProvider(
-                    gateway=LyricsEdgeGateway(),  # type: ignore[arg-type]
+                    gateway=gw,  # type: ignore[arg-type]
+                    http_get_fn=fake_lrclib_http,
                     audio_settings_file=os.path.join(tmpdir, "audio_settings.json"),
                 )
                 main_app.provider = provider
                 client = TestClient(main_app.app)
 
-                # Auto-lookup by videoId via get_watch_playlist -> get_lyrics(timestamps=True)
+                # 1. Exact lookup by videoId + title/artist hits LRCLIB /api/get
                 resp = client.get("/api/lyrics?videoId=5F28ye50-Kc&title=Hati-Hati+di+Jalan&artist=Tulus")
                 self.assertEqual(resp.status_code, 200)
                 body = resp.json()
                 self.assertTrue(body["hasTimestamps"])
-                self.assertEqual(body["browseId"], "MPLYt_RVAbNZdUasD-1")
+                self.assertEqual(body["source"], "LRCLIB")
+                self.assertEqual(body["browseId"], "lrclib:1001")
                 self.assertEqual(body["lines"][0]["text"], "Hari-hari berulang")
 
-                # Auto-lookup by title/artist search -> watch -> lyrics
-                resp_title = client.get("/api/lyrics?title=Hati-Hati+di+Jalan&artist=Tulus")
-                self.assertEqual(resp_title.status_code, 200)
-                self.assertTrue(resp_title.json()["hasTimestamps"])
+                # 2. Fallback to /api/search prefers syncedLyrics over plainLyrics
+                resp_search = client.get("/api/lyrics?title=Monokrom&artist=Tulus&durationSeconds=215")
+                self.assertEqual(resp_search.status_code, 200)
+                search_body = resp_search.json()
+                self.assertTrue(search_body["hasTimestamps"])
+                self.assertEqual(search_body["browseId"], "lrclib:2002")
+                self.assertEqual(search_body["lines"][0]["startTimeMs"], 2500)
 
-                # Track without lyrics returns 200 empty object (zero 404 console spam)
+                # 3. Auto-lookup by videoId only resolves metadata then calls LRCLIB
+                resp_vid = client.get("/api/lyrics?videoId=5F28ye50-Kc")
+                self.assertEqual(resp_vid.status_code, 200)
+                self.assertTrue(resp_vid.json()["hasTimestamps"])
+
+                # 4. Track without lyrics returns 200 empty object (zero 404 console spam)
                 resp_empty = client.get("/api/lyrics?videoId=noLyricsVid1&title=Laut+Kidul&artist=Jeyma+Monica")
                 self.assertEqual(resp_empty.status_code, 200)
                 empty_body = resp_empty.json()
                 self.assertFalse(empty_body["hasTimestamps"])
                 self.assertEqual(empty_body["lines"], [])
                 self.assertIsNone(empty_body["plainText"])
+                self.assertEqual(gw.lyrics_calls, 0)
+                self.assertTrue(all(u.startswith("https://lrclib.net/api/") for u in seen_urls))
                 self.assertNotIn("i.scdn.co", ALLOWED_ARTWORK_HOSTS)
             finally:
                 main_app.provider = orig_provider
@@ -1053,6 +1194,40 @@ class MusicProviderTests(unittest.TestCase):
         quick_picks = next(sec for sec in home["sections"] if sec["title"] == "Quick picks")
         self.assertEqual(quick_picks["items"][0]["title"], "Teh Hijau")
         self.assertLessEqual(len(quick_picks["items"]), 2)
+
+    def test_mood_playlists_fallback_on_gateway_error(self) -> None:
+        class BrokenMoodGateway(FakeYTMusicGateway):
+            def get_mood_playlists(self, params: str):
+                raise KeyError("Unable to find 'navigationEndpoint'")
+
+            def search(self, query: str, filter=None, limit: int = 20):
+                if filter == "playlists":
+                    return [
+                        {
+                            "resultType": "playlist",
+                            "title": "Pop Hits Indonesia",
+                            "browseId": "VLPLpopHits123",
+                            "author": "SoundClear",
+                            "thumbnails": [{"url": "https://yt3.googleusercontent.com/pop=w544-h544-l90-rj", "width": 544, "height": 544}],
+                        }
+                    ]
+                return super().search(query, filter=filter, limit=limit)
+
+        orig_provider = main_app.provider
+        try:
+            provider = MusicProvider(gateway=BrokenMoodGateway(), sleep_fn=lambda _d: None)  # type: ignore[arg-type]
+            main_app.provider = provider
+            client = TestClient(main_app.app)
+
+            resp = client.get("/api/moods/ggMPOg1uX1BmNzc2V2p0YXJ5?title=Pop")
+            self.assertEqual(resp.status_code, 200)
+            body = resp.json()
+            self.assertEqual(body["title"], "Pop")
+            self.assertEqual(len(body["playlists"]), 1)
+            self.assertEqual(body["playlists"][0]["title"], "Pop Hits Indonesia")
+            self.assertEqual(body["playlists"][0]["id"], "PLpopHits123")
+        finally:
+            main_app.provider = orig_provider
 
 
 if __name__ == "__main__":

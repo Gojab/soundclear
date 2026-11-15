@@ -5,11 +5,11 @@ import {
   Clock,
   Heart,
   Keyboard,
+  ListMusic,
   Palette,
   Plus,
   Settings,
   Sliders,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { useLibraryStore } from '../store/libraryStore';
@@ -180,7 +180,7 @@ export function MobileProfileDrawer({
             className="flex flex-col items-center gap-1.5 w-20 text-center group"
           >
             <span className="w-13 h-13 rounded-full bg-white/[0.07] border border-white/[0.12] group-hover:border-[#19EE8A]/50 flex items-center justify-center text-[#E8FFF3] transition-colors">
-              <Sparkles className="w-5 h-5 text-[#19EE8A]" strokeWidth={1.85} />
+              <ListMusic className="w-5 h-5 text-[#19EE8A]" strokeWidth={1.85} />
             </span>
             <span className="text-xs font-medium text-[#E8FFF3]">Playlist</span>
             <span className="text-[11px] text-[#B3F7D1]/60">{playlistsCount} daftar</span>

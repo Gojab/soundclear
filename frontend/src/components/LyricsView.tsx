@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Mic2 } from 'lucide-react';
+import { Maximize2, Mic2 } from 'lucide-react';
 import { fetchLyrics } from '../api/client';
 import { usePlayerStore } from '../store/playerStore';
 import { findActiveLyricIndex, formatArtists, getPlayableVideoId } from '../utils/playerLogic';
@@ -10,6 +10,7 @@ export function LyricsView() {
   const lyricsBrowseId = usePlayerStore((s) => s.lyricsBrowseId);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const requestSeek = usePlayerStore((s) => s.requestSeek);
+  const setKaraokeOpen = usePlayerStore((s) => s.setKaraokeOpen);
 
   const activeLineRef = useRef<HTMLButtonElement | null>(null);
   const videoId = getPlayableVideoId(currentTrack);
@@ -78,6 +79,17 @@ export function LyricsView() {
   if (data?.hasTimestamps && data.lines.length > 0) {
     return (
       <div className="space-y-2 py-2">
+        <div className="flex items-center justify-between px-2 pb-1">
+          <span className="text-[11px] font-semibold text-[#B3F7D1]/60">Lirik Tersinkron</span>
+          <button
+            type="button"
+            onClick={() => setKaraokeOpen(true)}
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#19EE8A] hover:underline"
+          >
+            <Maximize2 className="w-3 h-3" strokeWidth={2} />
+            Layar Penuh
+          </button>
+        </div>
         {data.lines.map((line, idx) => {
           const isActive = idx === activeIndex;
           const isPast = activeIndex >= 0 && idx < activeIndex;
@@ -99,9 +111,9 @@ export function LyricsView() {
             </button>
           );
         })}
-        {data.source && (
-          <p className="pt-4 px-2.5 text-[11px] text-[#B3F7D1]/40">{data.source}</p>
-        )}
+        <p className="pt-4 px-2.5 text-[11px] text-[#B3F7D1]/40">
+          {data.source || 'Sumber lirik: LRCLIB'}
+        </p>
       </div>
     );
   }
@@ -109,10 +121,21 @@ export function LyricsView() {
   if (data?.plainText) {
     return (
       <div className="py-2 px-1 space-y-3">
+        <div className="flex items-center justify-between px-1 pb-1">
+          <span className="text-[11px] font-semibold text-[#B3F7D1]/60">Lirik</span>
+          <button
+            type="button"
+            onClick={() => setKaraokeOpen(true)}
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#19EE8A] hover:underline"
+          >
+            <Maximize2 className="w-3 h-3" strokeWidth={2} />
+            Layar Penuh
+          </button>
+        </div>
         <p className="text-sm text-[#E8FFF3]/85 whitespace-pre-line leading-relaxed">
           {data.plainText}
         </p>
-        {data.source && <p className="text-[11px] text-[#B3F7D1]/40">{data.source}</p>}
+        <p className="text-[11px] text-[#B3F7D1]/40">{data.source || 'Sumber lirik: LRCLIB'}</p>
       </div>
     );
   }

@@ -96,10 +96,12 @@ export function fetchMoods(signal?: AbortSignal): Promise<MoodsResponse> {
 export function fetchMoodPlaylists(
   params: string,
   signal?: AbortSignal,
+  title?: string,
 ): Promise<MoodPlaylistsResponse> {
   const clean = params.trim();
   if (!clean) return Promise.reject(new ApiError('Parameter kategori mood tidak valid.', 400));
-  return requestJson<MoodPlaylistsResponse>(`/moods/${encodeURIComponent(clean)}`, { signal });
+  const qs = title?.trim() ? `?title=${encodeURIComponent(title.trim())}` : '';
+  return requestJson<MoodPlaylistsResponse>(`/moods/${encodeURIComponent(clean)}${qs}`, { signal });
 }
 
 function buildDetailQuery(fallbackQuery?: string): string {

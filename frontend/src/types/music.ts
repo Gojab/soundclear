@@ -500,6 +500,7 @@ export interface UserSettings {
   autoplay: boolean;
   dataSaver: boolean;
   showRightPanel: boolean;
+  lyricsPreviewEnabled: boolean;
   homeSectionOrder: string[];
   youtubeSound: YouTubeSoundSettings;
   episodePlaybackRates: Record<string, number>;
@@ -523,6 +524,8 @@ export type RouteView =
   | { name: 'search'; query?: string; filter?: SearchFilter }
   | { name: 'moods' }
   | { name: 'mood-detail'; params: string; title: string }
+  | { name: 'mix'; id: string }
+  | { name: 'create-mix'; seedTrack?: MediaItem; seedGenre?: string }
   | { name: 'artist'; id: string; fallbackQuery?: string }
   | { name: 'album'; id: string; fallbackQuery?: string }
   | { name: 'playlist'; id: string; fallbackQuery?: string }

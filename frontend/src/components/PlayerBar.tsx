@@ -18,7 +18,6 @@ import {
   SkipBack,
   SkipForward,
   Sliders,
-  Sparkles,
   Volume2,
   VolumeX,
 } from 'lucide-react';
@@ -62,7 +61,6 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const volume = usePlayerStore((s) => s.volume);
   const isMuted = usePlayerStore((s) => s.isMuted);
   const shuffle = usePlayerStore((s) => s.shuffle);
-  const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const repeat = usePlayerStore((s) => s.repeat);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
   const sleepTimerMode = usePlayerStore((s) => s.sleepTimerMode);
@@ -96,7 +94,6 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   const setVolume = usePlayerStore((s) => s.setVolume);
   const toggleMute = usePlayerStore((s) => s.toggleMute);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
-  const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
@@ -268,19 +265,6 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             }`}
           >
             <Shuffle className="w-4 h-4" strokeWidth={2} />
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleSmartShuffle}
-            aria-label="Acak pintar"
-            aria-pressed={smartShuffle}
-            title="Acak Pintar (sisipkan rekomendasi radio)"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-              smartShuffle ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/55 hover:text-[#E8FFF3]'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
           </button>
 
           <button

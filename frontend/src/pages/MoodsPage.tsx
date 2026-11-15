@@ -75,8 +75,8 @@ export function MoodDetailPage({ params, title }: { params: string; title: strin
   const cleanParams = params.trim();
 
   const query = useQuery({
-    queryKey: ['mood-playlists', cleanParams],
-    queryFn: ({ signal }) => fetchMoodPlaylists(cleanParams, signal),
+    queryKey: ['mood-playlists', cleanParams, title],
+    queryFn: ({ signal }) => fetchMoodPlaylists(cleanParams, signal, title),
     enabled: Boolean(cleanParams),
   });
 

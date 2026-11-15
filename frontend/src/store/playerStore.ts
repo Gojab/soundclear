@@ -266,7 +266,8 @@ function resolvePlaybackRateForTrack(track: MediaItem | null | undefined): numbe
 }
 
 function filterHiddenAndExplicit(tracks: MediaItem[]): MediaItem[] {
-  const hidden = new Set(useLibraryStore.getState().hiddenTrackIds);
+  const libState = useLibraryStore.getState();
+  const hidden = new Set([...libState.hiddenTrackIds, ...libState.excludedTasteIds]);
   const hideExplicit = useSettingsStore.getState().hideExplicit;
   return tracks.filter((t) => {
     if (isExcludedRegionalItem(t)) return false;

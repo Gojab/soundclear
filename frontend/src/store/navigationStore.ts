@@ -27,10 +27,13 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
       route.name === 'playlist' ||
       route.name === 'podcast' ||
       route.name === 'episode' ||
-      route.name === 'local-playlist'
+      route.name === 'local-playlist' ||
+      route.name === 'mix'
     ) {
       const cleanId =
-        route.name === 'local-playlist' ? route.id.trim() || null : normalizeRouteId(route.id);
+        route.name === 'local-playlist' || route.name === 'mix'
+          ? route.id.trim() || null
+          : normalizeRouteId(route.id);
       if (!cleanId) return;
       normalizedRoute = { ...route, id: cleanId };
     } else if (route.name === 'mood-detail') {

@@ -125,6 +125,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   autoplay: true,
   dataSaver: false,
   showRightPanel: true,
+  lyricsPreviewEnabled: true,
   homeSectionOrder: DEFAULT_HOME_SECTION_ORDER,
   youtubeSound: DEFAULT_YOUTUBE_SOUND,
   episodePlaybackRates: {},

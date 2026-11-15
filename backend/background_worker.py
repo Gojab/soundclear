@@ -408,8 +408,8 @@ class SoundClearBackgroundManager:
             if not vid:
                 continue
             now_mono = time.monotonic()
-            last_hydrated = self._hydrated_watch_keys.get(vid, 0.0)
-            if now_mono - last_hydrated < 120.0:
+            last_hydrated = self._hydrated_watch_keys.get(vid)
+            if last_hydrated is not None and now_mono - last_hydrated < 120.0:
                 continue
             self._hydrated_watch_keys[vid] = now_mono
             try:
@@ -450,8 +450,8 @@ class SoundClearBackgroundManager:
                 continue
             cache_key = f"{vid}:{quality}"
             now_mono = time.monotonic()
-            last_warm = self._prewarmed_keys.get(cache_key, 0.0)
-            if now_mono - last_warm < 900.0:
+            last_warm = self._prewarmed_keys.get(cache_key)
+            if last_warm is not None and now_mono - last_warm < 900.0:
                 continue
             self._prewarmed_keys[cache_key] = now_mono
             try:

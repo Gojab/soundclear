@@ -190,13 +190,65 @@ export function mergeWatchTracksIntoQueue(
   return [...head, ...manualUpcoming, ...additions];
 }
 
+export function formatNegativeRemaining(currentTime: number, duration: number): string {
+  if (!Number.isFinite(duration) || duration <= 0) return '-0:00';
+  const safeCurrent = Number.isFinite(currentTime) && currentTime > 0 ? currentTime : 0;
+  const remaining = Math.max(0, Math.ceil(duration - safeCurrent));
+  return `-${formatTime(remaining)}`;
+}
+
 export function getEffectiveThumbnail(
   url: string | null | undefined,
   dataSaver: boolean,
 ): string | null {
   if (!url) return null;
-  if (!dataSaver || url.startsWith('data:') || url.startsWith('blob:')) return url;
-  return url.replace(/=w\d+-h\d+/, '=w120-h120');
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  if (dataSaver) {
+    return url
+      .replace(/=w\d+-h\d+[^&\s]*/, '=w120-h120-l90-rj')
+      .replace(/=s\d+([^&\s]*)/, '=s120$1');
+  }
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    const whMatch = url.match(/=w(\d+)-h(\d+)/);
+    if (whMatch) {
+      const w = Number(whMatch[1]);
+      const h = Number(whMatch[2]);
+      if (w < 544 || h < 544) {
+        return url.replace(/=w\d+-h\d+[^&\s]*/, '=w544-h544-l90-rj');
+      }
+      return url;
+    }
+    const sMatch = url.match(/=s(\d+)/);
+    if (sMatch && Number(sMatch[1]) < 544) {
+      return url.replace(/=s\d+/, '=s544');
+    }
+  }
+  if (url.includes('ytimg.com') && !url.includes('?')) {
+    if (url.endsWith('/default.jpg') || url.endsWith('/0.jpg')) {
+      return url.replace(/\/(?:default|0)\.jpg$/, '/hqdefault.jpg');
+    }
+  }
+  return url;
+}
+
+export function isMissingYouTubeThumbnail(
+  url: string | null | undefined,
+  naturalWidth: number,
+  naturalHeight: number,
+): boolean {
+  if (!url || !url.includes('ytimg.com')) return false;
+  return naturalWidth === 120 && naturalHeight === 90;
+}
+
+export function shouldCropYouTubeLetterbox(
+  url: string | null | undefined,
+  naturalWidth: number,
+  naturalHeight: number,
+): boolean {
+  if (!url || !url.includes('ytimg.com')) return false;
+  if (naturalWidth <= 0 || naturalHeight <= 0) return false;
+  const ratio = naturalWidth / naturalHeight;
+  return Math.abs(ratio - 4 / 3) < 0.08;
 }
 
 export function findDuplicateTrackIndices(tracks: MediaItem[]): Set<number> {
