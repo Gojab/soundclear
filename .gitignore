@@ -17,3 +17,8 @@ ytmusic_auth*.json
 .ytmusic_auth*
 backend/.audio_settings.json
 *.audio_settings.json
+mobile-android/.gradle/
+mobile-android/build/
+mobile-android/app/build/
+mobile-android/local.properties
+
