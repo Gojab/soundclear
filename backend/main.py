@@ -12,6 +12,11 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.copyright_guard import (
+    COPYRIGHT_OWNER,
+    CopyrightGuard,
+    CopyrightGuardError,
+)
 from backend.music_provider import (
     MusicProvider,
     MusicProviderError,
@@ -22,6 +27,7 @@ from backend.music_provider import (
 load_dotenv()
 
 provider = MusicProvider(country="ID")
+copyright_guard = CopyrightGuard()
 
 
 @asynccontextmanager
@@ -60,14 +66,119 @@ class AudioSettingsBody(BaseModel):
     settings: Dict[str, Any]
 
 
+class CopyrightVerifyBody(BaseModel):
+    password: str = ""
+
+
+class CopyrightUpdateBody(BaseModel):
+    password: Optional[str] = None
+    customNote: Optional[str] = None
+    notice: Optional[str] = None
+
+
+def _extract_copyright_token(request: Request) -> Optional[str]:
+    header_token = request.headers.get("x-copyright-token")
+    if header_token:
+        return header_token.strip()
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return None
+
+
+@app.middleware("http")
+async def enforce_copyright_guard_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/"):
+        exempt = path in ("/api/health", "/api/copyright", "/api/copyright/verify")
+        integrity = copyright_guard.verify_integrity()
+        if not integrity["valid"] and not exempt:
+            return JSONResponse(
+                status_code=451,
+                content={
+                    "detail": (
+                        f"Pelanggaran Aturan Hak Cipta {COPYRIGHT_OWNER}: "
+                        f"{integrity.get('reason') or 'Atribut hak cipta telah dihapus atau dimodifikasi.'}"
+                    ),
+                    "code": "ZHAFX_COPYRIGHT_VIOLATION",
+                    "owner": COPYRIGHT_OWNER,
+                },
+                headers={
+                    "X-Copyright-Owner": COPYRIGHT_OWNER,
+                    "X-Copyright-Protected": "true",
+                },
+            )
+    response = await call_next(request)
+    response.headers["X-Copyright-Owner"] = COPYRIGHT_OWNER
+    response.headers["X-Copyright-Protected"] = "true"
+    return response
+
+
 @app.exception_handler(MusicProviderError)
 async def music_provider_error_handler(_request: Request, exc: MusicProviderError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
 
 
+@app.exception_handler(CopyrightGuardError)
+async def copyright_guard_error_handler(_request: Request, exc: CopyrightGuardError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.message, "code": exc.code, "owner": COPYRIGHT_OWNER},
+    )
+
+
 @app.get("/api/health")
-def health() -> Dict[str, str]:
-    return {"status": "ok", "service": "soundclear", "provider": "soundclear-cloud"}
+def health() -> Dict[str, Any]:
+    integrity = copyright_guard.verify_integrity()
+    return {
+        "status": "ok" if integrity["valid"] else "copyright_violation",
+        "service": "soundclear",
+        "provider": "soundclear-cloud",
+        "copyrightOwner": COPYRIGHT_OWNER,
+        "copyrightProtected": True,
+        "copyrightValid": integrity["valid"],
+    }
+
+
+@app.get("/api/copyright")
+def get_copyright() -> Dict[str, Any]:
+    return copyright_guard.get_info()
+
+
+@app.post("/api/copyright/verify")
+def verify_copyright_password_endpoint(body: CopyrightVerifyBody) -> Dict[str, Any]:
+    if not copyright_guard.verify_password(body.password):
+        raise CopyrightGuardError(
+            403,
+            "Kata sandi otorisasi hak cipta zhafx.corp salah.",
+            code="ZHAFX_INVALID_PASSWORD",
+        )
+    issued = copyright_guard.issue_token()
+    return {
+        "authorized": True,
+        "owner": COPYRIGHT_OWNER,
+        "message": "Otorisasi pengelola zhafx.corp berhasil diverifikasi.",
+        **issued,
+    }
+
+
+@app.put("/api/copyright")
+def update_copyright(body: CopyrightUpdateBody, request: Request) -> Dict[str, Any]:
+    password = body.password or request.headers.get("x-copyright-password")
+    token = _extract_copyright_token(request)
+    return copyright_guard.update_info(
+        password=password,
+        token=token,
+        custom_note=body.customNote,
+        notice=body.notice,
+    )
+
+
+@app.delete("/api/copyright")
+def delete_copyright(request: Request) -> Dict[str, Any]:
+    password = request.headers.get("x-copyright-password") or request.query_params.get("password")
+    token = _extract_copyright_token(request)
+    return copyright_guard.attempt_delete(password=password, token=token)
 
 
 @app.get("/api/search")

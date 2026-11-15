@@ -274,9 +274,90 @@ function waitUntilPythonReady(res: Response, timeoutMs = 25000): Promise<boolean
   });
 }
 
+const EXPECTED_COPYRIGHT_OWNER = 'zhafx.corp';
+const EXPECTED_RULES_DIGEST =
+  '921e2c2bee2e70d81fcbc8432b8cf41fced7a04d1152c02ae220371ad817e8cd';
+
+function verifyNodeCopyrightIntegrity(): { valid: boolean; reason?: string } {
+  const guardFile = path.join(__dirname, 'backend', 'copyright_guard.py');
+  if (!fs.existsSync(guardFile)) {
+    return {
+      valid: false,
+      reason: 'Berkas backend/copyright_guard.py tidak ditemukan.',
+    };
+  }
+  try {
+    const guardSrc = fs.readFileSync(guardFile, 'utf8');
+    if (
+      !guardSrc.includes(EXPECTED_COPYRIGHT_OWNER) ||
+      !guardSrc.includes(EXPECTED_RULES_DIGEST)
+    ) {
+      return {
+        valid: false,
+        reason: 'Aturan hak cipta zhafx.corp di backend/copyright_guard.py telah dimodifikasi.',
+      };
+    }
+  } catch {
+    return { valid: false, reason: 'Gagal membaca backend/copyright_guard.py.' };
+  }
+
+  const footerFile = path.join(__dirname, 'frontend', 'src', 'components', 'Footer.tsx');
+  if (fs.existsSync(footerFile)) {
+    try {
+      const footerSrc = fs.readFileSync(footerFile, 'utf8');
+      if (
+        !footerSrc.includes(EXPECTED_COPYRIGHT_OWNER) ||
+        !footerSrc.includes('© 2026 zhafx.corp')
+      ) {
+        return {
+          valid: false,
+          reason: 'Atribusi hak cipta © 2026 zhafx.corp dihapus dari Footer.tsx.',
+        };
+      }
+    } catch {
+      return { valid: false, reason: 'Gagal memeriksa Footer.tsx.' };
+    }
+  }
+
+  const appFile = path.join(__dirname, 'frontend', 'src', 'App.tsx');
+  if (fs.existsSync(appFile)) {
+    try {
+      const appSrc = fs.readFileSync(appFile, 'utf8');
+      if (!appSrc.includes('<Footer')) {
+        return {
+          valid: false,
+          reason: 'Komponen <Footer /> dihapus dari App.tsx.',
+        };
+      }
+    } catch {
+      return { valid: false, reason: 'Gagal memeriksa App.tsx.' };
+    }
+  }
+
+  return { valid: true };
+}
+
 function proxyApiToPython(req: Request, res: Response): void {
   const targetPath = req.originalUrl;
   const pathname = targetPath.split('?')[0];
+
+  res.setHeader('X-Copyright-Owner', EXPECTED_COPYRIGHT_OWNER);
+  res.setHeader('X-Copyright-Protected', 'true');
+
+  const integrity = verifyNodeCopyrightIntegrity();
+  if (
+    !integrity.valid &&
+    pathname !== '/api/health' &&
+    pathname !== '/api/copyright' &&
+    pathname !== '/api/copyright/verify'
+  ) {
+    res.status(451).json({
+      detail: `Pelanggaran Aturan Hak Cipta ${EXPECTED_COPYRIGHT_OWNER}: ${integrity.reason || 'Atribut hak cipta dihapus atau diubah.'}`,
+      code: 'ZHAFX_COPYRIGHT_VIOLATION',
+      owner: EXPECTED_COPYRIGHT_OWNER,
+    });
+    return;
+  }
 
   if (!pythonReady) {
     if (pathname === '/api/health') {
@@ -285,6 +366,9 @@ function proxyApiToPython(req: Request, res: Response): void {
         service: 'soundclear',
         provider: 'soundclear-cloud',
         ready: false,
+        copyrightOwner: EXPECTED_COPYRIGHT_OWNER,
+        copyrightProtected: true,
+        copyrightValid: integrity.valid,
         ...(pythonInitError ? { error: pythonInitError } : {}),
       });
       return;
