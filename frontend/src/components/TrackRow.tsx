@@ -103,11 +103,11 @@ export function TrackRow({
       onContextMenu={handleContextMenu}
       className={`track-row group flex items-center gap-3 px-3 ${
         compact ? 'py-1.5' : 'py-2'
-      } rounded-xl ${isCurrent ? 'bg-white/[0.08]' : ''} ${isHidden ? 'opacity-45' : ''}`}
+      } rounded-xl ${isCurrent ? 'bg-white/[0.09] border border-[#19EE8A]/20' : ''} ${isHidden ? 'opacity-45' : ''}`}
     >
       {draggable && (
         <span
-          className="text-white/30 group-hover:text-white/60 cursor-grab active:cursor-grabbing shrink-0"
+          className="text-[#B3F7D1]/35 group-hover:text-[#B3F7D1]/65 cursor-grab active:cursor-grabbing shrink-0"
           aria-hidden="true"
         >
           <GripVertical className="w-4 h-4" strokeWidth={1.75} />
@@ -118,7 +118,7 @@ export function TrackRow({
         <div className="w-6 text-center shrink-0">
           <span
             className={`text-xs tabular-nums group-hover:hidden ${
-              isCurrent ? 'text-[#2EE6A6] font-semibold' : 'text-white/45'
+              isCurrent ? 'text-[#19EE8A] font-semibold' : 'text-[#B3F7D1]/50'
             }`}
           >
             {index + 1}
@@ -128,7 +128,7 @@ export function TrackRow({
             onClick={handlePrimaryClick}
             tabIndex={-1}
             aria-hidden="true"
-            className="hidden group-hover:inline-flex items-center justify-center w-6 h-6 text-white hover:text-[#2EE6A6]"
+            className="hidden group-hover:inline-flex items-center justify-center w-6 h-6 text-[#E8FFF3] hover:text-[#19EE8A]"
           >
             {isCurrent && isPlaying ? (
               <Pause className="w-3.5 h-3.5 fill-current" strokeWidth={1.75} />
@@ -144,7 +144,7 @@ export function TrackRow({
           type="button"
           onClick={handlePrimaryClick}
           aria-label={`${isCurrent && isPlaying ? 'Jeda' : 'Putar'} ${track.title}`}
-          className="relative w-11 h-11 shrink-0 rounded-lg overflow-hidden focus-visible:outline-2 focus-visible:outline-[#2EE6A6]"
+          className="relative w-11 h-11 shrink-0 rounded-lg overflow-hidden focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
         >
           <ArtworkImage
             src={track.thumbnail}
@@ -154,14 +154,14 @@ export function TrackRow({
             roundedClass="rounded-lg"
           />
           <span
-            className={`absolute inset-0 flex items-center justify-center bg-black/50 transition-opacity duration-120 ${
+            className={`absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-xs transition-opacity duration-120 ${
               isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
             }`}
           >
             {isCurrent && isPlaying ? (
-              <Pause className="w-4 h-4 text-[#2EE6A6] fill-[#2EE6A6]" strokeWidth={1.75} />
+              <Pause className="w-4 h-4 text-[#19EE8A] fill-[#19EE8A]" strokeWidth={1.75} />
             ) : (
-              <Play className="w-4 h-4 text-white fill-white" strokeWidth={1.75} />
+              <Play className="w-4 h-4 text-[#E8FFF3] fill-[#E8FFF3]" strokeWidth={1.75} />
             )}
           </span>
         </button>
@@ -173,18 +173,18 @@ export function TrackRow({
             type="button"
             onClick={handlePrimaryClick}
             className={`block text-left text-sm font-medium truncate transition-colors ${
-              isCurrent ? 'text-[#2EE6A6]' : 'text-white hover:text-white'
+              isCurrent ? 'text-[#19EE8A]' : 'text-[#E8FFF3] hover:text-[#E8FFF3]'
             }`}
           >
             {track.title}
           </button>
           {track.isExplicit && (
-            <span className="text-[10px] font-semibold text-white/45 shrink-0" title="Konten eksplisit">
+            <span className="text-[10px] font-semibold text-[#B3F7D1]/50 shrink-0" title="Konten eksplisit">
               E
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-white/55 truncate mt-0.5">
+        <div className="flex items-center gap-1.5 text-xs text-[#B3F7D1]/65 truncate mt-0.5">
           {track.artists && track.artists.length > 0 ? (
             track.artists.map((artist, idx) => (
               <span key={`${artist.name}-${idx}`} className="inline-flex items-center gap-1 truncate">
@@ -196,7 +196,7 @@ export function TrackRow({
                       e.stopPropagation();
                       navigate({ name: 'artist', id: artist.id!, fallbackQuery: artist.name });
                     }}
-                    className="hover:text-white hover:underline truncate"
+                    className="hover:text-[#E8FFF3] hover:underline truncate"
                   >
                     {artist.name}
                   </button>
@@ -219,12 +219,12 @@ export function TrackRow({
               onClick={() =>
                 navigate({ name: 'album', id: track.album!.id!, fallbackQuery: track.album!.name })
               }
-              className="text-xs text-white/50 hover:text-white hover:underline truncate block max-w-full text-left"
+              className="text-xs text-[#B3F7D1]/60 hover:text-[#E8FFF3] hover:underline truncate block max-w-full text-left"
             >
               {track.album.name}
             </button>
           ) : (
-            <span className="text-xs text-white/45 truncate block">{track.album.name}</span>
+            <span className="text-xs text-[#B3F7D1]/50 truncate block">{track.album.name}</span>
           )}
         </div>
       )}
@@ -254,8 +254,8 @@ export function TrackRow({
           title={isOffline ? 'Tersimpan offline' : 'Unduh offline'}
           className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
             isOffline
-              ? 'text-[#2EE6A6]'
-              : 'text-white/40 md:hidden md:group-hover:flex hover:text-white hover:bg-white/[0.08]'
+              ? 'text-[#19EE8A]'
+              : 'text-[#B3F7D1]/45 md:hidden md:group-hover:flex hover:text-[#E8FFF3] hover:bg-white/[0.1]'
           }`}
         >
           {isOffline ? (
@@ -271,11 +271,11 @@ export function TrackRow({
           aria-label={liked ? `Hapus ${track.title} dari lagu disukai` : `Sukai ${track.title}`}
           className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
             liked
-              ? 'text-[#2EE6A6]'
-              : 'text-white/40 md:hidden md:group-hover:flex hover:text-white'
+              ? 'text-[#19EE8A]'
+              : 'text-[#B3F7D1]/45 md:hidden md:group-hover:flex hover:text-[#E8FFF3]'
           }`}
         >
-          <Heart className={`w-4 h-4 ${liked ? 'fill-[#2EE6A6]' : ''}`} strokeWidth={1.75} />
+          <Heart className={`w-4 h-4 ${liked ? 'fill-[#19EE8A]' : ''}`} strokeWidth={1.75} />
         </button>
 
         <button
@@ -290,7 +290,7 @@ export function TrackRow({
           }}
           aria-label={`Tambahkan ${track.title} ke antrean`}
           title="Tambahkan ke antrean"
-          className="hidden sm:group-hover:flex w-8 h-8 rounded-lg items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] transition-colors"
+          className="hidden sm:group-hover:flex w-8 h-8 rounded-lg items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
         >
           <ListEnd className="w-4 h-4" strokeWidth={1.75} />
         </button>
@@ -301,7 +301,7 @@ export function TrackRow({
             onClick={() => onAddToPlaylist(track)}
             aria-label={`Simpan ${track.title} ke playlist`}
             title="Simpan ke playlist"
-            className="hidden sm:group-hover:flex w-8 h-8 rounded-lg items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="hidden sm:group-hover:flex w-8 h-8 rounded-lg items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
           >
             <ListPlus className="w-4 h-4" strokeWidth={1.75} />
           </button>
@@ -313,7 +313,7 @@ export function TrackRow({
             onClick={onRemove}
             aria-label={`Hapus ${track.title} dari daftar`}
             title="Hapus"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-red-400 hover:bg-white/[0.08] transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-red-400 hover:bg-white/[0.1] transition-colors"
           >
             <Trash2 className="w-4 h-4" strokeWidth={1.75} />
           </button>
@@ -330,12 +330,12 @@ export function TrackRow({
           }}
           aria-label={`Opsi lainnya untuk ${track.title}`}
           title="Opsi lainnya"
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.08] transition-colors"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
         >
           <MoreHorizontal className="w-4 h-4" strokeWidth={1.75} />
         </button>
 
-        <span className="w-10 text-right text-xs text-white/50 tabular-nums">
+        <span className="w-10 text-right text-xs text-[#B3F7D1]/55 tabular-nums">
           {track.duration || '—'}
         </span>
       </div>

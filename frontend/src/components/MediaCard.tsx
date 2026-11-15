@@ -83,14 +83,14 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
           openMenu(e.clientX, e.clientY, item, { onAddToPlaylist });
         }
       }}
-      className="group rounded-lg p-3 flex flex-col bg-transparent hover:bg-white/[0.08] transition-colors duration-150"
+      className="group rounded-xl p-3 flex flex-col bg-white/[0.035] backdrop-blur-md border border-white/[0.07] hover:bg-white/[0.085] hover:border-white/[0.14] transition-all duration-150"
     >
       <div className="relative aspect-square w-full mb-2.5 overflow-hidden rounded-md shadow-md shadow-black/40">
         <button
           type="button"
           onClick={handleCardClick}
           aria-label={`Buka ${item.title}`}
-          className="block w-full h-full focus-visible:outline-2 focus-visible:outline-[#2EE6A6]"
+          className="block w-full h-full focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
         >
           <ArtworkImage
             src={item.thumbnail}
@@ -107,7 +107,7 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
             disabled={resolvingPlay}
             onClick={(e) => void handlePlayButtonClick(e)}
             aria-label={`Putar ${item.title}`}
-            className={`absolute bottom-2 right-2 z-10 w-11 h-11 rounded-full bg-[#2EE6A6] text-[#06130E] shadow-lg shadow-black/50 flex items-center justify-center transition-all duration-150 hover:scale-105 focus-visible:opacity-100 ${
+            className={`absolute bottom-2 right-2 z-10 w-11 h-11 rounded-full bg-sc-gradient text-[#0F1F17] shadow-lg shadow-black/50 flex items-center justify-center transition-all duration-150 hover:scale-105 hover:brightness-105 focus-visible:opacity-100 ${
               resolvingPlay
                 ? 'opacity-100 translate-y-0'
                 : 'opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0'
@@ -125,11 +125,11 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
       <button
         type="button"
         onClick={handleCardClick}
-        className="text-left text-sm font-semibold text-white truncate hover:underline"
+        className="text-left text-sm font-semibold text-[#E8FFF3] truncate hover:underline"
       >
         {item.title}
       </button>
-      <p className="text-xs text-white/60 truncate mt-1 leading-snug">{resolvedSubtitle}</p>
+      <p className="text-xs text-[#B3F7D1]/65 truncate mt-1 leading-snug">{resolvedSubtitle}</p>
     </div>
   );
 }

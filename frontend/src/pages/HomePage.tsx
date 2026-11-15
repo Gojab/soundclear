@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { ChevronRight, Headphones, Heart, ListMusic, Play, Upload } from 'lucide-react';
 import {
@@ -7,6 +7,7 @@ import {
   fetchHome,
   fetchMoods,
   fetchSearch,
+  fetchStreamAudioMeta,
   fetchWatchPlaylist,
 } from '../api/client';
 import { ArtworkImage } from '../components/ArtworkImage';
@@ -18,14 +19,17 @@ import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { HomeSectionId, MediaItem } from '../types/music';
+import { resolveTargetStreamQuality } from '../utils/audioMath';
 import {
   diversifyIndonesianTracks,
   filterHomeMediaItems,
+  formatArtists,
   getPlayableVideoId,
   isExcludedRegionalItem,
   isExcludedRegionalText,
 } from '../utils/playerLogic';
 import { getGreetingByHour } from '../utils/recapLogic';
+import { prefetchStreamProbe } from '../utils/streamProbeCache';
 
 interface HomePageProps {
   onAddToPlaylist: (track: MediaItem) => void;
@@ -58,6 +62,13 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
   const hiddenTrackIds = useLibraryStore((s) => s.hiddenTrackIds);
   const hideExplicit = useSettingsStore((s) => s.hideExplicit);
   const homeSectionOrder = useSettingsStore((s) => s.homeSectionOrder);
+  const localProfile = useSettingsStore((s) => s.localProfile);
+  const dataSaver = useSettingsStore((s) => s.dataSaver);
+  const streamQuality = resolveTargetStreamQuality(
+    localProfile,
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+    dataSaver,
+  );
 
   const navigate = useNavigationStore((s) => s.navigate);
 
@@ -220,6 +231,35 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
     [moodsQuery.data],
   );
 
+  // Zero-delay playback: pre-warm stream metadata probe cache for top visible home tracks
+  useEffect(() => {
+    const candidates = [
+      ...continueTracks.slice(0, 3),
+      ...dailyMixTracks.slice(0, 4),
+      ...chartSongs.slice(0, 5),
+    ];
+    const seen = new Set<string>();
+    let queued = 0;
+    for (const item of candidates) {
+      if (item.type === 'local' || item.localFileId) continue;
+      const vid = getPlayableVideoId(item);
+      if (!vid || seen.has(vid)) continue;
+      seen.add(vid);
+      prefetchStreamProbe(
+        vid,
+        {
+          title: item.title,
+          artist: formatArtists(item.artists),
+          durationSeconds: item.durationSeconds,
+          quality: streamQuality || 'high',
+        },
+        (id, meta) => fetchStreamAudioMeta(id, meta),
+      );
+      queued += 1;
+      if (queued >= 6) break;
+    }
+  }, [continueTracks, dailyMixTracks, chartSongs, streamQuality]);
+
   // Build 8 Windows Quick-Access Tiles (2 cols x 4 rows)
   const quickTiles = useMemo<QuickTile[]>(() => {
     const tiles: QuickTile[] = [];
@@ -305,13 +345,13 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
         return (
           <section key="continue" aria-labelledby="continue-heading" className="space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <h2 id="continue-heading" className="text-xl font-bold text-white tracking-tight">
+              <h2 id="continue-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
                 Lanjutkan
               </h2>
               <button
                 type="button"
                 onClick={() => playTrackList(continueTracks, 0, 'Lanjutkan')}
-                className="text-xs font-semibold text-white/65 hover:text-white hover:underline whitespace-nowrap"
+                className="text-xs font-semibold text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline whitespace-nowrap"
               >
                 Putar semua
               </button>
@@ -335,11 +375,11 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
               <div>
                 <h2
                   id="daily-mix-heading"
-                  className="text-xl font-bold text-white tracking-tight"
+                  className="text-xl font-bold text-[#E8FFF3] tracking-tight"
                 >
                   {greeting} · {moodLabel}
                 </h2>
-                <p className="text-xs text-white/55 mt-0.5">
+                <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
                   {hasPersonalSeed
                     ? 'Mix hari ini disesuaikan dengan riwayat dengar Anda'
                     : 'Mix lagu Indonesia lintas genre yang sedang trending hari ini'}
@@ -349,7 +389,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 <button
                   type="button"
                   onClick={() => playTrackList(dailyMixTracks, 0, 'Mix Hari Ini')}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all whitespace-nowrap shrink-0"
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all whitespace-nowrap shrink-0"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
                   Putar Mix
@@ -381,17 +421,17 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
           <section key="frequent" aria-labelledby="frequent-heading" className="space-y-3">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 id="frequent-heading" className="text-xl font-bold text-white tracking-tight">
+                <h2 id="frequent-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
                   Sering Diputar & Putar Ulang
                 </h2>
-                <p className="text-xs text-white/55 mt-0.5">
+                <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
                   Lagu yang paling sering Anda putar ulang
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => playTrackList(frequentTracks, 0, 'Putar Ulang')}
-                className="text-xs font-semibold text-white/65 hover:text-white hover:underline whitespace-nowrap"
+                className="text-xs font-semibold text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline whitespace-nowrap"
               >
                 Putar semua
               </button>
@@ -415,7 +455,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
         if (artistNewReleases.length === 0) return null;
         return (
           <section key="artist_releases" aria-labelledby="releases-heading" className="space-y-3">
-            <h2 id="releases-heading" className="text-xl font-bold text-white tracking-tight">
+            <h2 id="releases-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
               Rilisan Baru Artis yang Diikuti
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
@@ -430,7 +470,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
         if (mixSeedTracks.length === 0) return null;
         return (
           <section key="for_you_mix" aria-labelledby="foryou-heading" className="space-y-3">
-            <h2 id="foryou-heading" className="text-xl font-bold text-white tracking-tight">
+            <h2 id="foryou-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
               Mix Untukmu
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -441,12 +481,12 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 return (
                   <div
                     key={seed.videoId}
-                    className="rounded-lg bg-white/[0.05] hover:bg-white/[0.08] p-4 flex flex-col justify-between gap-3 transition-colors"
+                    className="rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.095] border border-white/[0.11] p-4 flex flex-col justify-between gap-3 transition-colors"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-white truncate">{seed.label}</p>
-                        <p className="text-xs text-white/55 truncate mt-0.5">
+                        <p className="text-sm font-bold text-[#E8FFF3] truncate">{seed.label}</p>
+                        <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5">
                           {tracks.length > 0
                             ? tracks
                                 .slice(0, 3)
@@ -460,7 +500,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                           type="button"
                           onClick={() => playTrackList(tracks, 0, seed.label)}
                           aria-label={`Putar ${seed.label}`}
-                          className="w-10 h-10 rounded-full bg-[#2EE6A6] text-[#06130E] flex items-center justify-center shrink-0 hover:brightness-105"
+                          className="w-10 h-10 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center shrink-0 hover:brightness-105"
                         >
                           <Play className="w-4 h-4 fill-current ml-0.5" strokeWidth={2} />
                         </button>
@@ -473,9 +513,9 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                             key={t.id}
                             type="button"
                             onClick={() => playTrackList(tracks, tIdx, seed.label)}
-                            className="w-full text-left text-xs text-white/75 hover:text-white truncate py-0.5"
+                            className="w-full text-left text-xs text-[#B3F7D1]/75 hover:text-[#E8FFF3] truncate py-0.5"
                           >
-                            <span className="text-white/40 font-mono-num mr-2">{tIdx + 1}.</span>
+                            <span className="text-[#B3F7D1]/45 font-mono-num mr-2">{tIdx + 1}.</span>
                             {t.title}
                           </button>
                         ))}
@@ -493,10 +533,10 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
           <section key="charts" aria-labelledby="charts-heading" className="space-y-4">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 id="charts-heading" className="text-xl font-bold text-white tracking-tight">
+                <h2 id="charts-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
                   Tangga Lagu Indonesia
                 </h2>
-                <p className="text-xs text-white/55 mt-0.5">
+                <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
                   Lagu dan artis terpopuler di Indonesia saat ini
                 </p>
               </div>
@@ -504,7 +544,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 <button
                   type="button"
                   onClick={() => playTrackList(chartSongs, 0, 'Tangga Lagu Indonesia')}
-                  className="text-xs font-semibold text-white/65 hover:text-white hover:underline whitespace-nowrap shrink-0"
+                  className="text-xs font-semibold text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline whitespace-nowrap shrink-0"
                 >
                   Tampilkan semua
                 </button>
@@ -541,7 +581,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
 
                 {chartPlaylists.length > 0 && (
                   <div className="space-y-3">
-                    <h3 className="text-lg font-bold text-white">Daftar Putar Tangga Lagu</h3>
+                    <h3 className="text-lg font-bold text-[#E8FFF3]">Daftar Putar Tangga Lagu</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                       {chartPlaylists.map((item) => (
                         <MediaCard key={item.id} item={item} subtitle="Tangga Lagu" />
@@ -552,7 +592,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
 
                 {chartArtists.length > 0 && (
                   <div className="space-y-3">
-                    <h3 className="text-lg font-bold text-white">Artis Teratas Indonesia</h3>
+                    <h3 className="text-lg font-bold text-[#E8FFF3]">Artis Teratas Indonesia</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                       {chartArtists.slice(0, 10).map((artist) => (
                         <MediaCard
@@ -574,7 +614,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
           <section key="home_feed" aria-label="Rekomendasi Beranda" className="space-y-7">
             {homeQuery.isLoading ? (
               <div className="space-y-4">
-                <div className="h-6 w-48 rounded bg-white/[0.08] animate-pulse" />
+                <div className="h-6 w-48 rounded bg-white/[0.07] animate-pulse" />
                 <CardGridSkeleton count={5} />
               </div>
             ) : homeQuery.isError ? (
@@ -599,14 +639,14 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 return (
                   <div key={section.title} className="space-y-3">
                     <div className="flex items-center justify-between gap-4">
-                      <h2 className="text-xl font-bold text-white tracking-tight">
+                      <h2 className="text-xl font-bold text-[#E8FFF3] tracking-tight">
                         {section.title}
                       </h2>
                       {mostlyPlayable && playableItems.length > 0 && (
                         <button
                           type="button"
                           onClick={() => playTrackList(playableItems, 0, section.title)}
-                          className="text-xs font-semibold text-white/65 hover:text-white hover:underline whitespace-nowrap"
+                          className="text-xs font-semibold text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline whitespace-nowrap"
                         >
                           Putar semua
                         </button>
@@ -655,13 +695,13 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
         return (
           <section key="moods" aria-labelledby="home-moods-heading" className="space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <h2 id="home-moods-heading" className="text-xl font-bold text-white tracking-tight">
+              <h2 id="home-moods-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
                 Mood & Genre
               </h2>
               <button
                 type="button"
                 onClick={() => navigate({ name: 'moods' })}
-                className="text-xs font-semibold text-white/65 hover:text-white hover:underline"
+                className="text-xs font-semibold text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline"
               >
                 Tampilkan semua
               </button>
@@ -674,13 +714,13 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                   onClick={() =>
                     navigate({ name: 'mood-detail', params: cat.params, title: cat.title })
                   }
-                  className="rounded-lg bg-white/[0.06] hover:bg-white/[0.12] px-3.5 py-3 flex items-center justify-between gap-2 text-left group transition-colors"
+                  className="rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] px-3.5 py-3 flex items-center justify-between gap-2 text-left group transition-colors"
                 >
-                  <span className="text-xs sm:text-sm font-semibold text-white truncate">
+                  <span className="text-xs sm:text-sm font-semibold text-[#E8FFF3] truncate">
                     {cat.title}
                   </span>
                   <ChevronRight
-                    className="w-4 h-4 text-white/40 group-hover:text-[#2EE6A6] shrink-0"
+                    className="w-4 h-4 text-[#B3F7D1]/45 group-hover:text-[#19EE8A] shrink-0"
                     strokeWidth={1.9}
                   />
                 </button>
@@ -714,8 +754,8 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
               onClick={() => setCategoryTab(tab.id)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
                 active
-                  ? 'bg-white text-black'
-                  : 'bg-white/[0.09] text-white/90 hover:bg-white/[0.15]'
+                  ? 'bg-[#E8FFF3] text-[#0F1F17]'
+                  : 'bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] text-[#B3F7D1]/85 hover:bg-white/[0.11] hover:text-[#E8FFF3]'
               }`}
             >
               {tab.label}
@@ -729,7 +769,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
         <div className="space-y-6">
           {savedPodcasts.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-xl font-bold text-white tracking-tight">Podcast Tersimpan</h2>
+              <h2 className="text-xl font-bold text-[#E8FFF3] tracking-tight">Podcast Tersimpan</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                 {savedPodcasts.map((entry) => (
                   <MediaCard key={entry.id} item={entry.item} subtitle="Podcast" />
@@ -740,7 +780,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
 
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-xl font-bold text-white tracking-tight">
+              <h2 className="text-xl font-bold text-[#E8FFF3] tracking-tight">
                 Podcast Populer Indonesia
               </h2>
               <button
@@ -748,7 +788,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 onClick={() =>
                   navigate({ name: 'search', query: 'podcast indonesia', filter: 'podcasts' })
                 }
-                className="text-xs font-semibold text-white/65 hover:text-white hover:underline"
+                className="text-xs font-semibold text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline"
               >
                 Tampilkan semua
               </button>
@@ -762,7 +802,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-white/55">Belum ada rekomendasi podcast.</p>
+              <p className="text-sm text-[#B3F7D1]/60">Belum ada rekomendasi podcast.</p>
             )}
           </section>
         </div>
@@ -770,15 +810,15 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-white tracking-tight">Pustaka Audio Lokal</h2>
-              <p className="text-xs text-white/55 mt-0.5">
+              <h2 className="text-xl font-bold text-[#E8FFF3] tracking-tight">Pustaka Audio Lokal</h2>
+              <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
                 File audio offline dengan Equalizer 10-band dan Normalisasi LUFS
               </p>
             </div>
             <button
               type="button"
               onClick={() => navigate({ name: 'library' })}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
             >
               <Upload className="w-3.5 h-3.5" strokeWidth={2} />
               Kelola & Impor Audio
@@ -797,16 +837,16 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl bg-white/[0.05] p-6 text-center space-y-2.5">
-              <Headphones className="w-8 h-8 text-[#2EE6A6] mx-auto" strokeWidth={1.75} />
-              <p className="text-sm font-semibold text-white">Belum ada file audio lokal</p>
-              <p className="text-xs text-white/55 max-w-md mx-auto">
+            <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-6 text-center space-y-2.5">
+              <Headphones className="w-8 h-8 text-[#19EE8A] mx-auto" strokeWidth={1.75} />
+              <p className="text-sm font-semibold text-[#E8FFF3]">Belum ada file audio lokal</p>
+              <p className="text-xs text-[#B3F7D1]/60 max-w-md mx-auto">
                 Impor MP3, WAV, FLAC, atau M4A dari perangkat Windows Anda untuk diputar dengan EQ 10-band.
               </p>
               <button
                 type="button"
                 onClick={() => navigate({ name: 'library' })}
-                className="px-4 py-2 rounded-full bg-white text-black text-xs font-semibold"
+                className="px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
               >
                 Buka Koleksi Lokal
               </button>
@@ -821,16 +861,16 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
               {quickTiles.map((tile) => (
                 <div
                   key={tile.id}
-                  className="group relative flex items-center gap-2 sm:gap-3 h-12 sm:h-14 rounded-md overflow-hidden bg-white/[0.07] hover:bg-white/[0.15] transition-colors pr-2 sm:pr-2.5"
+                  className="group relative flex items-center gap-2 sm:gap-3 h-12 sm:h-14 rounded-lg overflow-hidden bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.1] transition-colors pr-2 sm:pr-2.5"
                 >
                   <button
                     type="button"
                     onClick={tile.onOpen}
-                    className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 h-full text-left focus-visible:outline-2 focus-visible:outline-[#2EE6A6]"
+                    className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 h-full text-left focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
                   >
                     {tile.isLikedTile ? (
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-[#19A974] via-[#2EE6A6] to-[#7FF5CB] flex items-center justify-center shrink-0">
-                        <Heart className="w-4 h-4 sm:w-5 sm:h-5 fill-[#06130E] text-[#06130E]" strokeWidth={2} />
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-[#19EE8A] via-[#0AD36C] to-[#01BA53] flex items-center justify-center shrink-0">
+                        <Heart className="w-4 h-4 sm:w-5 sm:h-5 fill-[#0F1F17] text-[#0F1F17]" strokeWidth={2} />
                       </div>
                     ) : tile.thumbnail ? (
                       <ArtworkImage
@@ -840,11 +880,11 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                         roundedClass="rounded-none"
                       />
                     ) : (
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#242424] flex items-center justify-center shrink-0 text-white/55">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/[0.08] flex items-center justify-center shrink-0 text-[#B3F7D1]/60">
                         <ListMusic className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={1.8} />
                       </div>
                     )}
-                    <span className="text-xs sm:text-sm font-bold text-white truncate">
+                    <span className="text-xs sm:text-sm font-bold text-[#E8FFF3] truncate">
                       {tile.title}
                     </span>
                   </button>
@@ -857,7 +897,7 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                         tile.onPlay?.();
                       }}
                       aria-label={`Putar ${tile.title}`}
-                      className="hidden sm:flex w-9 h-9 rounded-full bg-[#2EE6A6] text-[#06130E] shadow-lg shadow-black/50 items-center justify-center opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-150 shrink-0 focus-visible:opacity-100"
+                      className="hidden sm:flex w-9 h-9 rounded-full bg-sc-gradient text-[#0F1F17] shadow-lg shadow-black/50 items-center justify-center opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-150 shrink-0 focus-visible:opacity-100"
                     >
                       <Play className="w-4 h-4 fill-current ml-0.5" strokeWidth={2} />
                     </button>

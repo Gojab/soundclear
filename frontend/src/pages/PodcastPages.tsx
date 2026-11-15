@@ -71,10 +71,10 @@ export function PodcastDetailPage({
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-5 animate-pulse">
-          <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-2xl bg-white/[0.08] shrink-0" />
+          <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-2xl bg-white/[0.06] shrink-0" />
           <div className="space-y-3 flex-1">
-            <div className="h-7 w-56 rounded bg-white/[0.08]" />
-            <div className="h-4 w-40 rounded bg-white/[0.06]" />
+            <div className="h-7 w-56 rounded bg-white/[0.06]" />
+            <div className="h-4 w-40 rounded bg-white/[0.05]" />
           </div>
         </div>
         <TrackListSkeleton count={6} />
@@ -116,16 +116,16 @@ export function PodcastDetailPage({
           roundedClass="rounded-2xl"
         />
         <div className="space-y-2 min-w-0 flex-1">
-          <p className="text-xs text-white/55 inline-flex items-center gap-1.5">
-            <Podcast className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={1.75} />
+          <p className="text-xs text-[#B3F7D1]/60 inline-flex items-center gap-1.5">
+            <Podcast className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.75} />
             Podcast
           </p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#E8FFF3] tracking-tight">
             {podcast.title}
           </h1>
-          {podcast.author && <p className="text-xs text-white/65">{podcast.author}</p>}
+          {podcast.author && <p className="text-xs text-[#B3F7D1]/70">{podcast.author}</p>}
           {podcast.description && (
-            <p className="text-xs text-white/55 max-w-2xl line-clamp-3">{podcast.description}</p>
+            <p className="text-xs text-[#B3F7D1]/60 max-w-2xl line-clamp-3">{podcast.description}</p>
           )}
           <div className="flex flex-wrap items-center gap-2.5 pt-2">
             {podcast.episodes.length > 0 && (
@@ -140,7 +140,7 @@ export function PodcastDetailPage({
                     sourceLabel: podcast.title,
                   });
                 }}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Episode Terbaru
@@ -152,8 +152,8 @@ export function PodcastDetailPage({
               aria-pressed={followed}
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
                 followed
-                  ? 'bg-white/[0.12] text-[#2EE6A6] border border-[#2EE6A6]/35'
-                  : 'bg-white/[0.07] hover:bg-white/[0.12] text-white'
+                  ? 'bg-white/[0.1] backdrop-blur-xl text-[#19EE8A] border border-[#19EE8A]/35'
+                  : 'bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] text-[#E8FFF3] border border-white/[0.11]'
               }`}
             >
               {followed ? (
@@ -173,12 +173,12 @@ export function PodcastDetailPage({
       </header>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-white">
-          Daftar Episode <span className="text-sm text-white/45 tabular-nums">({podcast.episodes.length})</span>
+        <h2 className="text-lg font-semibold text-[#E8FFF3]">
+          Daftar Episode <span className="text-sm text-[#B3F7D1]/50 tabular-nums">({podcast.episodes.length})</span>
         </h2>
 
         {podcast.episodes.length === 0 ? (
-          <p className="text-xs text-white/50">Belum ada episode tersedia.</p>
+          <p className="text-xs text-[#B3F7D1]/55">Belum ada episode tersedia.</p>
         ) : (
           <div className="space-y-2.5">
             {podcast.episodes.map((ep) => {
@@ -208,27 +208,27 @@ export function PodcastDetailPage({
                       roundedClass="rounded-xl"
                     />
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-sm font-semibold text-white line-clamp-1">{ep.title}</p>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/50">
+                      <p className="text-sm font-semibold text-[#E8FFF3] line-clamp-1">{ep.title}</p>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#B3F7D1]/55">
                         {ep.published && <span>{ep.published}</span>}
                         {ep.published && ep.duration && <span aria-hidden="true">·</span>}
                         {ep.duration && <span className="tabular-nums">{ep.duration}</span>}
                         {prog?.completed && (
-                          <span className="text-[#2EE6A6] font-medium">· Selesai</span>
+                          <span className="text-[#19EE8A] font-medium">· Selesai</span>
                         )}
                       </div>
                       {ep.description && (
-                        <p className="text-xs text-white/55 line-clamp-2">{ep.description}</p>
+                        <p className="text-xs text-[#B3F7D1]/60 line-clamp-2">{ep.description}</p>
                       )}
                       {prog && !prog.completed && prog.positionSeconds > 5 && (
                         <div className="pt-1 max-w-xs flex items-center gap-2">
-                          <div className="flex-1 h-1 rounded-full bg-white/15 overflow-hidden">
+                          <div className="flex-1 h-1 rounded-full bg-white/[0.12] overflow-hidden">
                             <div
-                              className="h-full bg-[#2EE6A6]"
+                              className="h-full bg-sc-gradient"
                               style={{ width: `${pct}%` }}
                             />
                           </div>
-                          <span className="text-[10px] text-white/50 tabular-nums">
+                          <span className="text-[10px] text-[#B3F7D1]/55 tabular-nums">
                             {formatTime(prog.positionSeconds)}
                           </span>
                         </div>
@@ -252,11 +252,11 @@ export function PodcastDetailPage({
                           setPlaybackRate(nextRate ?? defaultRate);
                         }
                       }}
-                      className="h-9 px-2 rounded-xl bg-[#16161B] border border-white/[0.1] text-[11px] text-white/85 tabular-nums focus:outline-none focus:border-[#2EE6A6]"
+                      className="h-9 px-2 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-[11px] text-[#E8FFF3] tabular-nums focus:outline-none focus:border-[#19EE8A]"
                     >
-                      <option value="default">Default ({defaultRate}x)</option>
+                      <option value="default" className="bg-[#0B0F0D] text-[#E8FFF3]">Default ({defaultRate}x)</option>
                       {PLAYBACK_RATE_OPTIONS.map((r) => (
-                        <option key={r} value={String(r)}>
+                        <option key={r} value={String(r)} className="bg-[#0B0F0D] text-[#E8FFF3]">
                           {r}x
                         </option>
                       ))}
@@ -271,8 +271,8 @@ export function PodcastDetailPage({
                       title={prog?.completed ? 'Sudah selesai' : 'Tandai selesai'}
                       className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
                         prog?.completed
-                          ? 'text-[#2EE6A6] bg-[#2EE6A6]/10'
-                          : 'text-white/50 hover:text-white bg-white/[0.06]'
+                          ? 'text-[#19EE8A] bg-[#19EE8A]/12'
+                          : 'text-[#B3F7D1]/55 hover:text-[#E8FFF3] bg-white/[0.055] hover:bg-white/[0.1] border border-white/[0.1]'
                       }`}
                     >
                       {prog?.completed ? (
@@ -291,7 +291,7 @@ export function PodcastDetailPage({
                           sourceLabel: podcast.title,
                         })
                       }
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
                       {prog && !prog.completed && prog.positionSeconds > 5 ? 'Lanjutkan' : 'Putar'}
@@ -382,9 +382,9 @@ export function EpisodeDetailPage({
           roundedClass="rounded-2xl"
         />
         <div className="space-y-2 min-w-0 flex-1">
-          <p className="text-xs text-white/55">Episode Podcast</p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">{ep.title}</h1>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
+          <p className="text-xs text-[#B3F7D1]/60">Episode Podcast</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#E8FFF3] tracking-tight">{ep.title}</h1>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[#B3F7D1]/65">
             {ep.author && <span>{ep.author}</span>}
             {ep.published && (
               <>
@@ -410,7 +410,7 @@ export function EpisodeDetailPage({
                   sourceLabel: ep.podcastTitle || 'Podcast',
                 })
               }
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
             >
               <Play className="w-4 h-4 fill-current" strokeWidth={2} />
               {prog && !prog.completed && prog.positionSeconds > 5 ? 'Lanjutkan Putar' : 'Putar Episode'}
@@ -421,8 +421,8 @@ export function EpisodeDetailPage({
               onClick={() => markEpisodeCompleted(ep.videoId, ep.podcastId, !prog?.completed)}
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-medium ${
                 prog?.completed
-                  ? 'bg-[#2EE6A6]/15 text-[#2EE6A6] border border-[#2EE6A6]/30'
-                  : 'bg-white/[0.07] text-white/80 hover:text-white'
+                  ? 'bg-[#19EE8A]/15 text-[#19EE8A] border border-[#19EE8A]/35'
+                  : 'bg-white/[0.055] backdrop-blur-xl text-[#E8FFF3]/85 hover:bg-white/[0.1] border border-white/[0.11]'
               }`}
             >
               {prog?.completed ? (
@@ -449,11 +449,11 @@ export function EpisodeDetailPage({
                   setPlaybackRate(nextRate ?? defaultRate);
                 }
               }}
-              className="h-10 px-3 rounded-xl bg-[#16161B] border border-white/[0.1] text-xs text-white tabular-nums focus:outline-none focus:border-[#2EE6A6]"
+              className="h-10 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-xs text-[#E8FFF3] tabular-nums focus:outline-none focus:border-[#19EE8A]"
             >
-              <option value="default">Kecepatan: Default ({defaultRate}x)</option>
+              <option value="default" className="bg-[#0B0F0D] text-[#E8FFF3]">Kecepatan: Default ({defaultRate}x)</option>
               {PLAYBACK_RATE_OPTIONS.map((r) => (
-                <option key={r} value={String(r)}>
+                <option key={r} value={String(r)} className="bg-[#0B0F0D] text-[#E8FFF3]">
                   Kecepatan: {r}x
                 </option>
               ))}
@@ -469,7 +469,7 @@ export function EpisodeDetailPage({
                     fallbackQuery: ep.podcastTitle || undefined,
                   })
                 }
-                className="px-4 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] text-xs font-medium text-white"
+                className="px-4 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-xs font-medium text-[#E8FFF3]"
               >
                 Lihat Semua Episode
               </button>
@@ -480,8 +480,8 @@ export function EpisodeDetailPage({
 
       {ep.description && (
         <section className="glass-card rounded-2xl p-5 space-y-2">
-          <h2 className="text-sm font-semibold text-white">Deskripsi Episode</h2>
-          <p className="text-xs text-white/65 leading-relaxed whitespace-pre-line">
+          <h2 className="text-sm font-semibold text-[#E8FFF3]">Deskripsi Episode</h2>
+          <p className="text-xs text-[#B3F7D1]/70 leading-relaxed whitespace-pre-line">
             {ep.description}
           </p>
         </section>

@@ -6,12 +6,17 @@
     color-scheme: dark;
     font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     --bg-base: #000000;
-    --surface-panel: #121212;
-    --surface-elevated: #1f1f1f;
-    --glass-bg: rgba(18, 18, 18, 0.92);
-    --glass-bg-hover: rgba(255, 255, 255, 0.09);
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --accent-mint: #2EE6A6;
+    --surface-panel: rgba(255, 255, 255, 0.035);
+    --surface-elevated: rgba(255, 255, 255, 0.06);
+    --surface-hover: rgba(255, 255, 255, 0.1);
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-bg-hover: rgba(255, 255, 255, 0.095);
+    --glass-border: rgba(232, 255, 243, 0.12);
+    --accent-mint: #19EE8A;
+    --accent-emerald: #0AD36C;
+    --accent-deep: #01BA53;
+    --text-mint-light: #E8FFF3;
+    --text-mint-soft: #B3F7D1;
   }
 
   html,
@@ -19,7 +24,7 @@
   #root {
     height: 100%;
     background-color: #000000;
-    color: #f5f5f7;
+    color: #E8FFF3;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -31,20 +36,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+.bg-sc-gradient {
+  background: linear-gradient(135deg, #19EE8A 0%, #0AD36C 50%, #01BA53 100%);
+}
+
 .glass-panel {
-  background: #121212;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   transition: background-color 140ms ease, border-color 140ms ease;
 }
 
 .glass-card:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.095);
+  border-color: rgba(25, 238, 138, 0.3);
 }
 
 .track-row {
@@ -52,10 +66,10 @@
 }
 
 .track-row:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.075);
 }
 
-/* Custom sleek dark scrollbar */
+/* Custom sleek dark green scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -66,12 +80,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(179, 247, 209, 0.2);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(25, 238, 138, 0.38);
 }
 
 /* Custom accessible range sliders */
@@ -93,7 +107,7 @@ input[type="range"].sc-range::-webkit-slider-thumb {
   width: 12px;
   height: 12px;
   border-radius: 9999px;
-  background: #ffffff;
+  background: #E8FFF3;
   margin-top: -4px;
   opacity: 0;
   transition: transform 120ms ease, opacity 120ms ease;
@@ -110,14 +124,14 @@ input[type="range"].sc-range::-moz-range-thumb {
   height: 12px;
   border: none;
   border-radius: 9999px;
-  background: #ffffff;
+  background: #E8FFF3;
 }
 
 /* Always-visible precision sliders for Settings / EQ / DSP controls */
 input[type="range"].sc-range-visible {
   -webkit-appearance: none;
   appearance: none;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(179, 247, 209, 0.16);
   height: 5px;
   border-radius: 9999px;
   cursor: pointer;
@@ -134,8 +148,8 @@ input[type="range"].sc-range-visible::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  background: #2ee6a6;
-  border: 2px solid #06130e;
+  background: #0AD36C;
+  border: 2px solid #0F1F17;
   margin-top: -4.5px;
   opacity: 1;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
@@ -150,15 +164,15 @@ input[type="range"].sc-range-visible:focus-visible::-webkit-slider-thumb {
 input[type="range"].sc-range-visible::-moz-range-track {
   height: 5px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(179, 247, 209, 0.16);
 }
 
 input[type="range"].sc-range-visible::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  background: #2ee6a6;
-  border: 2px solid #06130e;
+  background: #0AD36C;
+  border: 2px solid #0F1F17;
 }
 
 @keyframes sc-notch-marquee {

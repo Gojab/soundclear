@@ -853,8 +853,11 @@ class MusicProviderTests(unittest.TestCase):
     def test_ytmusic_audio_extraction_and_bot_block_meta_fallback(self) -> None:
         seen_urls = []
 
+        get_song_calls = []
+
         class DirectSongGateway(FakeYTMusicGateway):
             def get_song(self, video_id: str):
+                get_song_calls.append(video_id)
                 if video_id == "directYtm01":
                     return {
                         "playabilityStatus": {"status": "OK"},
@@ -909,6 +912,15 @@ class MusicProviderTests(unittest.TestCase):
                     self.assertEqual(meta_json["fallbackMode"], "youtube-iframe")
                     self.assertTrue(all("music.youtube.com/watch?v=" in u for u in seen_urls))
                     self.assertTrue(seen_opts and "logger" in seen_opts[0] and seen_opts[0].get("quiet"))
+
+                    calls_after_first = len(get_song_calls)
+                    ydl_calls_after_first = len(seen_urls)
+
+                    meta_resp2 = client.get("/api/stream/abc12345678/meta?title=Lagu&artist=Tulus")
+                    self.assertEqual(meta_resp2.status_code, 200)
+                    self.assertEqual(meta_resp2.json()["fallbackMode"], "youtube-iframe")
+                    self.assertEqual(len(get_song_calls), calls_after_first)
+                    self.assertEqual(len(seen_urls), ydl_calls_after_first)
 
                     stream_resp = client.get("/api/stream/dQw4w9WgXcQ?title=Monokrom&artist=Tulus")
                     self.assertEqual(stream_resp.status_code, 403)

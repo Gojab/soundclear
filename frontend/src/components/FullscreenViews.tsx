@@ -90,12 +90,12 @@ export function FullscreenKaraokeModal() {
       role="dialog"
       aria-modal="true"
       aria-label="Mode karaoke lirik layar penuh"
-      className="fixed inset-0 z-50 flex flex-col bg-[#0A0A0B]"
+      className="fixed inset-0 z-50 flex flex-col bg-black"
       style={{
-        backgroundImage: `radial-gradient(circle at 50% 25%, rgba(${ambientColor.r}, ${ambientColor.g}, ${ambientColor.b}, 0.48), rgba(10,10,11,0.98) 72%)`,
+        backgroundImage: `radial-gradient(circle at 50% 25%, rgba(${ambientColor.r}, ${ambientColor.g}, ${ambientColor.b}, 0.42), rgba(5,7,6,0.98) 72%)`,
       }}
     >
-      <header className="px-6 py-4 flex items-center justify-between border-b border-white/[0.06] shrink-0">
+      <header className="px-6 py-4 flex items-center justify-between border-b border-[#B3F7D1]/[0.1] shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <ArtworkImage
             src={currentTrack.thumbnail}
@@ -104,8 +104,8 @@ export function FullscreenKaraokeModal() {
             roundedClass="rounded-lg"
           />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{currentTrack.title}</p>
-            <p className="text-xs text-white/60 truncate">{formatArtists(currentTrack.artists)}</p>
+            <p className="text-sm font-semibold text-[#E8FFF3] truncate">{currentTrack.title}</p>
+            <p className="text-xs text-[#B3F7D1]/70 truncate">{formatArtists(currentTrack.artists)}</p>
           </div>
         </div>
 
@@ -113,7 +113,7 @@ export function FullscreenKaraokeModal() {
           type="button"
           onClick={() => setKaraokeOpen(false)}
           aria-label="Keluar dari mode karaoke"
-          className="w-10 h-10 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] flex items-center justify-center text-white transition-colors"
+          className="w-10 h-10 rounded-xl bg-white/[0.07] backdrop-blur-xl hover:bg-white/[0.13] border border-white/[0.12] flex items-center justify-center text-[#E8FFF3] transition-colors"
         >
           <X className="w-5 h-5" strokeWidth={1.75} />
         </button>
@@ -139,10 +139,10 @@ export function FullscreenKaraokeModal() {
                   onClick={() => requestSeek(line.startTimeMs / 1000)}
                   className={`block w-full text-center transition-all duration-200 leading-snug ${
                     isActive
-                      ? 'text-2xl sm:text-4xl font-bold text-[#2EE6A6] scale-[1.02]'
+                      ? 'text-2xl sm:text-4xl font-bold text-[#19EE8A] scale-[1.02]'
                       : isPast
-                        ? 'text-lg sm:text-2xl font-medium text-white/35 hover:text-white/70'
-                        : 'text-lg sm:text-2xl font-medium text-white/60 hover:text-white'
+                        ? 'text-lg sm:text-2xl font-medium text-[#B3F7D1]/35 hover:text-[#B3F7D1]/75'
+                        : 'text-lg sm:text-2xl font-medium text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
                   }`}
                 >
                   {line.text}
@@ -152,19 +152,19 @@ export function FullscreenKaraokeModal() {
           </div>
         ) : data?.plainText ? (
           <div className="w-full max-w-2xl text-center py-6">
-            <p className="text-lg sm:text-2xl font-medium text-white/85 whitespace-pre-line leading-relaxed">
+            <p className="text-lg sm:text-2xl font-medium text-[#E8FFF3]/90 whitespace-pre-line leading-relaxed">
               {data.plainText}
             </p>
           </div>
         ) : (
-          <div className="my-auto text-center text-white/55">Lirik belum tersedia.</div>
+          <div className="my-auto text-center text-[#B3F7D1]/60">Lirik belum tersedia.</div>
         )}
       </div>
 
-      <footer className="px-6 py-4 border-t border-white/[0.06] bg-black/30 backdrop-blur-xl shrink-0">
+      <footer className="px-6 py-4 border-t border-white/[0.1] bg-black/65 backdrop-blur-2xl shrink-0">
         <div className="max-w-xl mx-auto space-y-3">
           <div className="flex items-center gap-3">
-            <span className="w-10 text-right text-xs text-white/50 tabular-nums">
+            <span className="w-10 text-right text-xs text-[#B3F7D1]/60 tabular-nums">
               {formatTime(currentTime)}
             </span>
             <input
@@ -177,11 +177,11 @@ export function FullscreenKaraokeModal() {
               disabled={!currentTrack || safeDuration <= 0}
               onChange={(e) => requestSeek(Number(e.target.value))}
               style={{
-                background: `linear-gradient(to right, #2EE6A6 ${progressPct}%, rgba(255,255,255,0.18) ${progressPct}%)`,
+                background: `linear-gradient(to right, #19EE8A ${progressPct}%, rgba(179,247,209,0.2) ${progressPct}%)`,
               }}
               className="sc-range flex-1 h-1 rounded-full disabled:opacity-40"
             />
-            <span className="w-10 text-xs text-white/50 tabular-nums">
+            <span className="w-10 text-xs text-[#B3F7D1]/60 tabular-nums">
               {formatTime(safeDuration)}
             </span>
           </div>
@@ -191,7 +191,7 @@ export function FullscreenKaraokeModal() {
               type="button"
               onClick={prevTrack}
               aria-label="Lagu sebelumnya"
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white/80 hover:text-white"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-[#B3F7D1]/80 hover:text-[#E8FFF3]"
             >
               <SkipBack className="w-5 h-5 fill-current" strokeWidth={1.75} />
             </button>
@@ -199,7 +199,7 @@ export function FullscreenKaraokeModal() {
               type="button"
               onClick={togglePlayPause}
               aria-label={isPlaying ? 'Jeda' : 'Putar'}
-              className="w-12 h-12 rounded-full bg-[#2EE6A6] text-[#06130E] flex items-center justify-center"
+              className="w-12 h-12 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center hover:brightness-105 transition"
             >
               {isPlaying ? (
                 <Pause className="w-5 h-5 fill-current" strokeWidth={2} />
@@ -211,7 +211,7 @@ export function FullscreenKaraokeModal() {
               type="button"
               onClick={nextTrack}
               aria-label="Lagu berikutnya"
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white/80 hover:text-white"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-[#B3F7D1]/80 hover:text-[#E8FFF3]"
             >
               <SkipForward className="w-5 h-5 fill-current" strokeWidth={1.75} />
             </button>
@@ -266,13 +266,13 @@ export function FullscreenNowPlayingModal() {
       role="dialog"
       aria-modal="true"
       aria-label="Mode sedang diputar layar penuh"
-      className="fixed inset-0 z-50 flex flex-col bg-[#0A0A0B] p-6 sm:p-10"
+      className="fixed inset-0 z-50 flex flex-col bg-black p-6 sm:p-10"
       style={{
-        backgroundImage: `radial-gradient(circle at 30% 35%, rgba(${ambientColor.r}, ${ambientColor.g}, ${ambientColor.b}, 0.45), rgba(10,10,11,0.98) 72%)`,
+        backgroundImage: `radial-gradient(circle at 30% 35%, rgba(${ambientColor.r}, ${ambientColor.g}, ${ambientColor.b}, 0.4), rgba(5,7,6,0.98) 72%)`,
       }}
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-white/60">Sedang diputar</span>
+        <span className="text-xs font-semibold text-[#B3F7D1]/70">Sedang diputar</span>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -280,16 +280,16 @@ export function FullscreenNowPlayingModal() {
               setOpen(false);
               setKaraokeOpen(true);
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.07] backdrop-blur-xl hover:bg-white/[0.13] border border-white/[0.12] text-xs font-medium text-[#E8FFF3] transition-colors"
           >
-            <Mic2 className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={1.75} />
+            <Mic2 className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.75} />
             Karaoke
           </button>
           <button
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Keluar dari layar penuh"
-            className="w-9 h-9 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] flex items-center justify-center text-white"
+            className="w-9 h-9 rounded-xl bg-white/[0.07] backdrop-blur-xl hover:bg-white/[0.13] border border-white/[0.12] flex items-center justify-center text-[#E8FFF3] transition-colors"
           >
             <Minimize2 className="w-4 h-4" strokeWidth={1.75} />
           </button>
@@ -297,7 +297,7 @@ export function FullscreenNowPlayingModal() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center gap-8 max-w-xl w-full mx-auto">
-        <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-2xl overflow-hidden border border-white/[0.1]">
+        <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-2xl overflow-hidden border border-[#B3F7D1]/[0.14]">
           <ArtworkImage
             src={currentTrack.thumbnail}
             alt={currentTrack.title}
@@ -308,25 +308,25 @@ export function FullscreenNowPlayingModal() {
         </div>
 
         <div className="w-full text-center space-y-1">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">
+          <h2 className="text-2xl sm:text-3xl font-bold text-[#E8FFF3] truncate">
             {currentTrack.title}
           </h2>
-          <p className="text-sm text-white/65 truncate">{formatArtists(currentTrack.artists)}</p>
+          <p className="text-sm text-[#B3F7D1]/70 truncate">{formatArtists(currentTrack.artists)}</p>
           {activeStreamMeta && (
             <p
               className={`text-xs font-medium pt-0.5 ${
                 activeStreamMeta.hiRes
                   ? 'text-[#F5C451]'
                   : activeStreamMeta.lossless
-                    ? 'text-[#2EE6A6]'
-                    : 'text-white/55'
+                    ? 'text-[#19EE8A]'
+                    : 'text-[#B3F7D1]/60'
               }`}
             >
               {activeStreamMeta.badgeLabel}
             </p>
           )}
           {webAudioWarning && (
-            <p className="text-[11px] text-[#2EE6A6]/85 pt-0.5">{webAudioWarning}</p>
+            <p className="text-[11px] text-[#19EE8A]/85 pt-0.5">{webAudioWarning}</p>
           )}
         </div>
 
@@ -341,11 +341,11 @@ export function FullscreenNowPlayingModal() {
             disabled={!currentTrack || safeDuration <= 0}
             onChange={(e) => requestSeek(Number(e.target.value))}
             style={{
-              background: `linear-gradient(to right, #2EE6A6 ${progressPct}%, rgba(255,255,255,0.18) ${progressPct}%)`,
+              background: `linear-gradient(to right, #19EE8A ${progressPct}%, rgba(179,247,209,0.2) ${progressPct}%)`,
             }}
             className="sc-range w-full h-1 rounded-full disabled:opacity-40"
           />
-          <div className="flex justify-between text-xs text-white/50 tabular-nums">
+          <div className="flex justify-between text-xs text-[#B3F7D1]/60 tabular-nums">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(safeDuration)}</span>
           </div>
@@ -357,7 +357,7 @@ export function FullscreenNowPlayingModal() {
             onClick={toggleShuffle}
             aria-label="Acak urutan"
             className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              shuffle ? 'text-[#2EE6A6]' : 'text-white/60 hover:text-white'
+              shuffle ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
             }`}
           >
             <Shuffle className="w-5 h-5" strokeWidth={1.75} />
@@ -368,7 +368,7 @@ export function FullscreenNowPlayingModal() {
             aria-label="Acak pintar"
             title="Acak Pintar"
             className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              smartShuffle ? 'text-[#2EE6A6]' : 'text-white/60 hover:text-white'
+              smartShuffle ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
             }`}
           >
             <Sparkles className="w-5 h-5" strokeWidth={1.75} />
@@ -377,7 +377,7 @@ export function FullscreenNowPlayingModal() {
             type="button"
             onClick={prevTrack}
             aria-label="Lagu sebelumnya"
-            className="w-11 h-11 rounded-full flex items-center justify-center text-white"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-[#E8FFF3]"
           >
             <SkipBack className="w-6 h-6 fill-current" strokeWidth={1.75} />
           </button>
@@ -385,7 +385,7 @@ export function FullscreenNowPlayingModal() {
             type="button"
             onClick={togglePlayPause}
             aria-label={isPlaying ? 'Jeda' : 'Putar'}
-            className="w-16 h-16 rounded-full bg-[#2EE6A6] text-[#06130E] flex items-center justify-center"
+            className="w-16 h-16 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center hover:brightness-105 transition"
           >
             {isPlaying ? (
               <Pause className="w-7 h-7 fill-current" strokeWidth={2} />
@@ -397,7 +397,7 @@ export function FullscreenNowPlayingModal() {
             type="button"
             onClick={nextTrack}
             aria-label="Lagu berikutnya"
-            className="w-11 h-11 rounded-full flex items-center justify-center text-white"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-[#E8FFF3]"
           >
             <SkipForward className="w-6 h-6 fill-current" strokeWidth={1.75} />
           </button>
@@ -406,7 +406,7 @@ export function FullscreenNowPlayingModal() {
             onClick={cycleRepeat}
             aria-label={`Mode ulang: ${repeat}`}
             className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              repeat !== 'off' ? 'text-[#2EE6A6]' : 'text-white/60 hover:text-white'
+              repeat !== 'off' ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
             }`}
           >
             <RepeatIcon className="w-5 h-5" strokeWidth={1.75} />

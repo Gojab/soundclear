@@ -27,7 +27,7 @@ export default defineConfig(() => {
           short_name: 'SoundClear',
           description:
             'Pemutar musik web modern dengan antarmuka kaca gelap, lirik tersinkron, tangga lagu Indonesia, dan pustaka lokal.',
-          theme_color: '#06130E',
+          theme_color: '#0F1F17',
           background_color: '#000000',
           display: 'standalone',
           start_url: '/',

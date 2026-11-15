@@ -8,6 +8,10 @@ import {
   getOrCreateBackgroundSessionId,
   syncBackgroundSession,
 } from '../api/client';
+import {
+  stopSilentKeepaliveAudio,
+  unlockPlaybackOnUserGesture,
+} from '../audio/soundclearAudioEngine';
 import { db, type PersistedPlayerSession } from '../db/soundclearDb';
 import type {
   ActiveStreamMeta,
@@ -89,6 +93,7 @@ interface PlayerState {
   webAudioWarning: string | null;
   networkEffectiveType: string | null;
   bufferingStallCount: number;
+  autoplayBlockedPendingResume: boolean;
 
   hydrate: () => Promise<void>;
   playTrack: (
@@ -149,6 +154,8 @@ interface PlayerState {
   setNetworkEffectiveType: (effectiveType: string | null) => void;
   recordBufferingStall: () => void;
   resetBufferingStalls: () => void;
+  setAutoplayBlockedPendingResume: (pending: boolean) => void;
+  resumeBlockedPlayback: () => void;
 }
 
 const DEFAULT_AMBIENT: AmbientColor = { r: 22, g: 48, b: 40 };
@@ -367,6 +374,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   webAudioWarning: null,
   networkEffectiveType: null,
   bufferingStallCount: 0,
+  autoplayBlockedPendingResume: false,
 
   hydrate: async () => {
     installBackgroundLifecycleSync();
@@ -504,6 +512,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   playTrack: (track, options) => {
     if (!isPlayableTrack(track)) return;
+    unlockPlaybackOnUserGesture();
     beginTrackTelemetry(track);
 
     const startAt = options?.startAtSeconds ?? 0;
@@ -529,6 +538,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      autoplayBlockedPendingResume: false,
       notchManuallyHidden: false,
       hasActiveSessionPlayback: true,
       rightPanelOpen: options?.openPanel ? true : state.rightPanelOpen,
@@ -541,6 +551,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playTrackList: (tracks, startIndex = 0, sourceLabel = 'Daftar Putar') => {
     const playable = filterHiddenAndExplicit(tracks.filter((t) => isPlayableTrack(t)));
     if (playable.length === 0) return;
+    unlockPlaybackOnUserGesture();
 
     const safeIdx = Math.max(0, Math.min(startIndex, playable.length - 1));
     const target = playable[safeIdx];
@@ -567,6 +578,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      autoplayBlockedPendingResume: false,
       notchManuallyHidden: false,
       hasActiveSessionPlayback: true,
     }));
@@ -578,6 +590,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playFromManualQueue: (index) => {
     const { manualQueue, currentTrack } = get();
     if (index < 0 || index >= manualQueue.length) return;
+    unlockPlaybackOnUserGesture();
     const target = manualQueue[index];
     const nextManual = manualQueue.slice(index + 1);
     beginTrackTelemetry(target);
@@ -600,6 +613,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      autoplayBlockedPendingResume: false,
       notchManuallyHidden: false,
       hasActiveSessionPlayback: true,
     }));
@@ -610,6 +624,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playFromSourceQueue: (index) => {
     const { sourceQueue, currentTrack } = get();
     if (index < 0 || index >= sourceQueue.length) return;
+    unlockPlaybackOnUserGesture();
     const target = sourceQueue[index];
     const nextSource = sourceQueue.slice(index + 1);
     beginTrackTelemetry(target);
@@ -632,6 +647,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      autoplayBlockedPendingResume: false,
       notchManuallyHidden: false,
       hasActiveSessionPlayback: true,
     }));
@@ -727,8 +743,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   setIsPlaying: (playing) => {
+    if (playing) {
+      unlockPlaybackOnUserGesture();
+    } else {
+      stopSilentKeepaliveAudio();
+    }
     set((state) => ({
       isPlaying: playing,
+      autoplayBlockedPendingResume: playing ? false : state.autoplayBlockedPendingResume,
       notchManuallyHidden: playing ? false : state.notchManuallyHidden,
       hasActiveSessionPlayback: playing ? true : state.hasActiveSessionPlayback,
     }));
@@ -737,20 +759,25 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   togglePlayPause: () => {
     if (!get().currentTrack) return;
-    set((state) => {
-      const nextPlaying = !state.isPlaying;
-      return {
-        isPlaying: nextPlaying,
-        notchManuallyHidden: nextPlaying ? false : state.notchManuallyHidden,
-        hasActiveSessionPlayback: nextPlaying ? true : state.hasActiveSessionPlayback,
-      };
-    });
+    const nextPlaying = !get().isPlaying;
+    if (nextPlaying) {
+      unlockPlaybackOnUserGesture();
+    } else {
+      stopSilentKeepaliveAudio();
+    }
+    set((state) => ({
+      isPlaying: nextPlaying,
+      autoplayBlockedPendingResume: false,
+      notchManuallyHidden: nextPlaying ? false : state.notchManuallyHidden,
+      hasActiveSessionPlayback: nextPlaying ? true : state.hasActiveSessionPlayback,
+    }));
     persistPlayerSession(get(), true);
   },
 
   stopPlayback: () => {
     const state = get();
     if (!state.currentTrack) return;
+    stopSilentKeepaliveAudio();
     set({
       isPlaying: false,
       isBuffering: false,
@@ -758,6 +785,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       pendingSeekSeconds: 0,
       seekVersion: state.seekVersion + 1,
       floatingMiniOpen: false,
+      autoplayBlockedPendingResume: false,
       notchManuallyHidden: true,
       hasActiveSessionPlayback: false,
     });
@@ -913,6 +941,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     if (sourceQueue.length > 0) {
+      unlockPlaybackOnUserGesture();
       const pickIdx = shuffle ? Math.floor(Math.random() * sourceQueue.length) : 0;
       const target = sourceQueue[pickIdx];
       const remaining = sourceQueue.filter((_, i) => i !== pickIdx);
@@ -935,6 +964,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         selectedQualityOverride: null,
         webAudioWarning: null,
         bufferingStallCount: 0,
+        autoplayBlockedPendingResume: false,
         notchManuallyHidden: false,
         hasActiveSessionPlayback: true,
       });
@@ -946,6 +976,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const autoplay = useSettingsStore.getState().autoplay;
     const vid = getPlayableVideoId(currentTrack);
     if (autoplay && vid) {
+      unlockPlaybackOnUserGesture();
       fetchWatchPlaylist(vid, true)
         .then((watch) => {
           const rec = filterHiddenAndExplicit(
@@ -966,9 +997,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   prevTrack: () => {
     const state = get();
     if (!state.currentTrack) return;
+    unlockPlaybackOnUserGesture();
     if (state.currentTime > 3 || state.historyStack.length === 0) {
       get().requestSeek(0);
-      set({ isPlaying: true });
+      set({ isPlaying: true, autoplayBlockedPendingResume: false });
       return;
     }
 
@@ -990,6 +1022,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       selectedQualityOverride: null,
       webAudioWarning: null,
       bufferingStallCount: 0,
+      autoplayBlockedPendingResume: false,
       notchManuallyHidden: false,
       hasActiveSessionPlayback: true,
     });
@@ -1056,4 +1089,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   recordBufferingStall: () =>
     set((state) => ({ bufferingStallCount: Math.min(10, state.bufferingStallCount + 1) })),
   resetBufferingStalls: () => set({ bufferingStallCount: 0 }),
+  setAutoplayBlockedPendingResume: (autoplayBlockedPendingResume) =>
+    set({ autoplayBlockedPendingResume }),
+  resumeBlockedPlayback: () => {
+    const state = get();
+    if (!state.currentTrack) {
+      set({ autoplayBlockedPendingResume: false });
+      return;
+    }
+    unlockPlaybackOnUserGesture();
+    set({
+      isPlaying: true,
+      autoplayBlockedPendingResume: false,
+      hasActiveSessionPlayback: true,
+      notchManuallyHidden: false,
+    });
+    persistPlayerSession(get(), true);
+  },
 }));

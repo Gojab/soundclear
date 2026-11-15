@@ -276,30 +276,30 @@ export function renderVideoPiPFrame(state: VideoPiPRenderState): void {
   const h = CANVAS_HEIGHT;
 
   // Base dark background
-  ctx.fillStyle = '#090B0E';
+  ctx.fillStyle = '#08120D';
   ctx.fillRect(0, 0, w, h);
 
   // Subtle emerald / ambient glow top-left
   const glow = ctx.createRadialGradient(90, 40, 10, 90, 40, 320);
-  glow.addColorStop(0, 'rgba(46, 230, 166, 0.16)');
-  glow.addColorStop(1, 'rgba(46, 230, 166, 0)');
+  glow.addColorStop(0, 'rgba(25, 238, 138, 0.16)');
+  glow.addColorStop(1, 'rgba(25, 238, 138, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, w, h);
 
   // Header strip
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+  ctx.fillStyle = 'rgba(15, 31, 23, 0.72)';
   ctx.fillRect(0, 0, w, 46);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fillStyle = 'rgba(179, 247, 209, 0.12)';
   ctx.fillRect(0, 46, w, 1);
 
   // Status dot + Windows Mini label
-  ctx.fillStyle = '#2EE6A6';
+  ctx.fillStyle = '#19EE8A';
   ctx.beginPath();
   ctx.arc(28, 23, 5, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.font = '600 13px "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
+  ctx.fillStyle = 'rgba(232, 255, 243, 0.85)';
   ctx.textBaseline = 'middle';
   ctx.fillText('SOUNDCLEAR MINI • WINDOWS', 44, 24);
 
@@ -317,15 +317,15 @@ export function renderVideoPiPFrame(state: VideoPiPRenderState): void {
   const pillX = w - 22 - pillWidth;
   drawRoundedRect(ctx, pillX, 12, pillWidth, 22, 11);
   ctx.fillStyle = state.isPlaying
-    ? 'rgba(46, 230, 166, 0.18)'
-    : 'rgba(255, 255, 255, 0.1)';
+    ? 'rgba(25, 238, 138, 0.18)'
+    : 'rgba(179, 247, 209, 0.12)';
   ctx.fill();
 
-  ctx.fillStyle = state.isPlaying ? '#2EE6A6' : 'rgba(255, 255, 255, 0.72)';
+  ctx.fillStyle = state.isPlaying ? '#19EE8A' : 'rgba(179, 247, 209, 0.78)';
   ctx.fillText(statusLabel, pillX + 9, 23.5);
 
   ctx.font = '500 13px "JetBrains Mono", "Consolas", monospace';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.58)';
+  ctx.fillStyle = 'rgba(179, 247, 209, 0.62)';
   const timeWidth = ctx.measureText(timeLabel).width;
   ctx.fillText(timeLabel, pillX - 14 - timeWidth, 24);
 
@@ -355,19 +355,19 @@ export function renderVideoPiPFrame(state: VideoPiPRenderState): void {
     );
   } else {
     const fallbackGrad = ctx.createLinearGradient(artX, artY, artX + artSize, artY + artSize);
-    fallbackGrad.addColorStop(0, '#132821');
-    fallbackGrad.addColorStop(1, '#10151C');
+    fallbackGrad.addColorStop(0, '#15291F');
+    fallbackGrad.addColorStop(1, '#0F1F17');
     ctx.fillStyle = fallbackGrad;
     ctx.fillRect(artX, artY, artSize, artSize);
 
     // Subtle vinyl emblem
-    ctx.strokeStyle = 'rgba(46, 230, 166, 0.45)';
+    ctx.strokeStyle = 'rgba(25, 238, 138, 0.45)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(artX + artSize / 2, artY + artSize / 2, 34, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = '#2EE6A6';
+    ctx.fillStyle = '#19EE8A';
     ctx.beginPath();
     ctx.arc(artX + artSize / 2, artY + artSize / 2, 9, 0, Math.PI * 2);
     ctx.fill();
@@ -376,7 +376,7 @@ export function renderVideoPiPFrame(state: VideoPiPRenderState): void {
 
   // Artwork subtle border
   drawRoundedRect(ctx, artX, artY, artSize, artSize, 16);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.strokeStyle = 'rgba(179, 247, 209, 0.14)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
@@ -385,7 +385,7 @@ export function renderVideoPiPFrame(state: VideoPiPRenderState): void {
   const textMaxW = w - textX - 24;
 
   ctx.font = '700 23px "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif';
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = '#E8FFF3';
   const titleLine = truncateText(ctx, state.title || 'SoundClear', textMaxW);
   ctx.fillText(titleLine, textX, 92);
 
@@ -393,7 +393,7 @@ export function renderVideoPiPFrame(state: VideoPiPRenderState): void {
     let cursorY = 128;
     if (state.prevLine) {
       ctx.font = '500 15px "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.44)';
+      ctx.fillStyle = 'rgba(179, 247, 209, 0.48)';
       ctx.fillText(truncateText(ctx, state.prevLine, textMaxW), textX, cursorY);
       cursorY += 27;
     } else {
@@ -401,7 +401,7 @@ export function renderVideoPiPFrame(state: VideoPiPRenderState): void {
     }
 
     ctx.font = '600 19px "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif';
-    ctx.fillStyle = '#2EE6A6';
+    ctx.fillStyle = '#19EE8A';
     const activeLines = wrapTextTwoLines(ctx, state.activeLine, textMaxW);
     for (const line of activeLines) {
       ctx.fillText(line, textX, cursorY);
@@ -410,28 +410,28 @@ export function renderVideoPiPFrame(state: VideoPiPRenderState): void {
 
     if (state.nextLine && cursorY <= 204) {
       ctx.font = '500 15px "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.56)';
+      ctx.fillStyle = 'rgba(179, 247, 209, 0.62)';
       ctx.fillText(truncateText(ctx, state.nextLine, textMaxW), textX, cursorY + 2);
     }
   } else {
     ctx.font = '500 18px "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+    ctx.fillStyle = 'rgba(179, 247, 209, 0.78)';
     ctx.fillText(truncateText(ctx, state.artist || state.activeLine, textMaxW), textX, 132);
 
     ctx.font = '500 13px "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(46, 230, 166, 0.85)';
+    ctx.fillStyle = 'rgba(25, 238, 138, 0.88)';
     ctx.fillText('Jendela mengambang aktif di luar web (Windows)', textX, 168);
   }
 
   // Bottom progress bar
   const barY = h - 8;
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+  ctx.fillStyle = 'rgba(179, 247, 209, 0.14)';
   ctx.fillRect(0, barY, w, 8);
 
   const progressRatio =
     safeDuration > 0 ? Math.min(1, Math.max(0, state.currentTime / safeDuration)) : 0;
   if (progressRatio > 0) {
-    ctx.fillStyle = '#2EE6A6';
+    ctx.fillStyle = '#19EE8A';
     ctx.fillRect(0, barY, Math.round(w * progressRatio), 8);
   }
 }
@@ -708,13 +708,13 @@ export async function openWindowsExternalNotch(options?: {
 
     pipWindow.document.title = 'SoundClear Mini Player (Windows)';
     pipWindow.document.documentElement.className = 'dark';
-    pipWindow.document.documentElement.style.backgroundColor = '#07090C';
+    pipWindow.document.documentElement.style.backgroundColor = '#08120D';
     pipWindow.document.documentElement.style.height = '100%';
     pipWindow.document.body.style.margin = '0';
     pipWindow.document.body.style.padding = '0';
     pipWindow.document.body.style.height = '100%';
-    pipWindow.document.body.style.backgroundColor = '#07090C';
-    pipWindow.document.body.style.color = '#ffffff';
+    pipWindow.document.body.style.backgroundColor = '#08120D';
+    pipWindow.document.body.style.color = '#E8FFF3';
     pipWindow.document.body.style.overflow = 'hidden';
     pipWindow.document.body.style.userSelect = 'none';
     pipWindow.document.body.style.fontFamily =

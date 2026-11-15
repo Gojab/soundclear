@@ -96,12 +96,12 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
   return (
     <aside
       aria-label="Koleksi Kamu"
-      className={`hidden md:flex flex-col w-[272px] lg:w-[296px] shrink-0 rounded-lg overflow-hidden transition-colors duration-300 ${
+      className={`hidden md:flex flex-col w-[272px] lg:w-[296px] shrink-0 rounded-lg overflow-hidden transition-colors duration-300 border border-white/[0.08] ${
         glassPanels
-          ? 'bg-[#121212]/62 backdrop-blur-xl border border-white/[0.07]'
+          ? 'bg-black/45 backdrop-blur-2xl'
           : bgActive
-            ? 'bg-[#121212]/88 backdrop-blur-md border border-white/[0.05]'
-            : 'bg-[#121212]'
+            ? 'bg-[#090C0B]/80 backdrop-blur-xl'
+            : 'bg-white/[0.03] backdrop-blur-2xl'
       }`}
     >
       {/* Top Koleksi Kamu Header */}
@@ -109,9 +109,9 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
         <button
           type="button"
           onClick={() => navigate({ name: 'library' })}
-          className="flex items-center gap-2.5 text-white/80 hover:text-white transition-colors min-w-0"
+          className="flex items-center gap-2.5 text-[#B3F7D1]/80 hover:text-[#E8FFF3] transition-colors min-w-0"
         >
-          <Library className="w-5 h-5 shrink-0" strokeWidth={2} />
+          <Library className="w-5 h-5 shrink-0 text-[#19EE8A]" strokeWidth={2} />
           <span className="text-[15px] font-bold tracking-tight truncate">Koleksi Kamu</span>
         </button>
 
@@ -121,7 +121,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
             onClick={onOpenCreatePlaylist}
             aria-label="Buat playlist baru"
             title="Buat playlist baru"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white/65 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
           >
             <Plus className="w-4.5 h-4.5" strokeWidth={2} />
           </button>
@@ -130,7 +130,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
             onClick={() => navigate({ name: 'library' })}
             aria-label="Buka seluruh koleksi"
             title="Lihat semua koleksi"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white/65 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
           >
             <Maximize2 className="w-3.5 h-3.5" strokeWidth={2} />
           </button>
@@ -148,8 +148,8 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               onClick={() => setFilter(active && opt.id !== 'all' ? 'all' : opt.id)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                 active
-                  ? 'bg-white text-black font-semibold'
-                  : 'bg-[#232323] text-white/85 hover:bg-[#2E2E2E]'
+                  ? 'bg-[#19EE8A] text-[#0F1F17] font-semibold'
+                  : 'bg-white/[0.06] text-[#E8FFF3]/85 hover:bg-white/[0.11]'
               }`}
             >
               {opt.label}
@@ -161,15 +161,15 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
       {/* Inline Search & Sort Row */}
       <div className="px-3 pb-2 flex items-center justify-between gap-2">
         {searchOpen ? (
-          <div className="flex-1 flex items-center gap-1.5 bg-[#232323] rounded-md px-2.5 py-1.5">
-            <Search className="w-3.5 h-3.5 text-white/60 shrink-0" strokeWidth={2} />
+          <div className="flex-1 flex items-center gap-1.5 bg-white/[0.06] backdrop-blur-md border border-white/[0.12] rounded-md px-2.5 py-1.5">
+            <Search className="w-3.5 h-3.5 text-[#B3F7D1]/65 shrink-0" strokeWidth={2} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Cari di Koleksi..."
               autoFocus
-              className="flex-1 min-w-0 bg-transparent text-xs text-white placeholder:text-white/45 focus:outline-none"
+              className="flex-1 min-w-0 bg-transparent text-xs text-[#E8FFF3] placeholder:text-[#B3F7D1]/45 focus:outline-none"
             />
             <button
               type="button"
@@ -178,7 +178,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
                 setSearchOpen(false);
               }}
               aria-label="Tutup cari koleksi"
-              className="text-white/50 hover:text-white"
+              className="text-[#B3F7D1]/55 hover:text-[#E8FFF3]"
             >
               <X className="w-3.5 h-3.5" strokeWidth={2} />
             </button>
@@ -188,7 +188,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
             type="button"
             onClick={() => setSearchOpen(true)}
             aria-label="Cari di koleksi"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
           >
             <Search className="w-4 h-4" strokeWidth={1.9} />
           </button>
@@ -197,7 +197,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
         <button
           type="button"
           onClick={() => setSortBy((s) => (s === 'recent' ? 'alpha' : 'recent'))}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-white/65 hover:text-white px-2 py-1 rounded-md transition-colors whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-[#B3F7D1]/70 hover:text-[#E8FFF3] px-2 py-1 rounded-md transition-colors whitespace-nowrap shrink-0"
         >
           <span>{sortBy === 'recent' ? 'Baru diputar' : 'Abjad A–Z'}</span>
           <ArrowUpDown className="w-3.5 h-3.5" strokeWidth={1.8} />
@@ -214,18 +214,18 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               currentRoute.name === 'liked' ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'
             }`}
           >
-            <div className="w-12 h-12 rounded-md bg-gradient-to-br from-[#19A974] via-[#2EE6A6] to-[#7FF5CB] flex items-center justify-center shrink-0">
-              <Heart className="w-5 h-5 fill-[#06130E] text-[#06130E]" strokeWidth={2} />
+            <div className="w-12 h-12 rounded-md bg-gradient-to-br from-[#19EE8A] via-[#0AD36C] to-[#01BA53] flex items-center justify-center shrink-0">
+              <Heart className="w-5 h-5 fill-[#0F1F17] text-[#0F1F17]" strokeWidth={2} />
             </div>
             <div className="min-w-0 flex-1">
               <p
                 className={`text-sm font-semibold truncate ${
-                  currentRoute.name === 'liked' ? 'text-[#2EE6A6]' : 'text-white'
+                  currentRoute.name === 'liked' ? 'text-[#19EE8A]' : 'text-[#E8FFF3]'
                 }`}
               >
                 Lagu yang Disukai
               </p>
-              <p className="text-xs text-white/55 truncate mt-0.5 tabular-nums">
+              <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5 tabular-nums">
                 Playlist · {likedCount} lagu
               </p>
             </div>
@@ -253,20 +253,20 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
                     roundedClass="rounded-md"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-md bg-[#232323] flex items-center justify-center shrink-0 text-white/50">
+                  <div className="w-12 h-12 rounded-md bg-white/[0.06] flex items-center justify-center shrink-0 text-[#B3F7D1]/55">
                     <ListMusic className="w-5 h-5" strokeWidth={1.75} />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
                   <p
                     className={`text-sm font-semibold truncate ${
-                      active ? 'text-[#2EE6A6]' : 'text-white'
+                      active ? 'text-[#19EE8A]' : 'text-[#E8FFF3]'
                     }`}
                   >
                     {pl.name}
                   </p>
-                  <p className="text-xs text-white/55 truncate mt-0.5 flex items-center gap-1 tabular-nums">
-                    {pl.pinned && <Pin className="w-3 h-3 text-[#2EE6A6] shrink-0" strokeWidth={2} />}
+                  <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5 flex items-center gap-1 tabular-nums">
+                    {pl.pinned && <Pin className="w-3 h-3 text-[#19EE8A] shrink-0" strokeWidth={2} />}
                     <span>Playlist · {pl.tracks.length} lagu</span>
                   </p>
                 </div>
@@ -298,12 +298,12 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
                 <div className="min-w-0 flex-1">
                   <p
                     className={`text-sm font-semibold truncate ${
-                      active ? 'text-[#2EE6A6]' : 'text-white'
+                      active ? 'text-[#19EE8A]' : 'text-[#E8FFF3]'
                     }`}
                   >
                     {entry.item.title}
                   </p>
-                  <p className="text-xs text-white/55 truncate mt-0.5">
+                  <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5">
                     Album · {entry.item.artists?.[0]?.name || 'Artis'}
                   </p>
                 </div>
@@ -335,12 +335,12 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
                 <div className="min-w-0 flex-1">
                   <p
                     className={`text-sm font-semibold truncate ${
-                      active ? 'text-[#2EE6A6]' : 'text-white'
+                      active ? 'text-[#19EE8A]' : 'text-[#E8FFF3]'
                     }`}
                   >
                     {entry.item.title}
                   </p>
-                  <p className="text-xs text-white/55 truncate mt-0.5">Artis</p>
+                  <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5">Artis</p>
                 </div>
               </button>
             );
@@ -369,12 +369,12 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               <div className="min-w-0 flex-1">
                 <p
                   className={`text-sm font-semibold truncate ${
-                    active ? 'text-[#2EE6A6]' : 'text-white'
+                    active ? 'text-[#19EE8A]' : 'text-[#E8FFF3]'
                   }`}
                 >
                   {entry.item.title}
                 </p>
-                <p className="text-xs text-white/55 truncate mt-0.5">
+                <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5">
                   Podcast · {entry.item.artists?.[0]?.name || 'Acara'}
                 </p>
               </div>
@@ -386,15 +386,15 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
           savedAlbums.length === 0 &&
           followedArtists.length === 0 &&
           savedPodcasts.length === 0 && (
-            <div className="mx-2 mt-3 p-3.5 rounded-lg bg-[#1F1F1F] space-y-2">
-              <p className="text-xs font-semibold text-white">Buat playlist pertamamu</p>
-              <p className="text-xs text-white/55 leading-relaxed">
+            <div className="mx-2 mt-3 p-3.5 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] space-y-2">
+              <p className="text-xs font-semibold text-[#E8FFF3]">Buat playlist pertamamu</p>
+              <p className="text-xs text-[#B3F7D1]/65 leading-relaxed">
                 Simpan lagu favorit, album, dan artis agar selalu siap diputar.
               </p>
               <button
                 type="button"
                 onClick={onOpenCreatePlaylist}
-                className="px-3.5 py-1.5 rounded-full bg-white text-black text-xs font-semibold hover:scale-[1.02] transition-transform"
+                className="px-3.5 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-transform"
               >
                 Buat playlist
               </button>

@@ -115,8 +115,8 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               setMobileExpanded(true);
             }
           }}
-          className={`md:hidden fixed left-2 right-2 bottom-[64px] z-30 glass-panel rounded-xl overflow-hidden ${
-            glassPanels ? 'bg-[#141418]/72 backdrop-blur-xl' : 'bg-[#141418]/90'
+          className={`md:hidden fixed left-2 right-2 bottom-[64px] z-30 rounded-xl overflow-hidden border border-white/[0.14] shadow-2xl ${
+            glassPanels ? 'bg-black/60 backdrop-blur-2xl' : 'bg-[#0B0F0D]/85 backdrop-blur-2xl'
           }`}
         >
           <div className="flex items-center gap-3 px-3 py-2">
@@ -134,8 +134,8 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                 roundedClass="rounded-lg"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-white truncate">{currentTrack.title}</p>
-                <p className="text-[11px] text-white/55 truncate">
+                <p className="text-xs font-semibold text-[#E8FFF3] truncate">{currentTrack.title}</p>
+                <p className="text-[11px] text-[#B3F7D1]/65 truncate">
                   {formatArtists(currentTrack.artists)}
                 </p>
               </div>
@@ -146,17 +146,17 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               onClick={() => toggleLike(currentTrack)}
               aria-label={liked ? 'Hapus dari lagu disukai' : 'Sukai lagu'}
               className={`min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                liked ? 'text-[#2EE6A6]' : 'text-white/65'
+                liked ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/70'
               }`}
             >
-              <Heart className={`w-4 h-4 ${liked ? 'fill-[#2EE6A6]' : ''}`} strokeWidth={1.75} />
+              <Heart className={`w-4 h-4 ${liked ? 'fill-[#19EE8A]' : ''}`} strokeWidth={1.75} />
             </button>
 
             <button
               type="button"
               onClick={togglePlayPause}
               aria-label={isPlaying ? 'Jeda' : 'Putar'}
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-[#E8FFF3]"
             >
               {isPlaying ? (
                 <Pause className="w-5 h-5 fill-current" strokeWidth={1.75} />
@@ -165,9 +165,9 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               )}
             </button>
           </div>
-          <div className="h-[2px] w-full bg-white/10">
+          <div className="h-[2px] w-full bg-[#B3F7D1]/15">
             <div
-              className="h-full bg-[#2EE6A6] transition-[width] duration-200"
+              className="h-full bg-[#19EE8A] transition-[width] duration-200"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -191,9 +191,9 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               setMobileExpanded(false);
             }
           }}
-          className="md:hidden fixed inset-0 z-50 flex flex-col bg-[#0A0A0B] overflow-hidden"
+          className="md:hidden fixed inset-0 z-50 flex flex-col bg-black overflow-hidden"
           style={{
-            backgroundImage: `radial-gradient(circle at 50% 18%, rgba(${ambientColor.r}, ${ambientColor.g}, ${ambientColor.b}, 0.42), rgba(10,10,11,0.98) 70%)`,
+            backgroundImage: `radial-gradient(circle at 50% 18%, rgba(${ambientColor.r}, ${ambientColor.g}, ${ambientColor.b}, 0.38), rgba(5,7,6,0.98) 70%)`,
           }}
         >
           <div className="pt-3 pb-2 px-4 flex items-center justify-between shrink-0">
@@ -201,17 +201,17 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               type="button"
               onClick={() => setMobileExpanded(false)}
               aria-label="Tutup pemutar layar penuh"
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/80"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-[#B3F7D1]/80 hover:text-[#E8FFF3]"
             >
               <ChevronDown className="w-5 h-5" strokeWidth={1.75} />
             </button>
 
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.06] border border-white/[0.08]">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.11]">
               <button
                 type="button"
                 onClick={() => setSheetTab('player')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
-                  sheetTab === 'player' ? 'bg-white/[0.12] text-[#2EE6A6]' : 'text-white/65'
+                  sheetTab === 'player' ? 'bg-white/[0.14] text-[#19EE8A]' : 'text-[#B3F7D1]/70'
                 }`}
               >
                 Pemutar
@@ -220,7 +220,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                 type="button"
                 onClick={() => setSheetTab('lyrics')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium inline-flex items-center gap-1 ${
-                  sheetTab === 'lyrics' ? 'bg-white/[0.12] text-[#2EE6A6]' : 'text-white/65'
+                  sheetTab === 'lyrics' ? 'bg-white/[0.14] text-[#19EE8A]' : 'text-[#B3F7D1]/70'
                 }`}
               >
                 <Mic2 className="w-3 h-3" strokeWidth={1.75} />
@@ -230,7 +230,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                 type="button"
                 onClick={() => setSheetTab('queue')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium inline-flex items-center gap-1 ${
-                  sheetTab === 'queue' ? 'bg-white/[0.12] text-[#2EE6A6]' : 'text-white/65'
+                  sheetTab === 'queue' ? 'bg-white/[0.14] text-[#19EE8A]' : 'text-[#B3F7D1]/70'
                 }`}
               >
                 <ListMusic className="w-3 h-3" strokeWidth={1.75} />
@@ -242,7 +242,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               type="button"
               onClick={() => onAddToPlaylist(currentTrack)}
               aria-label="Simpan ke playlist"
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/80"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-[#B3F7D1]/80 hover:text-[#E8FFF3]"
             >
               <ListPlus className="w-5 h-5" strokeWidth={1.75} />
             </button>
@@ -263,20 +263,20 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               <div className="space-y-5 mt-5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-lg font-semibold text-white truncate">
+                    <h2 className="text-lg font-semibold text-[#E8FFF3] truncate">
                       {currentTrack.title}
                     </h2>
-                    <p className="text-sm text-white/60 truncate mt-0.5">
+                    <p className="text-sm text-[#B3F7D1]/70 truncate mt-0.5">
                       {formatArtists(currentTrack.artists)}
                     </p>
                     {activeStreamMeta && (
                       <p
                         className={`text-[11px] font-medium truncate mt-0.5 ${
                           activeStreamMeta.hiRes
-                            ? 'text-[#F5C451]'
+                            ? 'text-[#19EE8A]'
                             : activeStreamMeta.lossless
-                              ? 'text-[#2EE6A6]'
-                              : 'text-white/55'
+                              ? 'text-[#0AD36C]'
+                              : 'text-[#B3F7D1]/60'
                         }`}
                       >
                         {activeStreamMeta.badgeLabel}
@@ -288,11 +288,11 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     onClick={() => toggleLike(currentTrack)}
                     aria-label={liked ? 'Hapus dari lagu disukai' : 'Sukai lagu'}
                     className={`min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                      liked ? 'text-[#2EE6A6]' : 'text-white/65'
+                      liked ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/70'
                     }`}
                   >
                     <Heart
-                      className={`w-5 h-5 ${liked ? 'fill-[#2EE6A6]' : ''}`}
+                      className={`w-5 h-5 ${liked ? 'fill-[#19EE8A]' : ''}`}
                       strokeWidth={1.75}
                     />
                   </button>
@@ -309,11 +309,11 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     disabled={!currentTrack || safeDuration <= 0}
                     onChange={(e) => requestSeek(Number(e.target.value))}
                     style={{
-                      background: `linear-gradient(to right, #2EE6A6 ${progressPct}%, rgba(255,255,255,0.18) ${progressPct}%)`,
+                      background: `linear-gradient(to right, #19EE8A ${progressPct}%, rgba(179,247,209,0.2) ${progressPct}%)`,
                     }}
                     className="sc-range w-full h-1 rounded-full disabled:opacity-40"
                   />
-                  <div className="flex justify-between text-xs text-white/50 tabular-nums">
+                  <div className="flex justify-between text-xs text-[#B3F7D1]/55 tabular-nums">
                     <span>{formatTime(currentTime)}</span>
                     <span>{formatTime(safeDuration)}</span>
                   </div>
@@ -325,7 +325,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     onClick={toggleShuffle}
                     aria-label="Acak urutan"
                     className={`min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                      shuffle ? 'text-[#2EE6A6]' : 'text-white/60'
+                      shuffle ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/65'
                     }`}
                   >
                     <Shuffle className="w-5 h-5" strokeWidth={1.75} />
@@ -334,7 +334,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     type="button"
                     onClick={prevTrack}
                     aria-label="Lagu sebelumnya"
-                    className="min-w-[48px] min-h-[48px] flex items-center justify-center text-white"
+                    className="min-w-[48px] min-h-[48px] flex items-center justify-center text-[#E8FFF3]"
                   >
                     <SkipBack className="w-6 h-6 fill-current" strokeWidth={1.75} />
                   </button>
@@ -342,7 +342,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     type="button"
                     onClick={togglePlayPause}
                     aria-label={isPlaying ? 'Jeda' : 'Putar'}
-                    className="w-16 h-16 rounded-full bg-[#2EE6A6] text-[#06130E] flex items-center justify-center"
+                    className="w-16 h-16 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center shadow-lg shadow-[#01BA53]/25"
                   >
                     {isPlaying ? (
                       <Pause className="w-7 h-7 fill-current" strokeWidth={2} />
@@ -354,7 +354,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     type="button"
                     onClick={nextTrack}
                     aria-label="Lagu berikutnya"
-                    className="min-w-[48px] min-h-[48px] flex items-center justify-center text-white"
+                    className="min-w-[48px] min-h-[48px] flex items-center justify-center text-[#E8FFF3]"
                   >
                     <SkipForward className="w-6 h-6 fill-current" strokeWidth={1.75} />
                   </button>
@@ -363,7 +363,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     onClick={cycleRepeat}
                     aria-label={`Mode ulang: ${repeat}`}
                     className={`min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                      repeat !== 'off' ? 'text-[#2EE6A6]' : 'text-white/60'
+                      repeat !== 'off' ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/65'
                     }`}
                   >
                     <RepeatIcon className="w-5 h-5" strokeWidth={1.75} />
@@ -371,12 +371,12 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                 </div>
 
                 {/* Extra quick toggles */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/[0.08] text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#B3F7D1]/[0.1] text-xs">
                   <button
                     type="button"
                     onClick={toggleSmartShuffle}
-                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.06] ${
-                      smartShuffle ? 'text-[#2EE6A6]' : 'text-white/70'
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] ${
+                      smartShuffle ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/75'
                     }`}
                   >
                     <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -388,8 +388,8 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                     onClick={() =>
                       setSleepTimer(sleepTimerMode === 'off' ? 'minutes' : 'off', 30)
                     }
-                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.06] ${
-                      sleepTimerMode !== 'off' ? 'text-[#2EE6A6]' : 'text-white/70'
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] ${
+                      sleepTimerMode !== 'off' ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/75'
                     }`}
                   >
                     <Moon className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -399,7 +399,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                   <button
                     type="button"
                     onClick={() => setPlaybackRate(getNextPlaybackRate(playbackRate))}
-                    className="px-3 py-2 rounded-xl bg-white/[0.06] text-white/80 tabular-nums"
+                    className="px-3 py-2 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] text-[#E8FFF3]/85 tabular-nums"
                   >
                     {playbackRate}x
                   </button>
@@ -410,7 +410,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                       setMobileExpanded(false);
                       navigate({ name: 'settings', tab: 'sound', focusEq: false });
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 text-[#2EE6A6] font-medium"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#19EE8A]/15 border border-[#19EE8A]/35 text-[#19EE8A] font-medium"
                   >
                     <Sliders className="w-3.5 h-3.5" strokeWidth={1.85} />
                     Pengaturan Audio
@@ -422,7 +422,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
                       setMobileExpanded(false);
                       setKaraokeOpen(true);
                     }}
-                    className="px-3 py-2 rounded-xl bg-white/[0.06] text-white/80"
+                    className="px-3 py-2 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] text-[#E8FFF3]/85"
                   >
                     Karaoke
                   </button>
@@ -448,8 +448,8 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
       {/* Mobile Bottom Tab Bar */}
       <nav
         aria-label="Navigasi seluler"
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[58px] backdrop-blur-xl border-t border-white/[0.08] grid grid-cols-5 ${
-          glassPanels ? 'bg-[#0E0E11]/72' : 'bg-[#0E0E11]/90'
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[58px] backdrop-blur-2xl border-t border-white/[0.1] grid grid-cols-5 ${
+          glassPanels ? 'bg-black/65' : 'bg-[#080B09]/88'
         }`}
       >
         {tabs.map((tab) => {
@@ -466,7 +466,7 @@ export function MobileShell({ onAddToPlaylist }: MobileShellProps) {
               type="button"
               onClick={() => navigate({ name: tab.id })}
               className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors ${
-                active ? 'text-[#2EE6A6]' : 'text-white/55'
+                active ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/60'
               }`}
             >
               <Icon className="w-5 h-5" strokeWidth={1.75} />

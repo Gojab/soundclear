@@ -71,8 +71,8 @@ export function SpectrumAnalyzer() {
         const y = height - barHeight;
 
         ctx.fillStyle = signalLive
-          ? `rgba(46, 230, 166, ${(0.35 + magnitude * 0.65).toFixed(2)})`
-          : 'rgba(255, 255, 255, 0.14)';
+          ? `rgba(25, 238, 138, ${(0.38 + magnitude * 0.62).toFixed(2)})`
+          : 'rgba(179, 247, 209, 0.16)';
         ctx.beginPath();
         ctx.roundRect(x, y, barWidth, barHeight, 2);
         ctx.fill();
@@ -90,16 +90,16 @@ export function SpectrumAnalyzer() {
     : webAudioStreamActive
       ? 'Aktif (Web Audio DSP)'
       : activeStreamMeta?.sourceMode === 'youtube-iframe'
-        ? 'YT Music Player (DSP Bypass)'
+        ? 'Cloud Audio (DSP Bypass)'
         : activeStreamMeta?.sourceMode === 'fallback-no-fx'
           ? 'Terbatas (Tanpa DSP)'
           : 'Siaga';
 
   return (
-    <div className="rounded-xl bg-black/40 border border-white/[0.08] p-3 space-y-2">
-      <div className="flex items-center justify-between text-[11px] text-white/55">
+    <div className="rounded-xl bg-white/[0.045] backdrop-blur-xl border border-white/[0.11] p-3 space-y-2">
+      <div className="flex items-center justify-between text-[11px] text-[#B3F7D1]/65">
         <span>Analyzer Spektrum Real-Time</span>
-        <span className={signalLive ? 'text-[#2EE6A6] font-medium' : 'text-white/40'}>
+        <span className={signalLive ? 'text-[#19EE8A] font-medium' : 'text-[#B3F7D1]/45'}>
           {statusText}
         </span>
       </div>

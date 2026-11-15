@@ -275,12 +275,12 @@ export function SearchPage({
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">Cari Musik & Podcast</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight">Cari Musik & Podcast</h1>
 
         <div ref={searchBoxRef} className="relative max-w-2xl">
           <form onSubmit={handleSubmit} className="relative flex items-center">
             <Search
-              className="w-4 h-4 text-white/45 absolute left-3.5 pointer-events-none"
+              className="w-4 h-4 text-[#B3F7D1]/50 absolute left-3.5 pointer-events-none"
               strokeWidth={1.75}
             />
             <input
@@ -294,7 +294,7 @@ export function SearchPage({
               onFocus={() => setShowSuggestions(true)}
               placeholder="Cari lagu, artis, album, playlist, atau podcast..."
               aria-label="Cari lagu, artis, album, playlist, atau podcast"
-              className="w-full h-11 pl-10 pr-24 rounded-xl bg-white/[0.07] border border-white/[0.1] text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#2EE6A6]"
+              className="w-full h-11 pl-10 pr-24 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-sm text-[#E8FFF3] placeholder:text-[#B3F7D1]/45 focus:outline-none focus:border-[#19EE8A]"
             />
             {inputValue && (
               <button
@@ -307,14 +307,14 @@ export function SearchPage({
                   navigate({ name: 'search', query: '', filter });
                 }}
                 aria-label="Bersihkan pencarian"
-                className="absolute right-16 w-7 h-7 rounded-lg flex items-center justify-center text-white/50 hover:text-white"
+                className="absolute right-16 w-7 h-7 rounded-lg flex items-center justify-center text-[#B3F7D1]/55 hover:text-[#E8FFF3]"
               >
                 <X className="w-4 h-4" strokeWidth={1.75} />
               </button>
             )}
             <button
               type="submit"
-              className="absolute right-1.5 px-3 py-1.5 rounded-lg bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all"
+              className="absolute right-1.5 px-3 py-1.5 rounded-lg bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
             >
               Cari
             </button>
@@ -326,7 +326,7 @@ export function SearchPage({
               <div
                 role="listbox"
                 aria-label="Saran pencarian"
-                className="absolute left-0 right-0 top-12 z-20 glass-panel rounded-xl p-1.5 bg-[#121216]/95 shadow-2xl"
+                className="absolute left-0 right-0 top-12 z-20 rounded-xl p-1.5 bg-[#0B0F0D]/88 backdrop-blur-2xl border border-white/[0.14] shadow-2xl"
               >
                 {filteredSuggestions.map((suggestion) => (
                   <button
@@ -335,9 +335,9 @@ export function SearchPage({
                     role="option"
                     aria-selected={false}
                     onClick={() => runSearch(suggestion)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-sm text-white/85 hover:bg-white/[0.08] hover:text-white transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-sm text-[#E8FFF3]/90 hover:bg-white/[0.1] hover:text-[#E8FFF3] transition-colors"
                   >
-                    <Search className="w-3.5 h-3.5 text-white/40 shrink-0" strokeWidth={1.75} />
+                    <Search className="w-3.5 h-3.5 text-[#B3F7D1]/45 shrink-0" strokeWidth={1.75} />
                     <span className="truncate">{suggestion}</span>
                   </button>
                 ))}
@@ -367,8 +367,8 @@ export function SearchPage({
                 }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
                   active
-                    ? 'bg-[#2EE6A6] text-[#06130E] font-semibold'
-                    : 'bg-white/[0.06] text-white/70 hover:text-white hover:bg-white/[0.1]'
+                    ? 'bg-sc-gradient text-[#0F1F17] font-semibold'
+                    : 'bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] text-[#B3F7D1]/75 hover:text-[#E8FFF3] hover:bg-white/[0.1]'
                 }`}
               >
                 {tab.label}
@@ -383,7 +383,7 @@ export function SearchPage({
             aria-label="Follow-up pencarian"
             className="flex items-center gap-2 flex-wrap pt-1"
           >
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-white/45 mr-0.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#B3F7D1]/50 mr-0.5">
               Follow-up:
             </span>
             {followUpChips.slice(0, 6).map((chip) => (
@@ -391,9 +391,9 @@ export function SearchPage({
                 key={chip.id}
                 type="button"
                 onClick={() => runSearch(chip.query, chip.filter)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] hover:bg-[#2EE6A6]/15 border border-white/[0.08] hover:border-[#2EE6A6]/45 text-xs text-white/80 hover:text-white transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.055] backdrop-blur-xl hover:bg-[#19EE8A]/15 border border-white/[0.11] hover:border-[#19EE8A]/45 text-xs text-[#E8FFF3]/85 hover:text-[#E8FFF3] transition-colors"
               >
-                <CornerDownRight className="w-3 h-3 text-[#2EE6A6] shrink-0" strokeWidth={2} />
+                <CornerDownRight className="w-3 h-3 text-[#19EE8A] shrink-0" strokeWidth={2} />
                 <span className="truncate max-w-[220px]">{chip.label}</span>
               </button>
             ))}
@@ -407,13 +407,13 @@ export function SearchPage({
           {recentSearches.length > 0 && (
             <section aria-labelledby="recent-searches-heading" className="space-y-3">
               <div className="flex items-center justify-between gap-4">
-                <h2 id="recent-searches-heading" className="text-base font-semibold text-white">
+                <h2 id="recent-searches-heading" className="text-base font-semibold text-[#E8FFF3]">
                   Pencarian Terakhir
                 </h2>
                 <button
                   type="button"
                   onClick={clearRecentSearches}
-                  className="inline-flex items-center gap-1 text-xs text-white/50 hover:text-white transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-[#B3F7D1]/55 hover:text-[#E8FFF3] transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                   Hapus semua
@@ -430,15 +430,15 @@ export function SearchPage({
                       onClick={() => runSearch(entry.query)}
                       className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
                     >
-                      <Clock className="w-3.5 h-3.5 text-white/45 shrink-0" strokeWidth={1.75} />
-                      <span className="text-sm text-white/85 truncate">{entry.query}</span>
+                      <Clock className="w-3.5 h-3.5 text-[#B3F7D1]/50 shrink-0" strokeWidth={1.75} />
+                      <span className="text-sm text-[#E8FFF3]/90 truncate">{entry.query}</span>
                     </button>
                     {entry.uid !== undefined && (
                       <button
                         type="button"
                         onClick={() => removeRecentSearch(entry.uid!)}
                         aria-label={`Hapus pencarian ${entry.query}`}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.08] shrink-0"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-[#E8FFF3] hover:bg-white/[0.1] shrink-0"
                       >
                         <X className="w-3.5 h-3.5" strokeWidth={1.75} />
                       </button>
@@ -451,7 +451,7 @@ export function SearchPage({
 
           {/* Jelajahi Semua Kategori */}
           <section aria-labelledby="browse-categories-heading" className="space-y-4">
-            <h2 id="browse-categories-heading" className="text-base font-semibold text-white">
+            <h2 id="browse-categories-heading" className="text-base font-semibold text-[#E8FFF3]">
               Jelajahi Semua Kategori
             </h2>
             {moodsQuery.isLoading ? (
@@ -464,7 +464,7 @@ export function SearchPage({
               <div className="space-y-6">
                 {moodsQuery.data?.groups.map((group) => (
                   <div key={group.title} className="space-y-2.5">
-                    <h3 className="text-xs font-semibold text-white/55">{group.title}</h3>
+                    <h3 className="text-xs font-semibold text-[#B3F7D1]/60">{group.title}</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
                       {group.items.map((cat) => (
                         <button
@@ -473,13 +473,13 @@ export function SearchPage({
                           onClick={() =>
                             navigate({ name: 'mood-detail', params: cat.params, title: cat.title })
                           }
-                          className="glass-card rounded-xl px-3.5 py-3 flex items-center justify-between gap-2 text-left group"
+                          className="glass-card rounded-xl px-3.5 py-3 flex items-center justify-between gap-2 text-left group hover:bg-white/[0.1] transition-colors"
                         >
-                          <span className="text-xs sm:text-sm font-medium text-white truncate">
+                          <span className="text-xs sm:text-sm font-medium text-[#E8FFF3] truncate">
                             {cat.title}
                           </span>
                           <ChevronRight
-                            className="w-4 h-4 text-white/35 group-hover:text-[#2EE6A6] shrink-0"
+                            className="w-4 h-4 text-[#B3F7D1]/40 group-hover:text-[#19EE8A] shrink-0"
                             strokeWidth={1.75}
                           />
                         </button>
@@ -509,12 +509,12 @@ export function SearchPage({
       ) : items.length === 0 ? (
         <div className="glass-card rounded-2xl p-8 text-center space-y-4">
           <div>
-            <p className="text-sm font-medium text-white/80">
+            <p className="text-sm font-medium text-[#E8FFF3]/85">
               {queryBlockedRegional
                 ? 'Hasil untuk pencarian ini disembunyikan'
                 : <>Tidak ada hasil untuk &ldquo;{submittedQuery}&rdquo;</>}
             </p>
-            <p className="text-xs text-white/45 mt-1">
+            <p className="text-xs text-[#B3F7D1]/50 mt-1">
               Lagu Jepang, India &amp; Mandarin disembunyikan dari pencarian. Coba kata kunci atau follow-up berikut:
             </p>
           </div>
@@ -525,7 +525,7 @@ export function SearchPage({
                   key={`empty-${chip.id}`}
                   type="button"
                   onClick={() => runSearch(chip.query, chip.filter)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.07] hover:bg-[#2EE6A6] hover:text-[#06130E] text-xs font-medium text-white/85 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.11] hover:bg-[#19EE8A] hover:text-[#0F1F17] text-xs font-medium text-[#E8FFF3]/90 transition-colors"
                 >
                   <CornerDownRight className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
                   <span>{chip.label}</span>
@@ -539,7 +539,7 @@ export function SearchPage({
           {/* Hasil Teratas */}
           {topResult && (
             <section aria-labelledby="top-result-heading" className="space-y-2.5">
-              <h2 id="top-result-heading" className="text-base font-semibold text-white">
+              <h2 id="top-result-heading" className="text-base font-semibold text-[#E8FFF3]">
                 Hasil Teratas
               </h2>
               <div className="glass-card rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-2xl">
@@ -563,11 +563,11 @@ export function SearchPage({
                     roundedClass={topResult.type === 'artist' ? 'rounded-full' : 'rounded-xl'}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-[#2EE6A6] font-medium capitalize">
+                    <p className="text-[11px] text-[#19EE8A] font-medium capitalize">
                       {topResult.type}
                     </p>
-                    <p className="text-lg font-bold text-white truncate mt-0.5">{topResult.title}</p>
-                    <p className="text-xs text-white/60 truncate mt-0.5">
+                    <p className="text-lg font-bold text-[#E8FFF3] truncate mt-0.5">{topResult.title}</p>
+                    <p className="text-xs text-[#B3F7D1]/65 truncate mt-0.5">
                       {topResult.artists.length > 0
                         ? formatArtists(topResult.artists)
                         : topResult.year || topResult.views || 'Katalog SoundClear'}
@@ -588,7 +588,7 @@ export function SearchPage({
                         setResolvingTopPlay(false);
                       }
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2EE6A6] text-[#06130E] text-xs font-semibold shrink-0 hover:brightness-105 disabled:opacity-70"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold shrink-0 hover:brightness-105 disabled:opacity-70"
                   >
                     {resolvingTopPlay ? (
                       <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
@@ -603,7 +603,7 @@ export function SearchPage({
                     <button
                       type="button"
                       onClick={() => navigateToItem(topResult)}
-                      className="px-4 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white shrink-0"
+                      className="px-4 py-2.5 rounded-xl bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] shrink-0"
                     >
                       Buka
                     </button>
@@ -617,15 +617,15 @@ export function SearchPage({
           {topSongItem && (
             <section
               aria-label="Follow-up lagu"
-              className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-3.5 sm:p-4 space-y-3"
+              className="rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.11] p-3.5 sm:p-4 space-y-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2.5">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#2EE6A6]">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#19EE8A]">
                     Follow-up Lagu
                   </p>
-                  <p className="text-xs text-white/75 truncate mt-0.5">
-                    Lanjutkan dari <span className="font-semibold text-white">{topSongItem.title}</span>
+                  <p className="text-xs text-[#B3F7D1]/75 truncate mt-0.5">
+                    Lanjutkan dari <span className="font-semibold text-[#E8FFF3]">{topSongItem.title}</span>
                     {topSongItem.artists[0]?.name ? ` — ${topSongItem.artists[0].name}` : ''}
                   </p>
                 </div>
@@ -647,7 +647,7 @@ export function SearchPage({
                         });
                       }
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
                   >
                     <Radio className="w-3.5 h-3.5" strokeWidth={2} />
                     Putar Radio
@@ -660,9 +660,9 @@ export function SearchPage({
                       setRightPanelTab('lyrics');
                       setRightPanelOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.09] hover:bg-white/[0.15] border border-white/[0.12] text-xs font-medium text-[#E8FFF3] transition-colors"
                   >
-                    <Mic2 className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={1.9} />
+                    <Mic2 className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.9} />
                     Putar &amp; Lirik
                   </button>
 
@@ -676,7 +676,7 @@ export function SearchPage({
                           fallbackQuery: topSongItem.artists[0].name,
                         })
                       }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-xs text-white/85 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.11] text-xs text-[#E8FFF3]/90 transition-colors"
                     >
                       <span>Artis: {topSongItem.artists[0].name}</span>
                     </button>
@@ -685,18 +685,18 @@ export function SearchPage({
                   <button
                     type="button"
                     onClick={() => runSearch(`${topSongItem.title} akustik`, 'songs')}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-xs text-white/80 hover:text-white transition-colors"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#B3F7D1]/85 hover:text-[#E8FFF3] transition-colors"
                   >
-                    <CornerDownRight className="w-3 h-3 text-[#2EE6A6]" strokeWidth={2} />
+                    <CornerDownRight className="w-3 h-3 text-[#19EE8A]" strokeWidth={2} />
                     Akustik
                   </button>
 
                   <button
                     type="button"
                     onClick={() => runSearch(`${topSongItem.title} live`, 'songs')}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-xs text-white/80 hover:text-white transition-colors"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#B3F7D1]/85 hover:text-[#E8FFF3] transition-colors"
                   >
-                    <CornerDownRight className="w-3 h-3 text-[#2EE6A6]" strokeWidth={2} />
+                    <CornerDownRight className="w-3 h-3 text-[#19EE8A]" strokeWidth={2} />
                     Live
                   </button>
                 </div>
@@ -704,7 +704,7 @@ export function SearchPage({
 
               {relatedFollowUpTracks.length > 0 && (
                 <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
-                  <span className="text-[11px] text-white/45 shrink-0">Lagu serupa:</span>
+                  <span className="text-[11px] text-[#B3F7D1]/50 shrink-0">Lagu serupa:</span>
                   {relatedFollowUpTracks.slice(0, 4).map((rel, idx) => (
                     <button
                       key={`topfu-${rel.id}-${idx}`}
@@ -716,9 +716,9 @@ export function SearchPage({
                           `Follow-up: ${topSongItem.title}`,
                         )
                       }
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.07] text-xs text-white/85 hover:text-white shrink-0 max-w-[220px] transition-colors"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#E8FFF3]/90 hover:text-[#E8FFF3] shrink-0 max-w-[220px] transition-colors"
                     >
-                      <Play className="w-3 h-3 text-[#2EE6A6] fill-current shrink-0" strokeWidth={2} />
+                      <Play className="w-3 h-3 text-[#19EE8A] fill-current shrink-0" strokeWidth={2} />
                       <span className="truncate">{rel.title}</span>
                     </button>
                   ))}
@@ -730,7 +730,7 @@ export function SearchPage({
           {playableTracks.length > 0 && (
             <section className="space-y-2">
               {filter === 'all' && collectionItems.length > 0 && (
-                <h2 className="text-base font-semibold text-white">Lagu, Video & Episode</h2>
+                <h2 className="text-base font-semibold text-[#E8FFF3]">Lagu, Video & Episode</h2>
               )}
               <div className="space-y-1">
                 {playableTracks.map((track, idx) => (
@@ -754,7 +754,7 @@ export function SearchPage({
           {collectionItems.length > 0 && (
             <section className="space-y-3">
               {filter === 'all' && playableTracks.length > 0 && (
-                <h2 className="text-base font-semibold text-white">
+                <h2 className="text-base font-semibold text-[#E8FFF3]">
                   Artis, Album, Playlist & Podcast
                 </h2>
               )}
@@ -777,17 +777,17 @@ export function SearchPage({
             relatedFollowUpQuery.isLoading) && (
             <section
               aria-labelledby="search-followup-heading"
-              className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-4 sm:p-5 space-y-5"
+              className="rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-5 space-y-5"
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h2
                     id="search-followup-heading"
-                    className="text-base font-semibold text-white"
+                    className="text-base font-semibold text-[#E8FFF3]"
                   >
                     Follow-up Pencarian &amp; Rekomendasi Lanjutan
                   </h2>
-                  <p className="text-xs text-white/55 mt-0.5">
+                  <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
                     Jelajahi pencarian terkait atau putar lagu mirip dari &ldquo;{submittedQuery}&rdquo;
                   </p>
                 </div>
@@ -801,7 +801,7 @@ export function SearchPage({
                         `Radio Follow-up: ${submittedQuery}`,
                       )
                     }
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2EE6A6] text-[#06130E] text-xs font-semibold hover:brightness-105 transition-all shrink-0 self-start sm:self-auto"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all shrink-0 self-start sm:self-auto"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
                     Putar Radio Lanjutan
@@ -811,17 +811,17 @@ export function SearchPage({
 
               {followUpChips.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-white/60">Lanjutkan cari:</p>
+                  <p className="text-xs font-medium text-[#B3F7D1]/65">Lanjutkan cari:</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     {followUpChips.map((chip) => (
                       <button
                         key={`panel-${chip.id}`}
                         type="button"
                         onClick={() => runSearch(chip.query, chip.filter)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-xs font-medium text-white/85 hover:text-white transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.11] text-xs font-medium text-[#E8FFF3]/90 hover:text-[#E8FFF3] transition-colors"
                       >
                         <CornerDownRight
-                          className="w-3.5 h-3.5 text-[#2EE6A6] shrink-0"
+                          className="w-3.5 h-3.5 text-[#19EE8A] shrink-0"
                           strokeWidth={1.9}
                         />
                         <span>{chip.label}</span>
@@ -837,7 +837,7 @@ export function SearchPage({
                 <>
                   {relatedFollowUpTracks.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-white/60">
+                      <p className="text-xs font-medium text-[#B3F7D1]/65">
                         Lagu terkait yang mungkin kamu suka
                       </p>
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1">
@@ -862,7 +862,7 @@ export function SearchPage({
 
                   {relatedFollowUpCollections.length > 0 && (
                     <div className="space-y-2.5">
-                      <p className="text-xs font-medium text-white/60">
+                      <p className="text-xs font-medium text-[#B3F7D1]/65">
                         Artis &amp; Playlist terkait
                       </p>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

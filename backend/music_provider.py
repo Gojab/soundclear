@@ -2325,7 +2325,7 @@ class MusicProvider:
         candidates = [vid for _, _, vid in scored]
 
         if not candidates:
-            raise MusicProviderError("Tidak dapat menemukan media audio yang cocok di katalog YouTube Music.", 404)
+            raise MusicProviderError("Tidak dapat menemukan media audio yang cocok di katalog.", 404)
 
         result = {
             "id": clean_id or candidates[0],
@@ -2978,9 +2978,15 @@ class MusicProvider:
     ) -> Tuple[Mapping[str, Any], str]:
         clean_vid = (video_id or "").strip()
         if not VIDEO_ID_RE.fullmatch(clean_vid):
-            raise MusicProviderError("ID lagu YouTube Music tidak valid.", 400)
+            raise MusicProviderError("ID lagu tidak valid.", 400)
 
         allow_ffmpeg_only = self._should_use_ffmpeg_remux()
+
+        if time.monotonic() < self._yt_bot_blocked_until:
+            raise MusicProviderError(
+                "Aliran audio langsung sedang dibatasi server; beralih ke pemutar cloud.",
+                403,
+            )
 
         # 1. Try direct ytmusicapi.get_song streamingData URL if unencrypted & available
         ytm_fmt = self._extract_from_ytmusic_song_api(
@@ -2990,12 +2996,6 @@ class MusicProvider:
         )
         if ytm_fmt and ytm_fmt.get("url"):
             return ytm_fmt, "YouTube Music Audio"
-
-        if time.monotonic() < self._yt_bot_blocked_until:
-            raise MusicProviderError(
-                "Aliran audio langsung sedang dibatasi YouTube; beralih ke pemutar YouTube.",
-                403,
-            )
 
         ydl_opts: Dict[str, Any] = {
             "quiet": True,
@@ -3034,16 +3034,16 @@ class MusicProvider:
                 if any(tok in err_str for tok in ("sign in to confirm", "not a bot", "bot", "login", "cookies")):
                     self._yt_bot_blocked_until = time.monotonic() + 300
                     raise MusicProviderError(
-                        "Aliran audio langsung memerlukan verifikasi YouTube; beralih ke pemutar YouTube.",
+                        "Aliran audio langsung memerlukan verifikasi sesi; beralih ke pemutar cloud.",
                         403,
                     ) from exc
 
         if last_exc is not None:
             raise MusicProviderError(
-                f"Aliran audio YouTube Music belum tersedia: {last_exc}",
+                f"Aliran audio cloud belum tersedia: {last_exc}",
                 502,
             ) from last_exc
-        raise MusicProviderError("Aliran audio YouTube Music tidak tersedia untuk lagu ini.", 404)
+        raise MusicProviderError("Aliran audio cloud tidak tersedia untuk lagu ini.", 404)
 
     def _resolve_track_metadata_for_stream(
         self,

@@ -16,10 +16,10 @@ export function MoodsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">
+        <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight">
           Mood & Genre
         </h1>
-        <p className="text-xs text-white/55 mt-0.5">
+        <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
           Jelajahi daftar putar sesuai suasana hati dan genre favorit
         </p>
       </div>
@@ -27,7 +27,7 @@ export function MoodsPage() {
       {moodsQuery.isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 animate-pulse">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-14 rounded-xl bg-white/[0.06]" />
+            <div key={i} className="h-14 rounded-xl bg-white/[0.06] border border-white/[0.08]" />
           ))}
         </div>
       ) : moodsQuery.isError ? (
@@ -43,7 +43,7 @@ export function MoodsPage() {
         <div className="space-y-8">
           {moodsQuery.data?.groups.map((group) => (
             <section key={group.title} className="space-y-3">
-              <h2 className="text-base font-semibold text-white">{group.title}</h2>
+              <h2 className="text-base font-semibold text-[#E8FFF3]">{group.title}</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {group.items.map((cat) => (
                   <button
@@ -52,11 +52,11 @@ export function MoodsPage() {
                     onClick={() =>
                       navigate({ name: 'mood-detail', params: cat.params, title: cat.title })
                     }
-                    className="glass-card rounded-xl px-4 py-3.5 flex items-center justify-between gap-2 text-left group"
+                    className="glass-card rounded-xl px-4 py-3.5 flex items-center justify-between gap-2 text-left group hover:bg-white/[0.1] transition-colors"
                   >
-                    <span className="text-sm font-medium text-white truncate">{cat.title}</span>
+                    <span className="text-sm font-medium text-[#E8FFF3] truncate">{cat.title}</span>
                     <ChevronRight
-                      className="w-4 h-4 text-white/40 group-hover:text-[#2EE6A6] transition-colors shrink-0"
+                      className="w-4 h-4 text-[#B3F7D1]/45 group-hover:text-[#19EE8A] transition-colors shrink-0"
                       strokeWidth={1.75}
                     />
                   </button>
@@ -92,8 +92,8 @@ export function MoodDetailPage({ params, title }: { params: string; title: strin
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs text-white/50">Mood & Genre</p>
-        <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight mt-0.5">
+        <p className="text-xs text-[#B3F7D1]/55">Mood & Genre</p>
+        <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight mt-0.5">
           {title}
         </h1>
       </div>
@@ -117,7 +117,7 @@ export function MoodDetailPage({ params, title }: { params: string; title: strin
           ))}
         </div>
       ) : (
-        <p className="text-sm text-white/50">Tidak ada playlist ditemukan untuk kategori ini.</p>
+        <p className="text-sm text-[#B3F7D1]/55">Tidak ada playlist ditemukan untuk kategori ini.</p>
       )}
     </div>
   );

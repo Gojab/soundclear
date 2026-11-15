@@ -19,8 +19,8 @@ export const BACKGROUND_PRESETS: BackgroundPresetOption[] = [
     subtitle: 'Gelombang sutra gelap mint',
     kind: 'image',
     assetKey: 'emerald_aurora',
-    previewGradient: 'linear-gradient(135deg, #061812 0%, #0D3A2D 50%, #050B0F 100%)',
-    cssBackground: 'linear-gradient(135deg, #061812 0%, #0D3A2D 50%, #050B0F 100%)',
+    previewGradient: 'linear-gradient(135deg, #0F1F17 0%, #01BA53 55%, #08120D 100%)',
+    cssBackground: 'linear-gradient(135deg, #0F1F17 0%, #01BA53 55%, #08120D 100%)',
   },
   {
     id: 'studio_console',
@@ -28,8 +28,8 @@ export const BACKGROUND_PRESETS: BackgroundPresetOption[] = [
     subtitle: 'Konsol analog cahaya hangat',
     kind: 'image',
     assetKey: 'studio_console',
-    previewGradient: 'linear-gradient(135deg, #16120B 0%, #2B2111 50%, #08120E 100%)',
-    cssBackground: 'linear-gradient(135deg, #16120B 0%, #2B2111 50%, #08120E 100%)',
+    previewGradient: 'linear-gradient(135deg, #16120B 0%, #2B2111 50%, #08120D 100%)',
+    cssBackground: 'linear-gradient(135deg, #16120B 0%, #2B2111 50%, #08120D 100%)',
   },
   {
     id: 'vinyl_night',
@@ -37,8 +37,8 @@ export const BACKGROUND_PRESETS: BackgroundPresetOption[] = [
     subtitle: 'Ruang dengar larut malam',
     kind: 'image',
     assetKey: 'vinyl_night',
-    previewGradient: 'linear-gradient(135deg, #0B151A 0%, #172A33 52%, #090A0D 100%)',
-    cssBackground: 'linear-gradient(135deg, #0B151A 0%, #172A33 52%, #090A0D 100%)',
+    previewGradient: 'linear-gradient(135deg, #0B151A 0%, #172A33 52%, #08120D 100%)',
+    cssBackground: 'linear-gradient(135deg, #0B151A 0%, #172A33 52%, #08120D 100%)',
   },
   {
     id: 'midnight_emerald',
@@ -46,9 +46,9 @@ export const BACKGROUND_PRESETS: BackgroundPresetOption[] = [
     subtitle: 'Gradasi radial mint lembut',
     kind: 'gradient',
     previewGradient:
-      'radial-gradient(circle at 18% 20%, #114D3B 0%, #08231C 45%, #06090C 100%)',
+      'radial-gradient(circle at 18% 20%, #01BA53 0%, #0F1F17 48%, #08120D 100%)',
     cssBackground:
-      'radial-gradient(circle at 18% 20%, rgba(46, 230, 166, 0.32) 0%, rgba(13, 61, 47, 0.55) 38%, #050709 85%)',
+      'radial-gradient(circle at 18% 20%, rgba(25, 238, 138, 0.28) 0%, rgba(10, 211, 108, 0.16) 38%, #08120D 85%)',
   },
   {
     id: 'nordic_indigo',
@@ -71,16 +71,16 @@ export const BACKGROUND_PRESETS: BackgroundPresetOption[] = [
 ];
 
 export const QUICK_SOLID_COLORS = [
-  { label: 'Zamrud Gelap', value: '#09241B' },
+  { label: 'Zamrud Gelap', value: '#0F1F17' },
   { label: 'Laut Dalam', value: '#0B1D36' },
   { label: 'Ungu Malam', value: '#1E1133' },
   { label: 'Merah Anggur', value: '#2B0E17' },
   { label: 'Cokelat Studio', value: '#24180E' },
-  { label: 'Abu Arang', value: '#181A1F' },
+  { label: 'Abu Arang', value: '#15291F' },
 ];
 
 export const QUICK_GRADIENT_PAIRS = [
-  { label: 'Mint Malam', from: '#073B2C', to: '#070E1A', angle: 135 },
+  { label: 'Mint Malam', from: '#01BA53', to: '#0F1F17', angle: 135 },
   { label: 'Oseanik', from: '#0C2D48', to: '#121024', angle: 135 },
   { label: 'Senja Hangat', from: '#3E1C10', to: '#100C18', angle: 135 },
   { label: 'Nebula', from: '#28113B', to: '#0B1D2C', angle: 135 },
@@ -89,9 +89,9 @@ export const QUICK_GRADIENT_PAIRS = [
 export const DEFAULT_CUSTOM_BACKGROUND: CustomBackgroundSettings = {
   mode: 'default',
   presetId: 'emerald_aurora',
-  solidColor: '#09241B',
-  gradientFrom: '#073B2C',
-  gradientTo: '#070E1A',
+  solidColor: '#0F1F17',
+  gradientFrom: '#01BA53',
+  gradientTo: '#0F1F17',
   gradientAngle: 135,
   customImageDataUrl: null,
   customImageName: null,
@@ -234,7 +234,7 @@ export function computeBackgroundPresentation(
   }
 
   if (bg.mode === 'ambient') {
-    const rgb = opts?.ambientColor ?? { r: 46, g: 230, b: 166 };
+    const rgb = opts?.ambientColor ?? { r: 25, g: 238, b: 138 };
     const thumb = isSafeBackgroundImageUrl(opts?.currentTrackThumbnail)
       ? opts?.currentTrackThumbnail
       : null;
@@ -242,7 +242,7 @@ export function computeBackgroundPresentation(
       isActive: true,
       useGlassPanels: bg.panelGlass,
       imageUrl: thumb,
-      backgroundCss: `radial-gradient(circle at 24% 20%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.55), rgba(8, 10, 14, 0.96) 72%)`,
+      backgroundCss: `radial-gradient(circle at 24% 20%, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.48), rgba(8, 18, 13, 0.96) 72%)`,
       blurPx: thumb ? Math.max(14, blurPx) : 0,
       scrimOpacity,
     };
@@ -302,7 +302,7 @@ export function computeBackgroundPresentation(
     isActive: true,
     useGlassPanels: bg.panelGlass,
     imageUrl: bg.customImageDataUrl,
-    backgroundCss: '#050709',
+    backgroundCss: '#08120D',
     blurPx,
     scrimOpacity,
   };

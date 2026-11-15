@@ -47,7 +47,7 @@ export function LyricsView() {
 
   if (!currentTrack) {
     return (
-      <div className="py-12 text-center text-xs text-white/45">
+      <div className="py-12 text-center text-xs text-[#B3F7D1]/50">
         Putar lagu untuk menampilkan lirik.
       </div>
     );
@@ -69,7 +69,7 @@ export function LyricsView() {
 
   if (isError) {
     return (
-      <div className="py-8 px-3 text-xs text-white/60">
+      <div className="py-8 px-3 text-xs text-[#B3F7D1]/65">
         {error instanceof Error ? error.message : 'Gagal memuat lirik.'}
       </div>
     );
@@ -89,10 +89,10 @@ export function LyricsView() {
               onClick={() => requestSeek(line.startTimeMs / 1000)}
               className={`block w-full text-left px-2.5 py-1.5 rounded-lg text-sm leading-relaxed transition-colors duration-150 ${
                 isActive
-                  ? 'text-[#2EE6A6] font-semibold bg-white/[0.07]'
+                  ? 'text-[#19EE8A] font-semibold bg-white/[0.09] backdrop-blur-md border border-[#19EE8A]/20'
                   : isPast
-                    ? 'text-white/40 hover:text-white/75'
-                    : 'text-white/70 hover:text-white'
+                    ? 'text-[#B3F7D1]/40 hover:text-[#B3F7D1]/75'
+                    : 'text-[#E8FFF3]/75 hover:text-[#E8FFF3]'
               }`}
             >
               {line.text}
@@ -100,7 +100,7 @@ export function LyricsView() {
           );
         })}
         {data.source && (
-          <p className="pt-4 px-2.5 text-[11px] text-white/35">{data.source}</p>
+          <p className="pt-4 px-2.5 text-[11px] text-[#B3F7D1]/40">{data.source}</p>
         )}
       </div>
     );
@@ -109,18 +109,18 @@ export function LyricsView() {
   if (data?.plainText) {
     return (
       <div className="py-2 px-1 space-y-3">
-        <p className="text-sm text-white/80 whitespace-pre-line leading-relaxed">
+        <p className="text-sm text-[#E8FFF3]/85 whitespace-pre-line leading-relaxed">
           {data.plainText}
         </p>
-        {data.source && <p className="text-[11px] text-white/35">{data.source}</p>}
+        {data.source && <p className="text-[11px] text-[#B3F7D1]/40">{data.source}</p>}
       </div>
     );
   }
 
   return (
     <div className="py-12 px-4 text-center space-y-2">
-      <Mic2 className="w-6 h-6 text-white/35 mx-auto" strokeWidth={1.75} />
-      <p className="text-xs text-white/55">Lirik belum tersedia.</p>
+      <Mic2 className="w-6 h-6 text-[#B3F7D1]/40 mx-auto" strokeWidth={1.75} />
+      <p className="text-xs text-[#B3F7D1]/60">Lirik belum tersedia.</p>
     </div>
   );
 }

@@ -282,24 +282,24 @@ export function NotchMiniPlayer() {
       role="region"
       aria-label="Pemutar mini eksternal Windows"
       data-notch-expanded={expanded ? 'true' : 'false'}
-      className="relative w-full h-full bg-[#090B0E] text-white select-none flex flex-col justify-between overflow-hidden"
+      className="relative w-full h-full bg-[#090C0B] text-[#E8FFF3] select-none flex flex-col justify-between overflow-hidden"
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(46,230,166,0.12),transparent_55%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(25,238,138,0.14),transparent_55%)]"
       />
 
       {/* Top strip: Windows Mini badge + lyric expand + close back to web */}
-      <div className="relative z-10 flex items-center justify-between gap-2 px-3.5 py-2 border-b border-white/[0.07] bg-white/[0.02]">
+      <div className="relative z-10 flex items-center justify-between gap-2 px-3.5 py-2 border-b border-white/[0.1] bg-white/[0.045] backdrop-blur-xl">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="w-2 h-2 rounded-full bg-[#2EE6A6] shrink-0" aria-hidden="true" />
-          <span className="text-[10px] font-semibold tracking-wide uppercase text-white/70 truncate">
+          <span className="w-2 h-2 rounded-full bg-[#19EE8A] shrink-0" aria-hidden="true" />
+          <span className="text-[10px] font-semibold tracking-wide uppercase text-[#B3F7D1]/75 truncate">
             SoundClear Mini • Windows
           </span>
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[10px] font-mono-num text-white/50 mr-1">
+          <span className="text-[10px] font-mono-num text-[#B3F7D1]/55 mr-1">
             {formatTime(currentTime)}
             {safeDuration > 0 ? ` / ${formatTime(safeDuration)}` : ''}
           </span>
@@ -309,7 +309,7 @@ export function NotchMiniPlayer() {
             aria-expanded={expanded}
             aria-label={expanded ? 'Perkecil tampilan lirik' : 'Perluas tampilan lirik'}
             title={expanded ? 'Perkecil' : 'Lihat Lirik'}
-            className="w-6 h-6 rounded-full flex items-center justify-center text-white/65 hover:text-white hover:bg-white/10 transition-colors"
+            className="w-6 h-6 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.12] transition-colors"
           >
             {expanded ? (
               <ChevronUp className="w-3.5 h-3.5" strokeWidth={2} />
@@ -322,7 +322,7 @@ export function NotchMiniPlayer() {
             onClick={() => closeWindowsExternalNotch()}
             aria-label="Tutup jendela mini dan kembali ke web"
             title="Tutup jendela mini"
-            className="w-6 h-6 rounded-full flex items-center justify-center text-white/65 hover:text-white hover:bg-white/10 transition-colors"
+            className="w-6 h-6 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.12] transition-colors"
           >
             <X className="w-3.5 h-3.5" strokeWidth={2} />
           </button>
@@ -344,7 +344,7 @@ export function NotchMiniPlayer() {
           onClick={() => setExpanded((prev) => !prev)}
           aria-expanded={expanded}
           aria-label={expanded ? 'Perkecil lirik pemutar mini' : 'Perluas lirik pemutar mini'}
-          className="flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-[#2EE6A6] rounded-md"
+          className="flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-[#19EE8A] rounded-md"
         >
           <div ref={titleViewportRef} className="w-full overflow-hidden">
             <span
@@ -357,7 +357,7 @@ export function NotchMiniPlayer() {
                     } as CSSProperties)
                   : undefined
               }
-              className={`block whitespace-nowrap text-xs leading-4 text-white font-semibold ${
+              className={`block whitespace-nowrap text-xs leading-4 text-[#E8FFF3] font-semibold ${
                 marqueeActive ? 'sc-notch-marquee inline-block' : 'truncate'
               }`}
             >
@@ -369,7 +369,7 @@ export function NotchMiniPlayer() {
           (displayLines.mode === 'synced' || displayLines.mode === 'synced-intro') ? (
             <div className="mt-1 space-y-0.5">
               {displayLines.prev && (
-                <p className="text-[11px] leading-[15px] text-white/45 truncate">
+                <p className="text-[11px] leading-[15px] text-[#B3F7D1]/50 truncate">
                   {displayLines.prev}
                 </p>
               )}
@@ -380,13 +380,13 @@ export function NotchMiniPlayer() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={lyricFadeTransition}
-                  className="text-xs leading-4 text-[#2EE6A6] font-medium truncate"
+                  className="text-xs leading-4 text-[#19EE8A] font-medium truncate"
                 >
                   {displayLines.active}
                 </motion.p>
               </AnimatePresence>
               {displayLines.next && (
-                <p className="text-[11px] leading-[15px] text-white/45 truncate">
+                <p className="text-[11px] leading-[15px] text-[#B3F7D1]/50 truncate">
                   {displayLines.next}
                 </p>
               )}
@@ -401,7 +401,7 @@ export function NotchMiniPlayer() {
                   exit={{ opacity: 0 }}
                   transition={lyricFadeTransition}
                   className={`text-[11px] leading-4 truncate ${
-                    displayLines.mode === 'synced' ? 'text-[#2EE6A6] font-medium' : 'text-white/65'
+                    displayLines.mode === 'synced' ? 'text-[#19EE8A] font-medium' : 'text-[#B3F7D1]/70'
                   }`}
                 >
                   {displayLines.active}
@@ -421,7 +421,7 @@ export function NotchMiniPlayer() {
             }}
             aria-label="Lagu sebelumnya"
             title="Sebelumnya"
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white/75 hover:text-white hover:bg-white/10 transition-colors"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.12] transition-colors"
           >
             <SkipBack className="w-3.5 h-3.5 fill-current" strokeWidth={1.75} />
           </button>
@@ -434,7 +434,7 @@ export function NotchMiniPlayer() {
             }}
             aria-label={isPlaying ? 'Jeda lagu' : 'Putar lagu'}
             title={isPlaying ? 'Jeda' : 'Putar'}
-            className="w-8 h-8 rounded-full bg-[#2EE6A6] text-[#06130E] flex items-center justify-center hover:brightness-105 active:scale-95 transition-transform"
+            className="w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center hover:brightness-105 active:scale-95 transition-transform"
           >
             {isPlaying ? (
               <Pause className="w-4 h-4 fill-current" strokeWidth={2} />
@@ -451,7 +451,7 @@ export function NotchMiniPlayer() {
             }}
             aria-label="Lagu berikutnya"
             title="Berikutnya"
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white/75 hover:text-white hover:bg-white/10 transition-colors"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.12] transition-colors"
           >
             <SkipForward className="w-3.5 h-3.5 fill-current" strokeWidth={1.75} />
           </button>
@@ -465,7 +465,7 @@ export function NotchMiniPlayer() {
             }}
             aria-label="Hentikan pemutaran"
             title="Hentikan"
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.12] transition-colors"
           >
             <Square className="w-3 h-3" strokeWidth={2} />
           </button>
@@ -473,9 +473,9 @@ export function NotchMiniPlayer() {
       </div>
 
       {/* Bottom progress bar */}
-      <div className="h-[3px] w-full bg-white/10 shrink-0">
+      <div className="h-[3px] w-full bg-white/[0.1] shrink-0">
         <div
-          className="h-full bg-[#2EE6A6] transition-[width] duration-200"
+          className="h-full bg-sc-gradient transition-[width] duration-200"
           style={{ width: `${progressPct}%` }}
         />
       </div>

@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { resolvePlayableYoutube } from '../api/client';
+import {
+  startSilentKeepaliveAudio,
+  stopSilentKeepaliveAudio,
+} from '../audio/soundclearAudioEngine';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -177,7 +181,7 @@ export function YouTubePlayerBridge() {
     };
   }, []);
 
-  // Media Session API (artwork thumbnail + music metadata, no video)
+  // Media Session API (artwork thumbnail + music metadata + full lockscreen transport actions)
   useEffect(() => {
     if (!('mediaSession' in navigator) || !currentTrack) return;
 
@@ -199,6 +203,7 @@ export function YouTubePlayerBridge() {
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ['play', () => usePlayerStore.getState().setIsPlaying(true)],
       ['pause', () => usePlayerStore.getState().setIsPlaying(false)],
+      ['stop', () => usePlayerStore.getState().stopPlayback()],
       ['previoustrack', () => usePlayerStore.getState().prevTrack()],
       ['nexttrack', () => usePlayerStore.getState().nextTrack()],
       [
@@ -207,6 +212,23 @@ export function YouTubePlayerBridge() {
           if (typeof details.seekTime === 'number') {
             usePlayerStore.getState().requestSeek(details.seekTime);
           }
+        },
+      ],
+      [
+        'seekbackward',
+        (details) => {
+          const st = usePlayerStore.getState();
+          const step = typeof details.seekOffset === 'number' ? details.seekOffset : 10;
+          st.requestSeek(Math.max(0, st.currentTime - step));
+        },
+      ],
+      [
+        'seekforward',
+        (details) => {
+          const st = usePlayerStore.getState();
+          const step = typeof details.seekOffset === 'number' ? details.seekOffset : 10;
+          const max = st.duration > 0 ? st.duration : st.currentTime + step;
+          st.requestSeek(Math.min(max, st.currentTime + step));
         },
       ],
     ];
@@ -238,6 +260,172 @@ export function YouTubePlayerBridge() {
       document.removeEventListener('visibilitychange', syncVisibilityPosition);
     };
   }, [currentTrack, isPlaying]);
+
+  // Pre-warm YouTube IFrame API & standby hidden player immediately on mount for 0ms fallback startup
+  useEffect(() => {
+    let disposed = false;
+    const warmStandby = async () => {
+      try {
+        const YT = await loadYouTubeIframeApi();
+        if (disposed || playerRef.current || !iframeHostRef.current) return;
+        iframeHostRef.current.innerHTML = '';
+        const mountNode = document.createElement('div');
+        iframeHostRef.current.appendChild(mountNode);
+
+        const instance = new YT.Player(mountNode, {
+          width: 200,
+          height: 112,
+          host: 'https://www.youtube-nocookie.com',
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            iv_load_policy: 3,
+            modestbranding: 1,
+            rel: 0,
+            playsinline: 1,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: (event) => {
+              playerReadyRef.current = true;
+              const p = event.target;
+              const pendingVid = desiredVideoIdRef.current;
+              const st = usePlayerStore.getState();
+              if (pendingVid && isYoutubeIframeActive(st.activeStreamMeta)) {
+                const cap = useSettingsStore.getState().youtubeSound.maxVolumeLimit;
+                const effVol = clampYoutubeVolume(st.volume, cap, st.isMuted);
+                try {
+                  p.setVolume(effVol);
+                  if (st.isMuted || effVol === 0) p.mute();
+                  else p.unMute();
+                  p.setPlaybackRate(st.playbackRate || 1);
+                  loadedVideoIdRef.current = pendingVid;
+                  const startSeconds = Math.max(0, st.pendingSeekSeconds ?? st.currentTime ?? 0);
+                  if (st.isPlaying) {
+                    p.loadVideoById({ videoId: pendingVid, startSeconds });
+                  } else {
+                    p.cueVideoById({ videoId: pendingVid, startSeconds });
+                  }
+                } catch {
+                  // Ignore standby handoff errors
+                }
+              }
+            },
+            onStateChange: (event) => {
+              const st = usePlayerStore.getState();
+              if (!isYoutubeIframeActive(st.activeStreamMeta)) return;
+
+              const stateCode = event.data;
+              if (stateCode === 1) {
+                st.setIsBuffering(false);
+                st.setPlayerError(null);
+                st.clearPendingSeek();
+                const dur = event.target.getDuration?.() ?? 0;
+                const cur = event.target.getCurrentTime?.() ?? st.currentTime;
+                if (Number.isFinite(cur)) {
+                  st.setProgress(cur, dur > 0 ? dur : undefined);
+                }
+                if (!st.isPlaying) {
+                  try {
+                    event.target.pauseVideo();
+                  } catch {
+                    // Ignore
+                  }
+                }
+              } else if (stateCode === 3) {
+                st.setIsBuffering(true);
+              } else if (stateCode === 2) {
+                st.setIsBuffering(false);
+              } else if (stateCode === 0) {
+                st.handleTrackEnded();
+              }
+            },
+            onError: () => {
+              if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) {
+                handleYtErrorRef.current();
+              }
+            },
+          },
+        });
+        playerRef.current = instance;
+      } catch {
+        // Non-fatal: fallback creation happens on demand if blocked offline
+      }
+    };
+    void warmStandby();
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  // Keep first-party audio session & Screen WakeLock alive during background/cross-origin YouTube playback
+  useEffect(() => {
+    if (iframeActive && isPlaying) {
+      startSilentKeepaliveAudio();
+    } else if (iframeActive && !isPlaying) {
+      stopSilentKeepaliveAudio();
+    }
+  }, [iframeActive, isPlaying]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || !isPlaying) return;
+    let wakeSentinel: { release: () => Promise<void> } | null = null;
+    let disposed = false;
+
+    const acquireWakeLock = async () => {
+      try {
+        const nav = navigator as Navigator & {
+          wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> };
+        };
+        if (nav.wakeLock && document.visibilityState === 'visible') {
+          const lock = await nav.wakeLock.request('screen');
+          if (disposed) {
+            void lock.release().catch(() => {});
+          } else {
+            wakeSentinel = lock;
+          }
+        }
+      } catch {
+        // WakeLock optional across browsers
+      }
+    };
+
+    const onVisibilityRecover = () => {
+      if (document.visibilityState === 'visible') {
+        void acquireWakeLock();
+      }
+      const st = usePlayerStore.getState();
+      if (
+        st.isPlaying &&
+        isYoutubeIframeActive(st.activeStreamMeta) &&
+        playerRef.current &&
+        playerReadyRef.current
+      ) {
+        startSilentKeepaliveAudio();
+        try {
+          const pState = playerRef.current.getPlayerState?.();
+          if (pState !== 1 && pState !== 3) {
+            playerRef.current.playVideo();
+          }
+        } catch {
+          // Ignore YT state recovery error
+        }
+      }
+    };
+
+    void acquireWakeLock();
+    document.addEventListener('visibilitychange', onVisibilityRecover);
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', onVisibilityRecover);
+      if (wakeSentinel) {
+        void wakeSentinel.release().catch(() => {});
+        wakeSentinel = null;
+      }
+    };
+  }, [isPlaying]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -375,7 +563,7 @@ export function YouTubePlayerBridge() {
         st.setIsBuffering(false);
         st.setIsPlaying(false);
         st.setPlayerError(
-          'Pemutar YouTube Music tidak mengizinkan embed untuk lagu ini di sesi saat ini.',
+          'Pemutar cloud tidak mengizinkan pemutaran untuk lagu ini di sesi saat ini.',
         );
         return;
       }
@@ -418,7 +606,7 @@ export function YouTubePlayerBridge() {
         latest.setIsBuffering(false);
         latest.setIsPlaying(false);
         latest.setPlayerError(
-          'Pemutar YouTube Music tidak mengizinkan embed untuk lagu ini di sesi saat ini.',
+          'Pemutar cloud tidak mengizinkan pemutaran untuk lagu ini di sesi saat ini.',
         );
       }
     };
@@ -539,7 +727,7 @@ export function YouTubePlayerBridge() {
           const st = usePlayerStore.getState();
           st.setIsBuffering(false);
           st.setIsPlaying(false);
-          st.setPlayerError('Gagal memuat pemutar YouTube Music.');
+          st.setPlayerError('Gagal memuat pemutar cloud.');
         }
       }
     };

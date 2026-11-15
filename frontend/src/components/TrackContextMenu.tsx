@@ -125,11 +125,11 @@ export function GlobalTrackContextMenu({
           role="menu"
           aria-label={`Menu untuk ${track.title}`}
           style={{ left: menuLeft, top: menuTop }}
-          className="fixed z-50 w-56 glass-panel rounded-xl p-1.5 bg-[#131317]/95 shadow-2xl border border-white/[0.12] text-xs"
+          className="fixed z-50 w-56 rounded-xl p-1.5 bg-[#0B0F0D]/88 backdrop-blur-2xl shadow-2xl border border-white/[0.14] text-xs"
         >
-          <div className="px-2.5 py-2 border-b border-white/[0.08] mb-1">
-            <p className="font-semibold text-white truncate">{track.title}</p>
-            <p className="text-[11px] text-white/50 truncate">{formatArtists(track.artists)}</p>
+          <div className="px-2.5 py-2 border-b border-[#B3F7D1]/[0.1] mb-1">
+            <p className="font-semibold text-[#E8FFF3] truncate">{track.title}</p>
+            <p className="text-[11px] text-[#B3F7D1]/60 truncate">{formatArtists(track.artists)}</p>
           </div>
 
           {trackKey && (
@@ -142,9 +142,9 @@ export function GlobalTrackContextMenu({
                   showToast('Ditambahkan ke putar berikutnya');
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
-                <ListStart className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                <ListStart className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                 <span>Putar berikutnya</span>
               </button>
 
@@ -156,9 +156,9 @@ export function GlobalTrackContextMenu({
                   showToast('Ditambahkan ke antrean');
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
-                <ListEnd className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                <ListEnd className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                 <span>Tambah ke antrean</span>
               </button>
             </>
@@ -175,9 +175,9 @@ export function GlobalTrackContextMenu({
               }
               closeMenu();
             }}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
           >
-            <ListPlus className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+            <ListPlus className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
             <span>Tambah ke playlist</span>
           </button>
 
@@ -192,10 +192,10 @@ export function GlobalTrackContextMenu({
                   showToast(liked ? 'Dihapus dari Lagu Disukai' : 'Ditambahkan ke Lagu Disukai');
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
                 <Heart
-                  className={`w-3.5 h-3.5 ${liked ? 'text-[#2EE6A6] fill-[#2EE6A6]' : 'text-white/60'}`}
+                  className={`w-3.5 h-3.5 ${liked ? 'text-[#19EE8A] fill-[#19EE8A]' : 'text-[#B3F7D1]/65'}`}
                   strokeWidth={1.75}
                 />
                 <span>{liked ? 'Batal sukai' : 'Sukai lagu'}</span>
@@ -223,17 +223,17 @@ export function GlobalTrackContextMenu({
                   }
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
                 {downloadedOffline ? (
-                  <Check className="w-3.5 h-3.5 text-[#2EE6A6]" strokeWidth={2} />
+                  <Check className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={2} />
                 ) : (
-                  <Download className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                  <Download className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                 )}
                 <span>{downloadedOffline ? 'Hapus dari offline' : 'Unduh offline'}</span>
               </button>
 
-              {!localFile && <div className="my-1 border-t border-white/[0.08]" />}
+              {!localFile && <div className="my-1 border-t border-[#B3F7D1]/[0.1]" />}
 
               {primaryArtist?.id && (
                 <button
@@ -247,9 +247,9 @@ export function GlobalTrackContextMenu({
                     });
                     closeMenu();
                   }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
                 >
-                  <User className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                  <User className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                   <span>Ke Artis</span>
                 </button>
               )}
@@ -266,9 +266,9 @@ export function GlobalTrackContextMenu({
                     });
                     closeMenu();
                   }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
                 >
-                  <Disc3 className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                  <Disc3 className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                   <span>Ke Album</span>
                 </button>
               )}
@@ -279,9 +279,9 @@ export function GlobalTrackContextMenu({
                     type="button"
                     role="menuitem"
                     onClick={() => void handleStartRadio()}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
                   >
-                    <Radio className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                    <Radio className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                     <span>Radio lagu</span>
                   </button>
 
@@ -289,9 +289,9 @@ export function GlobalTrackContextMenu({
                     type="button"
                     role="menuitem"
                     onClick={() => openCredits(track)}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
                   >
-                    <FileText className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                    <FileText className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                     <span>Kredit lagu</span>
                   </button>
                 </>
@@ -306,9 +306,9 @@ export function GlobalTrackContextMenu({
                   navigate({ name: 'search', query: q, filter: 'songs' });
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
-                <Search className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                <Search className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                 <span>Cari lagu serupa</span>
               </button>
 
@@ -317,9 +317,9 @@ export function GlobalTrackContextMenu({
                   type="button"
                   role="menuitem"
                   onClick={() => void handleCopyLink()}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
                 >
-                  <Copy className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+                  <Copy className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                   <span>Salin tautan</span>
                 </button>
               )}
@@ -338,16 +338,16 @@ export function GlobalTrackContextMenu({
                 }
                 closeMenu();
               }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-white/85 hover:text-white hover:bg-white/[0.08] text-left transition-colors"
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
             >
-              <EyeOff className="w-3.5 h-3.5 text-white/60" strokeWidth={1.75} />
+              <EyeOff className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
               <span>{hidden ? 'Tampilkan lagu ini' : 'Sembunyikan lagu'}</span>
             </button>
           )}
 
           {options.onRemoveFromList && (
             <>
-              <div className="my-1 border-t border-white/[0.08]" />
+              <div className="my-1 border-t border-[#B3F7D1]/[0.1]" />
               <button
                 type="button"
                 role="menuitem"
@@ -373,7 +373,7 @@ export function GlobalTrackContextMenu({
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-24 md:bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#16181D]/95 border border-[#2EE6A6]/30 text-xs font-medium text-white shadow-xl"
+          className="fixed bottom-24 md:bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#0B0F0D]/88 backdrop-blur-2xl border border-[#19EE8A]/35 text-xs font-medium text-[#E8FFF3] shadow-xl"
         >
           {toastMessage}
         </div>
@@ -412,20 +412,20 @@ function SongCreditsModal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
     >
-      <div className="w-full max-w-md glass-panel rounded-2xl p-5 bg-[#121215]/95 space-y-4">
+      <div className="w-full max-w-md rounded-2xl p-5 bg-[#0B0F0D]/88 backdrop-blur-2xl border border-white/[0.14] shadow-2xl space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs text-white/50">Kredit Lagu</p>
-            <h2 className="text-base font-semibold text-white truncate mt-0.5">{track.title}</h2>
-            <p className="text-xs text-white/55 truncate">{formatArtists(track.artists)}</p>
+            <p className="text-xs text-[#B3F7D1]/60">Kredit Lagu</p>
+            <h2 className="text-base font-semibold text-[#E8FFF3] truncate mt-0.5">{track.title}</h2>
+            <p className="text-xs text-[#B3F7D1]/70 truncate">{formatArtists(track.artists)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Tutup kredit lagu"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.08]"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1]"
           >
             <X className="w-4 h-4" strokeWidth={1.75} />
           </button>
@@ -442,18 +442,18 @@ function SongCreditsModal({
             {query.data.credits.map((credit) => (
               <div
                 key={credit.role}
-                className="rounded-xl bg-white/[0.04] border border-white/[0.06] px-3.5 py-2.5"
+                className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] px-3.5 py-2.5"
               >
-                <p className="text-[11px] font-medium text-white/50">{credit.role}</p>
-                <p className="text-sm text-white mt-0.5">{credit.names.join(', ')}</p>
+                <p className="text-[11px] font-medium text-[#B3F7D1]/60">{credit.role}</p>
+                <p className="text-sm text-[#E8FFF3] mt-0.5">{credit.names.join(', ')}</p>
               </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-4 space-y-2 text-xs text-white/65">
+          <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] p-4 space-y-2 text-xs text-[#B3F7D1]/75">
             <p>Kredit terperinci tidak disediakan oleh sumber untuk lagu ini.</p>
-            <p className="text-white/85">Artis: {formatArtists(track.artists)}</p>
-            {track.album?.name && <p className="text-white/85">Album: {track.album.name}</p>}
+            <p className="text-[#E8FFF3]">Artis: {formatArtists(track.artists)}</p>
+            {track.album?.name && <p className="text-[#E8FFF3]">Album: {track.album.name}</p>}
           </div>
         )}
       </div>

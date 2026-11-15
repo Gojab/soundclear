@@ -7,12 +7,18 @@ import {
 import {
   applyAudioProfileToGraph,
   computeLiveAnalyserRms,
+  engageBackgroundDirectDeck,
   ensureAudioGraph,
+  getActivePlaybackElement,
   incrementSkipSilenceCount,
   measureAndEstimateLufs,
+  resetDirectDeck,
+  restoreDspDeckFromBackground,
   resumeAudioContext,
   setAudioOutputDevice,
   setDynamicMeasuredLufs,
+  startSilentKeepaliveAudio,
+  stopSilentKeepaliveAudio,
 } from '../audio/soundclearAudioEngine';
 import { db } from '../db/soundclearDb';
 import { useLibraryStore } from '../store/libraryStore';
@@ -39,6 +45,11 @@ import {
   decideOnlineStreamAction,
   isYoutubeIframeActive,
 } from '../utils/streamPlaybackLogic';
+import {
+  prefetchStreamProbe,
+  probeStreamWithCache,
+  shouldFastRouteToIframe,
+} from '../utils/streamProbeCache';
 
 function revokeDeckUrl(
   objectUrls: [string | null, string | null],
@@ -177,7 +188,7 @@ export function LocalAudioEngine() {
   useEffect(() => {
     const graph = ensureAudioGraph();
     if (graph) {
-      graph.decks.forEach((deck) => {
+      [...graph.decks, graph.directDeck].forEach((deck) => {
         deck.playbackRate = playbackRate;
         const m = deck as HTMLAudioElement & {
           preservesPitch?: boolean;
@@ -189,11 +200,81 @@ export function LocalAudioEngine() {
     }
   }, [playbackRate]);
 
+  // Background audio continuity: hand off from WebAudio DSP to un-captured directDeck if OS suspends AudioContext when backgrounded
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    let checkTimer: number | null = null;
+    const onVisibility = () => {
+      const graph = ensureAudioGraph();
+      if (!graph) return;
+      const st = usePlayerStore.getState();
+      if (isYoutubeIframeActive(st.activeStreamMeta)) return;
+
+      if (document.visibilityState === 'hidden') {
+        if (!st.isPlaying) return;
+        startSilentKeepaliveAudio();
+        if (checkTimer !== null) window.clearTimeout(checkTimer);
+        checkTimer = window.setTimeout(() => {
+          checkTimer = null;
+          const latest = usePlayerStore.getState();
+          if (
+            document.visibilityState === 'hidden' &&
+            latest.isPlaying &&
+            !isYoutubeIframeActive(latest.activeStreamMeta) &&
+            graph.ctx.state !== 'running'
+          ) {
+            const effVol = isLocalTrack(latest.currentTrack)
+              ? latest.volume
+              : clampYoutubeVolume(
+                  latest.volume,
+                  useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+                  latest.isMuted,
+                );
+            void engageBackgroundDirectDeck(effVol, latest.isMuted);
+          }
+        }, 180);
+      } else {
+        if (checkTimer !== null) {
+          window.clearTimeout(checkTimer);
+          checkTimer = null;
+        }
+        if (graph.backgroundDirectActive) {
+          void restoreDspDeckFromBackground();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (checkTimer !== null) window.clearTimeout(checkTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  // Auto-resume on first user interaction when browser blocked autoplay on reopen
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onFirstGesture = () => {
+      const st = usePlayerStore.getState();
+      if (st.autoplayBlockedPendingResume && st.currentTrack) {
+        st.resumeBlockedPlayback();
+      }
+    };
+    ['pointerdown', 'keydown', 'click'].forEach((evt) => {
+      window.addEventListener(evt, onFirstGesture, { passive: true, capture: true });
+    });
+    return () => {
+      ['pointerdown', 'keydown', 'click'].forEach((evt) => {
+        window.removeEventListener(evt, onFirstGesture, { capture: true });
+      });
+    };
+  }, []);
+
   // Pause HTML5 audio decks cleanly whenever youtube-iframe mode takes over
   useEffect(() => {
     if (activeStreamSourceMode !== 'youtube-iframe') return;
     const graph = ensureAudioGraph();
     if (!graph) return;
+    resetDirectDeck();
     graph.decks.forEach((d) => d.pause());
   }, [activeStreamSourceMode]);
 
@@ -205,7 +286,24 @@ export function LocalAudioEngine() {
 
     if (!htmlAudioTrackKey) {
       loadedKeyRef.current = null;
+      resetDirectDeck();
       graph.decks.forEach((d) => d.pause());
+      return;
+    }
+
+    // Fast-path 0ms: if online YouTube stream is globally blocked and we already have an 11-char ID, bypass network probe immediately
+    if (!localActive && !useOfflineBlob && rawVideoId && shouldFastRouteToIframe(rawVideoId)) {
+      loadedKeyRef.current = htmlAudioTrackKey;
+      resetDirectDeck();
+      graph.decks.forEach((d) => {
+        d.pause();
+        d.removeAttribute('src');
+      });
+      usePlayerStore
+        .getState()
+        .setActiveStreamMeta(
+          buildYoutubeIframeStreamMeta(rawVideoId, rawVideoId, targetStreamTier),
+        );
       return;
     }
 
@@ -239,6 +337,7 @@ export function LocalAudioEngine() {
     };
 
     const loadSource = async () => {
+      resetDirectDeck();
       const nextDeckIdx: 0 | 1 = graph.activeDeck;
       const otherDeckIdx: 0 | 1 = nextDeckIdx === 0 ? 1 : 0;
       graph.decks[otherDeckIdx].pause();
@@ -359,9 +458,13 @@ export function LocalAudioEngine() {
         const defaultBitrate =
           targetStreamTier === 'low' ? 96 : targetStreamTier === 'normal' ? 128 : 160;
 
-        // Check if backend YT Music stream extraction is available before setting <audio src>
+        // Check if backend YT Music stream extraction is available using cached probe
         try {
-          const probeMeta = await fetchStreamAudioMeta(streamVideoId, streamQueryMeta);
+          const probeMeta = await probeStreamWithCache(
+            streamVideoId,
+            streamQueryMeta,
+            (vid, q) => fetchStreamAudioMeta(vid, q),
+          );
           if (cancelled) return;
           if (decideOnlineStreamAction(probeMeta) === 'use-youtube-iframe') {
             audio.pause();
@@ -437,7 +540,11 @@ export function LocalAudioEngine() {
         if (streamMetaFetchTarget) {
           const target = streamMetaFetchTarget;
           streamMetaFetchTarget = null;
-          void fetchStreamAudioMeta(target.streamVideoId, target.queryMeta)
+          void probeStreamWithCache(
+            target.streamVideoId,
+            target.queryMeta,
+            (vid, q) => fetchStreamAudioMeta(vid, q),
+          )
             .then((realMeta) => {
               if (cancelled) return;
               const latest = usePlayerStore.getState();
@@ -463,12 +570,33 @@ export function LocalAudioEngine() {
             })
             .catch(() => {});
         }
+        // Pre-warm probe cache for upcoming track so Next is instantaneous
+        const nextUpcoming = st.manualQueue[0] ?? st.sourceQueue[0] ?? null;
+        if (nextUpcoming && !isLocalTrack(nextUpcoming)) {
+          const nextVid = getPlayableVideoId(nextUpcoming);
+          if (nextVid) {
+            prefetchStreamProbe(
+              nextVid,
+              {
+                title: nextUpcoming.title,
+                artist: formatArtists(nextUpcoming.artists),
+                durationSeconds: nextUpcoming.durationSeconds,
+                quality: targetStreamTier,
+              },
+              (vid, q) => fetchStreamAudioMeta(vid, q),
+            );
+          }
+        }
         if (st.isPlaying) {
           void resumeAudioContext();
+          startSilentKeepaliveAudio();
           void audio.play().catch((err: unknown) => {
             if (!cancelled && err instanceof DOMException && err.name === 'NotAllowedError') {
-              usePlayerStore.getState().setIsPlaying(false);
-              usePlayerStore.getState().setIsBuffering(false);
+              const latest = usePlayerStore.getState();
+              latest.setIsPlaying(false);
+              latest.setAutoplayBlockedPendingResume(true);
+              latest.setIsBuffering(false);
+              stopSilentKeepaliveAudio();
             }
           });
         }
@@ -605,15 +733,17 @@ export function LocalAudioEngine() {
       pauseTimerRef.current = null;
     }
 
-    const activeAudio = graph.decks[graph.activeDeck];
+    const activeAudio = getActivePlaybackElement(graph);
     const activeGain = graph.deckGains[graph.activeDeck].gain;
     const profile = useSettingsStore.getState().localProfile;
     const ytFade = useSettingsStore.getState().youtubeSound.fadeOnPauseResume;
-    const useFade = (profile.fadeOnPlayPause || ytFade) && !profile.directMode;
+    const useFade =
+      (profile.fadeOnPlayPause || ytFade) && !profile.directMode && !graph.backgroundDirectActive;
     const now = graph.ctx.currentTime;
 
     if (isPlaying) {
       void resumeAudioContext();
+      startSilentKeepaliveAudio();
       if (activeAudio.src) {
         activeGain.cancelScheduledValues(now);
         if (useFade) {
@@ -623,10 +753,18 @@ export function LocalAudioEngine() {
           activeGain.setValueAtTime(1, now);
         }
         if (activeAudio.paused) {
-          void activeAudio.play().catch(() => {});
+          void activeAudio.play().catch((err: unknown) => {
+            if (err instanceof DOMException && err.name === 'NotAllowedError') {
+              const st = usePlayerStore.getState();
+              st.setIsPlaying(false);
+              st.setAutoplayBlockedPendingResume(true);
+              stopSilentKeepaliveAudio();
+            }
+          });
         }
       }
     } else if (!activeAudio.paused) {
+      stopSilentKeepaliveAudio();
       if (useFade) {
         activeGain.cancelScheduledValues(now);
         activeGain.setValueAtTime(activeGain.value, now);
@@ -641,6 +779,8 @@ export function LocalAudioEngine() {
       } else {
         activeAudio.pause();
       }
+    } else {
+      stopSilentKeepaliveAudio();
     }
   }, [isPlaying, htmlAudioTrackKey, activeStreamSourceMode]);
 
@@ -650,7 +790,7 @@ export function LocalAudioEngine() {
     if (!htmlAudioTrackKey || pendingSeekSeconds === null || !graph) return;
     if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) return;
 
-    const activeAudio = graph.decks[graph.activeDeck];
+    const activeAudio = getActivePlaybackElement(graph);
     if (Number.isFinite(activeAudio.duration) && activeAudio.duration > 0) {
       activeAudio.currentTime = Math.max(0, Math.min(pendingSeekSeconds, activeAudio.duration));
       usePlayerStore.getState().clearPendingSeek();
@@ -740,7 +880,7 @@ export function LocalAudioEngine() {
     const interval = window.setInterval(() => {
       const activeIdx = graph.activeDeck;
       const standbyIdx: 0 | 1 = activeIdx === 0 ? 1 : 0;
-      const audio = graph.decks[activeIdx];
+      const audio = getActivePlaybackElement(graph);
       if (!audio.src) return;
 
       const cur = audio.currentTime;

@@ -39,31 +39,31 @@ function LocalFileDetails({ track }: { track: MediaItem }) {
 
   return (
     <div className="space-y-3 text-xs">
-      <div className="rounded-xl bg-[#1F1F1F] p-4 space-y-2.5">
-        <p className="text-sm font-bold text-white">Informasi File Lokal</p>
-        <div className="space-y-1.5 text-white/65">
+      <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 space-y-2.5">
+        <p className="text-sm font-bold text-[#E8FFF3]">Informasi File Lokal</p>
+        <div className="space-y-1.5 text-[#B3F7D1]/70">
           <p>
-            Judul: <span className="text-white font-medium">{track.title}</span>
+            Judul: <span className="text-[#E8FFF3] font-medium">{track.title}</span>
           </p>
           <p>
-            Artis: <span className="text-white font-medium">{formatArtists(track.artists)}</span>
+            Artis: <span className="text-[#E8FFF3] font-medium">{formatArtists(track.artists)}</span>
           </p>
           {track.album?.name && (
             <p>
-              Album: <span className="text-white font-medium">{track.album.name}</span>
+              Album: <span className="text-[#E8FFF3] font-medium">{track.album.name}</span>
             </p>
           )}
           {record && (
             <>
               <p className="tabular-nums">
                 Perkiraan Loudness:{' '}
-                <span className="text-[#2EE6A6] font-mono-num">
+                <span className="text-[#19EE8A] font-mono-num">
                   {record.estimatedLufs.toFixed(1)} LUFS
                 </span>
               </p>
               <p className="tabular-nums">
                 Ukuran:{' '}
-                <span className="text-white font-mono-num">
+                <span className="text-[#E8FFF3] font-mono-num">
                   {(record.fileSize / (1024 * 1024)).toFixed(1)} MB
                 </span>
               </p>
@@ -75,10 +75,10 @@ function LocalFileDetails({ track }: { track: MediaItem }) {
       <button
         type="button"
         onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: true })}
-        className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-[#2EE6A6] text-[#06130E] font-semibold hover:brightness-105 transition-all"
+        className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-sc-gradient text-[#0F1F17] font-semibold hover:brightness-105 transition-all"
       >
         <Sliders className="w-3.5 h-3.5" strokeWidth={2} />
-        Buka Equalizer & Efek Lokal
+        Buka Equalizer &amp; Efek Lokal
       </button>
     </div>
   );
@@ -115,14 +115,14 @@ function SongDetailsAndRelated({
   return (
     <div className="space-y-4">
       {/* Credits Card */}
-      <div className="rounded-xl bg-[#1F1F1F] p-4 space-y-3">
+      <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h4 className="text-sm font-bold text-white">Kredit</h4>
+          <h4 className="text-sm font-bold text-[#E8FFF3]">Kredit</h4>
           {allCredits.length > 3 && (
             <button
               type="button"
               onClick={() => setShowAllCredits((v) => !v)}
-              className="text-xs font-semibold text-white/65 hover:text-white hover:underline"
+              className="text-xs font-semibold text-[#B3F7D1]/70 hover:text-[#19EE8A] hover:underline"
             >
               {showAllCredits ? 'Ringkas' : 'Tampilkan semua'}
             </button>
@@ -131,26 +131,26 @@ function SongDetailsAndRelated({
 
         {creditsQuery.isLoading ? (
           <div className="space-y-2 animate-pulse">
-            <div className="h-9 rounded-lg bg-white/[0.06]" />
-            <div className="h-9 rounded-lg bg-white/[0.06]" />
+            <div className="h-9 rounded-lg bg-white/[0.09]" />
+            <div className="h-9 rounded-lg bg-white/[0.09]" />
           </div>
         ) : visibleCredits.length > 0 ? (
           <div className="space-y-3">
             {visibleCredits.map((credit) => (
               <div key={credit.role} className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">
+                  <p className="text-sm font-semibold text-[#E8FFF3] truncate">
                     {credit.names.join(', ')}
                   </p>
-                  <p className="text-xs text-white/55 truncate mt-0.5">{credit.role}</p>
+                  <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5">{credit.role}</p>
                 </div>
               </div>
             ))}
           </div>
         ) : (
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-white">{formatArtists(track.artists)}</p>
-            <p className="text-xs text-white/55">
+            <p className="text-sm font-semibold text-[#E8FFF3]">{formatArtists(track.artists)}</p>
+            <p className="text-xs text-[#B3F7D1]/60">
               {track.album?.name ? `Album · ${track.album.name}` : 'Artis Utama'}
             </p>
           </div>
@@ -158,12 +158,12 @@ function SongDetailsAndRelated({
       </div>
 
       {/* Related Tracks Card */}
-      <div className="rounded-xl bg-[#1F1F1F] p-4 space-y-3">
-        <h4 className="text-sm font-bold text-white">Lagu Terkait</h4>
+      <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 space-y-3">
+        <h4 className="text-sm font-bold text-[#E8FFF3]">Lagu Terkait</h4>
         {relatedQuery.isLoading ? (
           <div className="space-y-2 animate-pulse">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-11 rounded-lg bg-white/[0.06]" />
+              <div key={i} className="h-11 rounded-lg bg-white/[0.09]" />
             ))}
           </div>
         ) : relatedQuery.data && relatedQuery.data.tracks.length > 0 ? (
@@ -173,7 +173,7 @@ function SongDetailsAndRelated({
                 key={`${rel.id}-${idx}`}
                 type="button"
                 onClick={() => playTrackList(relatedQuery.data.tracks, idx, 'Lagu Terkait')}
-                className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/[0.08] text-left transition-colors"
+                className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/[0.09] text-left transition-colors"
               >
                 <ArtworkImage
                   src={rel.thumbnail}
@@ -182,8 +182,8 @@ function SongDetailsAndRelated({
                   roundedClass="rounded-md"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-white truncate">{rel.title}</p>
-                  <p className="text-[11px] text-white/55 truncate mt-0.5">
+                  <p className="text-xs font-semibold text-[#E8FFF3] truncate">{rel.title}</p>
+                  <p className="text-[11px] text-[#B3F7D1]/60 truncate mt-0.5">
                     {formatArtists(rel.artists)}
                   </p>
                 </div>
@@ -191,13 +191,13 @@ function SongDetailsAndRelated({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-white/45">Belum ada lagu terkait untuk lagu ini.</p>
+          <p className="text-xs text-[#B3F7D1]/50">Belum ada lagu terkait untuk lagu ini.</p>
         )}
       </div>
 
       {relatedQuery.data && relatedQuery.data.artists.length > 0 && (
-        <div className="rounded-xl bg-[#1F1F1F] p-4 space-y-3">
-          <h4 className="text-sm font-bold text-white">Artis Serupa</h4>
+        <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 space-y-3">
+          <h4 className="text-sm font-bold text-[#E8FFF3]">Artis Serupa</h4>
           <div className="space-y-1">
             {relatedQuery.data.artists.slice(0, 5).map((art) => (
               <button
@@ -206,7 +206,7 @@ function SongDetailsAndRelated({
                 onClick={() =>
                   navigate({ name: 'artist', id: art.browseId || art.id, fallbackQuery: art.title })
                 }
-                className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/[0.08] text-left transition-colors"
+                className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/[0.09] text-left transition-colors"
               >
                 <ArtworkImage
                   src={art.thumbnail}
@@ -215,7 +215,7 @@ function SongDetailsAndRelated({
                   className="w-9 h-9 shrink-0"
                   roundedClass="rounded-full"
                 />
-                <span className="text-xs font-semibold text-white truncate">{art.title}</span>
+                <span className="text-xs font-semibold text-[#E8FFF3] truncate">{art.title}</span>
               </button>
             ))}
           </div>
@@ -225,7 +225,7 @@ function SongDetailsAndRelated({
       <button
         type="button"
         onClick={() => onAddToPlaylist(track)}
-        className="w-full py-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white transition-colors"
+        className="w-full py-2.5 rounded-full bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-[#19EE8A]/35 text-xs font-semibold text-[#19EE8A] transition-colors"
       >
         Simpan ke Playlist
       </button>
@@ -265,17 +265,17 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
   return (
     <aside
       aria-label="Panel sedang diputar"
-      className={`hidden lg:flex flex-col w-[312px] xl:w-[348px] shrink-0 rounded-lg overflow-hidden transition-all duration-200 ${
+      className={`hidden lg:flex flex-col w-[312px] xl:w-[348px] shrink-0 rounded-lg overflow-hidden transition-all duration-200 border border-white/[0.08] ${
         glassPanels
-          ? 'bg-[#121212]/62 backdrop-blur-xl border border-white/[0.07]'
+          ? 'bg-black/45 backdrop-blur-2xl'
           : bgActive
-            ? 'bg-[#121212]/88 backdrop-blur-md border border-white/[0.05]'
-            : 'bg-[#121212]'
+            ? 'bg-[#090C0B]/80 backdrop-blur-xl'
+            : 'bg-white/[0.03] backdrop-blur-2xl'
       }`}
     >
       {/* Header matching Windows Now Playing Sidebar */}
       <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-white truncate">
+        <h2 className="text-sm font-bold text-[#E8FFF3] truncate">
           {currentTrack ? currentTrack.title : 'Sedang diputar'}
         </h2>
         <div className="flex items-center gap-0.5 shrink-0">
@@ -285,7 +285,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
               onClick={() => setFullscreenNowPlaying(true)}
               aria-label="Buka tampilan penuh"
               title="Layar Penuh"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
             >
               <Maximize2 className="w-3.5 h-3.5" strokeWidth={2} />
             </button>
@@ -294,7 +294,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             type="button"
             onClick={() => setRightPanelOpen(false)}
             aria-label="Tutup panel sedang diputar"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
           >
             <X className="w-4 h-4" strokeWidth={2} />
           </button>
@@ -305,7 +305,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
         {currentTrack ? (
           <div className="space-y-3.5">
             {localPlaying ? (
-              <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-[#1F1F1F]">
+              <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-white/[0.05] border border-white/[0.08]">
                 {currentTrack.thumbnail ? (
                   <ArtworkImage
                     src={currentTrack.thumbnail}
@@ -315,14 +315,14 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                     roundedClass="rounded-lg"
                   />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/45">
-                    <Headphones className="w-10 h-10 text-[#2EE6A6]/75" strokeWidth={1.6} />
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-[#B3F7D1]/55">
+                    <Headphones className="w-10 h-10 text-[#19EE8A]/80" strokeWidth={1.6} />
                     <span className="text-xs">Audio File Lokal</span>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-[#1F1F1F]">
+              <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-white/[0.05] border border-white/[0.08]">
                 <ArtworkImage
                   src={currentTrack.thumbnail}
                   alt={currentTrack.title}
@@ -335,10 +335,10 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
 
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <h3 className="text-xl font-bold text-white truncate tracking-tight">
+                <h3 className="text-xl font-bold text-[#E8FFF3] truncate tracking-tight">
                   {currentTrack.title}
                 </h3>
-                <div className="flex flex-wrap items-center gap-x-1 text-sm text-white/65 mt-0.5">
+                <div className="flex flex-wrap items-center gap-x-1 text-sm text-[#B3F7D1]/70 mt-0.5">
                   {currentTrack.artists.map((artist, idx) => (
                     <span key={`${artist.name}-${idx}`} className="inline-flex items-center">
                       {idx > 0 && <span className="mr-1">,</span>}
@@ -348,7 +348,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                           onClick={() =>
                             navigate({ name: 'artist', id: artist.id!, fallbackQuery: artist.name })
                           }
-                          className="hover:text-white hover:underline text-left"
+                          className="hover:text-[#E8FFF3] hover:underline text-left"
                         >
                           {artist.name}
                         </button>
@@ -367,8 +367,8 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                   aria-label={liked ? 'Hapus dari lagu disukai' : 'Sukai lagu ini'}
                   className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
                     liked
-                      ? 'bg-[#2EE6A6] text-[#06130E]'
-                      : 'border border-white/40 text-white/75 hover:border-white hover:text-white'
+                      ? 'bg-[#19EE8A] text-[#0F1F17]'
+                      : 'border border-[#B3F7D1]/40 text-[#B3F7D1]/75 hover:border-[#19EE8A] hover:text-[#E8FFF3]'
                   }`}
                 >
                   {liked ? (
@@ -402,8 +402,8 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                   title={isOffline ? 'Tersimpan offline (klik untuk hapus)' : 'Simpan ke offline'}
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
                     isOffline
-                      ? 'bg-[#2EE6A6]/15 text-[#2EE6A6]'
-                      : 'text-white/60 hover:text-white hover:bg-white/[0.08]'
+                      ? 'bg-[#19EE8A]/15 text-[#19EE8A]'
+                      : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09]'
                   }`}
                 >
                   <Download className="w-4 h-4" strokeWidth={1.9} />
@@ -412,7 +412,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                   type="button"
                   onClick={() => onAddToPlaylist(currentTrack)}
                   aria-label="Simpan lagu ke playlist"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
                 >
                   <ListPlus className="w-4 h-4" strokeWidth={1.9} />
                 </button>
@@ -423,7 +423,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                     openMenu(rect.right - 220, rect.bottom + 6, currentTrack, { onAddToPlaylist });
                   }}
                   aria-label="Opsi lagu sedang diputar"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
                 >
                   <MoreHorizontal className="w-4 h-4" strokeWidth={1.9} />
                 </button>
@@ -431,14 +431,14 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             </div>
 
             {activeStreamMeta && (
-              <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] border border-white/[0.06] px-3 py-2">
+              <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] px-3 py-2">
                 <span
                   className={`text-[11px] font-medium truncate ${
                     activeStreamMeta.hiRes
-                      ? 'text-[#F5C451]'
+                      ? 'text-[#19EE8A]'
                       : activeStreamMeta.lossless
-                        ? 'text-[#2EE6A6]'
-                        : 'text-white/70'
+                        ? 'text-[#0AD36C]'
+                        : 'text-[#B3F7D1]/75'
                   }`}
                 >
                   {activeStreamMeta.badgeLabel}
@@ -446,7 +446,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
                 <button
                   type="button"
                   onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
-                  className="inline-flex items-center gap-1 text-[11px] text-[#2EE6A6] hover:underline shrink-0"
+                  className="inline-flex items-center gap-1 text-[11px] text-[#19EE8A] hover:underline shrink-0"
                 >
                   <Sliders className="w-3 h-3" strokeWidth={1.9} />
                   Audio
@@ -455,7 +455,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             )}
 
             {webAudioWarning && (
-              <p className="text-[11px] text-[#2EE6A6]/90 bg-[#2EE6A6]/10 border border-[#2EE6A6]/20 rounded-xl px-3 py-2">
+              <p className="text-[11px] text-[#19EE8A] bg-[#19EE8A]/10 border border-[#19EE8A]/25 rounded-xl px-3 py-2">
                 {webAudioWarning}
               </p>
             )}
@@ -467,9 +467,9 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             )}
           </div>
         ) : (
-          <div className="rounded-xl bg-[#1F1F1F] p-5 text-center space-y-2">
-            <p className="text-sm font-semibold text-white">Belum ada lagu diputar</p>
-            <p className="text-xs text-white/55">
+          <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 text-center space-y-2">
+            <p className="text-sm font-semibold text-[#E8FFF3]">Belum ada lagu diputar</p>
+            <p className="text-xs text-[#B3F7D1]/65">
               Pilih lagu dari Beranda atau Cari untuk mulai memutar musik.
             </p>
           </div>
@@ -478,7 +478,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
         <div
           role="tablist"
           aria-label="Tab panel sedang diputar"
-          className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-[#1F1F1F]"
+          className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-white/[0.05] backdrop-blur-md border border-white/[0.08]"
         >
           <button
             type="button"
@@ -487,8 +487,8 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             onClick={() => setRightPanelTab('queue')}
             className={`flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap ${
               rightPanelTab === 'queue'
-                ? 'bg-[#2E2E2E] text-white'
-                : 'text-white/60 hover:text-white'
+                ? 'bg-white/[0.12] text-[#19EE8A]'
+                : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
             }`}
           >
             <ListMusic className="w-3.5 h-3.5" strokeWidth={1.9} />
@@ -501,8 +501,8 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             onClick={() => setRightPanelTab('lyrics')}
             className={`flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap ${
               rightPanelTab === 'lyrics'
-                ? 'bg-[#2E2E2E] text-white'
-                : 'text-white/60 hover:text-white'
+                ? 'bg-white/[0.12] text-[#19EE8A]'
+                : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
             }`}
           >
             <Mic2 className="w-3.5 h-3.5" strokeWidth={1.9} />
@@ -515,8 +515,8 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
             onClick={() => setRightPanelTab('details')}
             className={`flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap ${
               rightPanelTab === 'details'
-                ? 'bg-[#2E2E2E] text-white'
-                : 'text-white/60 hover:text-white'
+                ? 'bg-white/[0.12] text-[#19EE8A]'
+                : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
             }`}
           >
             <Info className="w-3.5 h-3.5" strokeWidth={1.9} />
@@ -536,7 +536,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
               <SongDetailsAndRelated track={currentTrack} onAddToPlaylist={onAddToPlaylist} />
             )
           ) : (
-            <p className="text-xs text-white/45 py-8 text-center">
+            <p className="text-xs text-[#B3F7D1]/50 py-8 text-center">
               Putar lagu untuk melihat kredit dan lagu terkait.
             </p>
           )}

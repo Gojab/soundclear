@@ -35,6 +35,8 @@ export interface AudioDiagnosticsSnapshot {
 export interface SharedAudioGraph {
   ctx: AudioContext;
   decks: [HTMLAudioElement, HTMLAudioElement];
+  directDeck: HTMLAudioElement;
+  backgroundDirectActive: boolean;
   deckSources: [MediaElementAudioSourceNode, MediaElementAudioSourceNode];
   deckGains: [GainNode, GainNode];
   inputBus: GainNode;
@@ -59,6 +61,8 @@ export interface SharedAudioGraph {
 }
 
 let sharedGraph: SharedAudioGraph | null = null;
+let keepaliveAudio: HTMLAudioElement | null = null;
+let keepaliveBlobUrl: string | null = null;
 let testToneMode: TestToneMode | null = null;
 let testToneOsc: OscillatorNode | null = null;
 let testToneSweepTimer: number | null = null;
@@ -111,6 +115,75 @@ function getSinkIdSupport(graph: SharedAudioGraph | null): {
   return { supported: false, method: 'none' };
 }
 
+function createSilentWavBlobUrl(): string {
+  if (keepaliveBlobUrl) return keepaliveBlobUrl;
+  const sampleRate = 8000;
+  const numSamples = 4000; // 0.5s tiny valid PCM WAV
+  const dataSize = numSamples;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i += 1) {
+      view.setUint8(offset + i, s.charCodeAt(i));
+    }
+  };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+  for (let i = 0; i < numSamples; i += 1) {
+    view.setUint8(44 + i, 128);
+  }
+  const blob = new Blob([buffer], { type: 'audio/wav' });
+  keepaliveBlobUrl = URL.createObjectURL(blob);
+  return keepaliveBlobUrl;
+}
+
+function ensureKeepaliveAudioElement(): HTMLAudioElement | null {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
+  if (keepaliveAudio) return keepaliveAudio;
+  const el = new Audio(createSilentWavBlobUrl());
+  el.loop = true;
+  el.preload = 'auto';
+  el.volume = 0.005;
+  (el as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+  keepaliveAudio = el;
+  return el;
+}
+
+export function startSilentKeepaliveAudio(): void {
+  const el = ensureKeepaliveAudioElement();
+  if (!el) return;
+  if (el.paused) {
+    void el.play().catch(() => {});
+  }
+}
+
+export function stopSilentKeepaliveAudio(): void {
+  if (!keepaliveAudio) return;
+  if (!keepaliveAudio.paused) {
+    keepaliveAudio.pause();
+  }
+}
+
+export function unlockPlaybackOnUserGesture(): void {
+  if (typeof window === 'undefined') return;
+  const graph = ensureAudioGraph();
+  if (graph && graph.ctx.state !== 'running') {
+    void graph.ctx.resume().catch(() => {});
+  }
+  startSilentKeepaliveAudio();
+}
+
 function configureAudioElement(audio: HTMLAudioElement, useCors: boolean): void {
   audio.preload = 'auto';
   audio.crossOrigin = useCors ? 'anonymous' : null;
@@ -118,10 +191,12 @@ function configureAudioElement(audio: HTMLAudioElement, useCors: boolean): void 
     preservesPitch?: boolean;
     webkitPreservesPitch?: boolean;
     mozPreservesPitch?: boolean;
+    playsInline?: boolean;
   };
   mediaWithPitch.preservesPitch = true;
   mediaWithPitch.webkitPreservesPitch = true;
   mediaWithPitch.mozPreservesPitch = true;
+  mediaWithPitch.playsInline = true;
 }
 
 export function ensureAudioGraph(): SharedAudioGraph | null {
@@ -136,6 +211,9 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
   const ctx = new AudioCtx();
   const decks: [HTMLAudioElement, HTMLAudioElement] = [new Audio(), new Audio()];
   decks.forEach((audio) => configureAudioElement(audio, true));
+
+  const directDeck = new Audio();
+  configureAudioElement(directDeck, false);
 
   const deckSources: [MediaElementAudioSourceNode, MediaElementAudioSourceNode] = [
     ctx.createMediaElementSource(decks[0]),
@@ -258,6 +336,8 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
   sharedGraph = {
     ctx,
     decks,
+    directDeck,
+    backgroundDirectActive: false,
     deckSources,
     deckGains,
     inputBus,
@@ -294,6 +374,91 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
   installFirstGestureResume();
   notifyDiagnosticsListeners();
   return sharedGraph;
+}
+
+export function getActivePlaybackElement(graph: SharedAudioGraph): HTMLAudioElement {
+  return graph.backgroundDirectActive ? graph.directDeck : graph.decks[graph.activeDeck];
+}
+
+export function resetDirectDeck(): void {
+  const graph = sharedGraph;
+  if (!graph) return;
+  graph.backgroundDirectActive = false;
+  if (!graph.directDeck.paused) {
+    graph.directDeck.pause();
+  }
+  graph.directDeck.removeAttribute('src');
+}
+
+export async function engageBackgroundDirectDeck(
+  volume0to100: number,
+  isMuted: boolean,
+): Promise<boolean> {
+  const graph = sharedGraph;
+  if (!graph || graph.backgroundDirectActive) return Boolean(graph?.backgroundDirectActive);
+  const activeDeck = graph.decks[graph.activeDeck];
+  if (!activeDeck.src || activeDeck.paused) return false;
+
+  const targetSrc = activeDeck.src;
+  const resumeAt = Number.isFinite(activeDeck.currentTime) ? activeDeck.currentTime : 0;
+  const targetRate = activeDeck.playbackRate || 1;
+  const directVol = isMuted ? 0 : Math.max(0, Math.min(1, volume0to100 / 100));
+
+  try {
+    graph.directDeck.crossOrigin = targetSrc.startsWith('blob:') ? null : 'anonymous';
+    graph.directDeck.src = targetSrc;
+    graph.directDeck.volume = directVol;
+    graph.directDeck.playbackRate = targetRate;
+    if (resumeAt > 0) {
+      graph.directDeck.currentTime = resumeAt;
+    }
+    graph.backgroundDirectActive = true;
+    activeDeck.pause();
+    await graph.directDeck.play();
+    notifyDiagnosticsListeners();
+    return true;
+  } catch {
+    graph.backgroundDirectActive = false;
+    return false;
+  }
+}
+
+export async function restoreDspDeckFromBackground(): Promise<void> {
+  const graph = sharedGraph;
+  if (!graph || !graph.backgroundDirectActive) return;
+
+  const activeDeck = graph.decks[graph.activeDeck];
+  const resumeAt = Number.isFinite(graph.directDeck.currentTime)
+    ? graph.directDeck.currentTime
+    : activeDeck.currentTime;
+  const wasPlaying = !graph.directDeck.paused;
+
+  graph.backgroundDirectActive = false;
+  graph.directDeck.pause();
+
+  try {
+    if (graph.ctx.state !== 'running') {
+      await graph.ctx.resume();
+    }
+  } catch {
+    // Best-effort resume
+  }
+
+  if (activeDeck.src && Number.isFinite(resumeAt)) {
+    try {
+      activeDeck.currentTime = resumeAt;
+    } catch {
+      // Ignore seek error
+    }
+  }
+  if (wasPlaying && activeDeck.src) {
+    try {
+      await activeDeck.play();
+    } catch {
+      // Re-engage direct deck cleanly if foreground DSP play fails
+    }
+  }
+  notifyDiagnosticsListeners();
 }
 
 export async function resumeAudioContext(): Promise<AudioContextState | 'unavailable'> {

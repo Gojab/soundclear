@@ -66,11 +66,11 @@ export function TopBarAccountMenu() {
         title="Akun & Pengaturan"
         className={`w-9 h-9 rounded-full p-1 flex items-center justify-center transition-transform hover:scale-105 ${
           open || currentRoute.name === 'settings'
-            ? 'bg-[#282828] ring-2 ring-white/25'
-            : 'bg-[#1F1F1F] hover:bg-[#282828]'
+            ? 'bg-white/[0.14] ring-2 ring-[#B3F7D1]/30'
+            : 'bg-white/[0.06] hover:bg-white/[0.11]'
         }`}
       >
-        <span className="w-full h-full rounded-full bg-[#2EE6A6] text-[#06130E] text-xs font-extrabold flex items-center justify-center">
+        <span className="w-full h-full rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center">
           {avatarLetter}
         </span>
       </button>
@@ -79,56 +79,56 @@ export function TopBarAccountMenu() {
         <div
           role="menu"
           aria-label="Menu akun dan pengaturan"
-          className="absolute right-0 mt-2 w-[280px] rounded-md bg-[#282828] border border-white/[0.08] shadow-[0_16px_40px_rgba(0,0,0,0.75)] p-1.5 z-50 text-left"
+          className="absolute right-0 mt-2 w-[280px] rounded-xl bg-[#0B0F0D]/85 backdrop-blur-2xl border border-white/[0.14] shadow-[0_16px_40px_rgba(0,0,0,0.8)] p-1.5 z-50 text-left"
         >
           <div className="space-y-0.5">
             <button
               type="button"
               role="menuitem"
               onClick={() => go({ name: 'settings', tab: 'general' })}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-white/90 hover:bg-white/[0.08] hover:text-white transition-colors"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
             >
               <span className="flex items-center gap-2.5">
-                <User className="w-4 h-4 text-white/70" strokeWidth={1.9} />
+                <User className="w-4 h-4 text-[#B3F7D1]/70" strokeWidth={1.9} />
                 <span>Profil ({accountKey === 'cloud' ? 'Streaming Audio' : 'Mode Lokal'})</span>
               </span>
-              <ExternalLink className="w-3.5 h-3.5 text-white/50" strokeWidth={1.8} />
+              <ExternalLink className="w-3.5 h-3.5 text-[#B3F7D1]/50" strokeWidth={1.8} />
             </button>
 
             <button
               type="button"
               role="menuitem"
               onClick={() => go({ name: 'library' })}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-white/90 hover:bg-white/[0.08] hover:text-white transition-colors"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
             >
               <span className="flex items-center gap-2.5">
-                <Library className="w-4 h-4 text-white/70" strokeWidth={1.9} />
+                <Library className="w-4 h-4 text-[#B3F7D1]/70" strokeWidth={1.9} />
                 <span>Koleksi Kamu</span>
               </span>
-              <span className="text-[11px] text-white/45 font-mono-num">{playlistsCount}</span>
+              <span className="text-[11px] text-[#B3F7D1]/50 font-mono-num">{playlistsCount}</span>
             </button>
 
             <button
               type="button"
               role="menuitem"
               onClick={() => go({ name: 'liked' })}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-white/90 hover:bg-white/[0.08] hover:text-white transition-colors"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
             >
               <span className="flex items-center gap-2.5">
-                <Heart className="w-4 h-4 text-white/70" strokeWidth={1.9} />
+                <Heart className="w-4 h-4 text-[#B3F7D1]/70" strokeWidth={1.9} />
                 <span>Lagu yang Disukai</span>
               </span>
-              <span className="text-[11px] text-white/45 font-mono-num">{likedCount}</span>
+              <span className="text-[11px] text-[#B3F7D1]/50 font-mono-num">{likedCount}</span>
             </button>
 
             <button
               type="button"
               role="menuitem"
               onClick={() => go({ name: 'recap' })}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-white/90 hover:bg-white/[0.08] hover:text-white transition-colors"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
             >
               <span className="flex items-center gap-2.5">
-                <BarChart3 className="w-4 h-4 text-white/70" strokeWidth={1.9} />
+                <BarChart3 className="w-4 h-4 text-[#B3F7D1]/70" strokeWidth={1.9} />
                 <span>Rekap Dengar</span>
               </span>
             </button>
@@ -137,10 +137,10 @@ export function TopBarAccountMenu() {
               type="button"
               role="menuitem"
               onClick={() => go({ name: 'settings', tab: 'appearance' })}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-white/90 hover:bg-white/[0.08] hover:text-white transition-colors"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
             >
               <span className="flex items-center gap-2.5">
-                <Palette className="w-4 h-4 text-[#2EE6A6]" strokeWidth={1.9} />
+                <Palette className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.9} />
                 <span>Latar Belakang &amp; Tampilan</span>
               </span>
             </button>
@@ -149,10 +149,10 @@ export function TopBarAccountMenu() {
               type="button"
               role="menuitem"
               onClick={() => go({ name: 'settings', tab: 'sound', focusEq: true })}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-white/90 hover:bg-white/[0.08] hover:text-white transition-colors"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
             >
               <span className="flex items-center gap-2.5">
-                <Sliders className="w-4 h-4 text-[#2EE6A6]" strokeWidth={1.9} />
+                <Sliders className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.9} />
                 <span>Pengaturan Audio &amp; EQ</span>
               </span>
             </button>
@@ -161,10 +161,10 @@ export function TopBarAccountMenu() {
               type="button"
               role="menuitem"
               onClick={() => go({ name: 'shortcuts' })}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-white/90 hover:bg-white/[0.08] hover:text-white transition-colors"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
             >
               <span className="flex items-center gap-2.5">
-                <Keyboard className="w-4 h-4 text-white/70" strokeWidth={1.9} />
+                <Keyboard className="w-4 h-4 text-[#B3F7D1]/70" strokeWidth={1.9} />
                 <span>Pintasan Keyboard</span>
               </span>
             </button>
@@ -175,25 +175,25 @@ export function TopBarAccountMenu() {
               onClick={() => go({ name: 'settings', tab: 'general' })}
               className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[4px] text-[13px] font-medium transition-colors ${
                 currentRoute.name === 'settings'
-                  ? 'bg-white/[0.1] text-white'
-                  : 'text-white/90 hover:bg-white/[0.08] hover:text-white'
+                  ? 'bg-white/[0.09] text-[#19EE8A]'
+                  : 'text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3]'
               }`}
             >
               <span className="flex items-center gap-2.5">
-                <Settings className="w-4 h-4 text-white/70" strokeWidth={1.9} />
+                <Settings className="w-4 h-4 text-[#B3F7D1]/70" strokeWidth={1.9} />
                 <span>Pengaturan</span>
               </span>
             </button>
           </div>
 
-          <div className="my-1.5 border-t border-white/[0.12]" />
+          <div className="my-1.5 border-t border-[#B3F7D1]/[0.12]" />
 
           <div className="px-3 pt-1.5 pb-4">
-            <p className="text-[13px] font-bold text-white">Info Terkini</p>
+            <p className="text-[13px] font-bold text-[#E8FFF3]">Info Terkini</p>
             <div className="mt-4 flex flex-col items-center text-center gap-2 px-2">
-              <Check className="w-7 h-7 text-white/85" strokeWidth={2} />
-              <p className="text-xs font-bold text-white">Kamu sudah lihat semuanya</p>
-              <p className="text-[11px] leading-relaxed text-white/60">
+              <Check className="w-7 h-7 text-[#19EE8A]" strokeWidth={2} />
+              <p className="text-xs font-bold text-[#E8FFF3]">Kamu sudah lihat semuanya</p>
+              <p className="text-[11px] leading-relaxed text-[#B3F7D1]/65">
                 Pantau terus bagian ini untuk pembaruan pemutar audio, playlist, dan pustaka lokal Anda.
               </p>
             </div>
