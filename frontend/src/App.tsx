@@ -6,7 +6,6 @@ import {
   Clock,
   Compass,
   CornerDownRight,
-  Disc3,
   Home,
   Keyboard,
   PanelRightOpen,
@@ -248,11 +247,11 @@ export default function App() {
             className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-full hover:bg-white/[0.06] transition-colors"
           >
             <img
-              src="/assets/aistudio/75DD2556-E7B1-4261-84AE-EE04912ABEF1_8c38c95c.png"
+              src="/soundclear-logo.png"
               alt="SoundClear"
-              className="w-8 h-8 rounded-lg object-cover shrink-0 shadow-sm"
+              className="w-8 h-8 rounded-lg object-contain shrink-0"
             />
-            <span className="text-sm font-bold tracking-tight text-white hidden xl:inline whitespace-nowrap">
+            <span className="text-sm font-bold tracking-tight text-white hidden sm:inline whitespace-nowrap">
               SoundClear
             </span>
           </button>
@@ -529,9 +528,11 @@ export default function App() {
             }`}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-[#2EE6A6]/15 border border-[#2EE6A6]/30 flex items-center justify-center text-[#2EE6A6]">
-                <Disc3 className="w-4 h-4" strokeWidth={1.75} />
-              </div>
+              <img
+                src="/soundclear-logo.png"
+                alt="SoundClear"
+                className="w-7 h-7 rounded-lg object-contain shrink-0"
+              />
               <span className="text-sm font-semibold tracking-tight text-white">SoundClear</span>
               <button
                 type="button"

@@ -2,7 +2,7 @@
 
 <br />
 
-<img src="public/assets/aistudio/75DD2556-E7B1-4261-84AE-EE04912ABEF1_8c38c95c.png" alt="SoundClear Logo" width="84" height="84" />
+<img src="public/soundclear-logo.png" alt="SoundClear Logo" width="84" height="84" />
 
 <br /><br />
 

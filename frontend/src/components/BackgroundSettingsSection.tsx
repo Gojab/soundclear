@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import {
   Check,
-  Disc3,
   Image as ImageIcon,
   Layers,
   Palette,
@@ -158,9 +157,11 @@ export function BackgroundSettingsSection() {
                 }`}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-full bg-[#2EE6A6] flex items-center justify-center text-[#06130E]">
-                    <Disc3 className="w-2.5 h-2.5" strokeWidth={2.4} />
-                  </span>
+                  <img
+                    src="/soundclear-logo.png"
+                    alt="SoundClear"
+                    className="w-3.5 h-3.5 rounded object-contain shrink-0"
+                  />
                   <span className="text-[10px] font-bold text-white truncate">Koleksi</span>
                 </div>
                 <div className="h-2 w-4/5 rounded bg-white/15" />

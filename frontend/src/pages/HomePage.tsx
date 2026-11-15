@@ -19,6 +19,7 @@ import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import type { HomeSectionId, MediaItem } from '../types/music';
 import {
+  diversifyIndonesianTracks,
   filterHomeMediaItems,
   getPlayableVideoId,
   isExcludedRegionalItem,
@@ -131,7 +132,13 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
     return filterList(sorted).slice(0, 10);
   }, [playHistory, hiddenTrackIds, hideExplicit, categoryTab]);
 
-  const seedTrack = continueTracks[0] || likedTracks[0] || chartsQuery.data?.songs[0] || null;
+  const hasPersonalSeed = continueTracks.length > 0 || likedTracks.length > 0;
+  const chartSongsRaw = filterList(chartsQuery.data?.songs ?? []);
+  const chartSongs = useMemo(
+    () => diversifyIndonesianTracks(chartSongsRaw, 1, 2),
+    [chartSongsRaw],
+  );
+  const seedTrack = continueTracks[0] || likedTracks[0] || chartSongs[0] || null;
   const seedVideoId = seedTrack ? getPlayableVideoId(seedTrack) : null;
 
   const dailyMixQuery = useQuery({
@@ -192,10 +199,22 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
   }, [followedArtistQueries, hiddenTrackIds, hideExplicit, categoryTab]);
 
   const { greeting, moodLabel } = getGreetingByHour(new Date().getHours());
-  const chartSongs = filterList(chartsQuery.data?.songs ?? []);
   const chartPlaylists = filterList(chartsQuery.data?.videos ?? []);
   const chartArtists = filterList(chartsQuery.data?.artists ?? []);
-  const dailyMixTracks = filterList(dailyMixQuery.data?.tracks ?? []).slice(0, 8);
+  const dailyMixTracks = useMemo(() => {
+    const rawWatch = filterList(dailyMixQuery.data?.tracks ?? []);
+    if (hasPersonalSeed) {
+      return rawWatch.slice(0, 8);
+    }
+    // Keep default Home mix diverse across trending Indonesian artists & genres
+    const interleaved: MediaItem[] = [];
+    const maxLen = Math.max(chartSongs.length, rawWatch.length);
+    for (let i = 0; i < maxLen; i += 1) {
+      if (i < chartSongs.length) interleaved.push(chartSongs[i]);
+      if (i < rawWatch.length) interleaved.push(rawWatch[i]);
+    }
+    return diversifyIndonesianTracks(interleaved, 1, 1).slice(0, 8);
+  }, [dailyMixQuery.data, hasPersonalSeed, chartSongs, hiddenTrackIds, hideExplicit, categoryTab]);
   const moodCategories = useMemo(
     () => (moodsQuery.data?.groups ?? []).flatMap((g) => g.items).slice(0, 12),
     [moodsQuery.data],
@@ -321,7 +340,9 @@ export function HomePage({ onAddToPlaylist }: HomePageProps) {
                   {greeting} · {moodLabel}
                 </h2>
                 <p className="text-xs text-white/55 mt-0.5">
-                  Mix hari ini disesuaikan dengan riwayat dengar Anda
+                  {hasPersonalSeed
+                    ? 'Mix hari ini disesuaikan dengan riwayat dengar Anda'
+                    : 'Mix lagu Indonesia lintas genre yang sedang trending hari ini'}
                 </p>
               </div>
               {dailyMixTracks.length > 0 && (

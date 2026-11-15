@@ -237,6 +237,271 @@ def _is_excluded_home_item(item: Mapping[str, Any]) -> bool:
     return _is_excluded_catalog_item(item)
 
 
+KOPLO_DANGDUT_KEYWORD_RE = re.compile(
+    r"\b(?:koplo|dangdut|campursari|gamelan|tayub|tarling|jaipong|orgen\s*tunggal|elekton|"
+    r"om\s+adella|new\s+pallapa|om\s+monata|new\s+monata|ageng\s+music|dc\.?\s*production|"
+    r"dc\s+musik|ta\s*pro\s*music|lembayung\s+music|berkah\s+talenta|aneeska|savana\s+music|"
+    r"sri\s+surya|bajol\s+ndanu|one\s+nada|mahesa\s+music|pantura|sinden|ketipung|kendang|"
+    r"gedruk|jandhut|ambyar(?:\s+everywhere)?|da7|dj\s+tiktok|jedag\s+jedug|full\s+bass|"
+    r"live\s+dangdut|dangdut\s+jamming|cover\s+ai|ai\s+cover|karaoke|"
+    r"jeyma\s+monica|denny\s+caknan|yeni\s+inka|della\s+monica|dini\s+kurnia|shinta\s+gisul|"
+    r"laila\s+ayu|ajeng\s+febria|happy\s+asmara|sasya\s+arkhisna|silvy\s+kumalasari|"
+    r"maulana\s+ardiansyah|melly\s+lee|ndarboy\s+genk|guyon\s+waton|gilga\s+sahid|"
+    r"difarina\s+indra|arlida\s+putri|tasya\s+rosmala|niken\s+salindry)\b",
+    re.IGNORECASE,
+)
+
+KOPLO_DANGDUT_ARTISTS = frozenset(
+    {
+        "jeyma monica",
+        "denny caknan",
+        "yeni inka",
+        "della monica",
+        "dini kurnia",
+        "shinta gisul",
+        "laila ayu",
+        "ajeng febria",
+        "happy asmara",
+        "sasya arkhisna",
+        "silvy kumalasari",
+        "maulana ardiansyah",
+        "ndarboy genk",
+        "ndarboy",
+        "guyon waton",
+        "aftershine",
+        "gilga sahid",
+        "gildcoustic",
+        "masdddho",
+        "difarina indra",
+        "arlida putri",
+        "tasya rosmala",
+        "syahiba saufa",
+        "niken salindry",
+        "lala widy",
+        "vita alvia",
+        "safira inema",
+        "esa risty",
+        "woro widowati",
+        "damara de",
+        "via vallen",
+        "nella kharisma",
+        "ayu ting ting",
+        "siti badriah",
+        "farel prayoga",
+        "abah lala",
+        "om adella",
+        "new pallapa",
+        "dc. production",
+        "dc production",
+        "ta pro music & publishing",
+        "ta pro music",
+        "lembayung music",
+        "berkah talenta",
+        "ageng music",
+    }
+)
+
+UNWANTED_PLAYLIST_TITLE_RE = re.compile(
+    r"\b(?:cover\s*ai|ai\s*cover|koplo|dangdut|campursari|karaoke|jedag\s*jedug|"
+    r"full\s*bass|dj\s+remix|reggae\s+ska|slowed|reverb|8d|cambodia|khmer|"
+    r"malaysian|hindi|india|thai|vietnam|pinoy|tagalog|lawas|90an|2000an|"
+    r"2008\s*[-–]\s*2016|2015|2016|2017)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_koplo_or_dangdut_item(item: Mapping[str, Any]) -> bool:
+    parts: List[str] = [str(item.get("title") or "")]
+    for artist in item.get("artists") or []:
+        if isinstance(artist, Mapping) and artist.get("name"):
+            name = str(artist["name"]).strip()
+            if name.lower() in KOPLO_DANGDUT_ARTISTS:
+                return True
+            parts.append(name)
+    album = item.get("album")
+    if isinstance(album, Mapping) and album.get("name"):
+        parts.append(str(album["name"]))
+    desc = item.get("description")
+    if isinstance(desc, str) and desc:
+        parts.append(desc)
+    combined = " ".join(parts)
+    if KOPLO_DANGDUT_KEYWORD_RE.search(combined):
+        return True
+    # Catch live dangdut/cover channel spam like "Judul ~ Cover by: ..."
+    if re.search(r"~\s*cover\s+by\s*:", combined, re.IGNORECASE):
+        return True
+    return False
+
+
+def _is_unwanted_playlist_title(title: str) -> bool:
+    if not title or _is_excluded_regional_text(title):
+        return True
+    return bool(UNWANTED_PLAYLIST_TITLE_RE.search(title))
+
+
+def _normalize_title_dedupe_key(title: str) -> str:
+    clean = _clean_track_title_for_query(title).lower()
+    clean = re.sub(r"[^a-z0-9]+", " ", clean).strip()
+    return clean
+
+
+def _diversify_indonesia_tracks(
+    items: List[Dict[str, Any]],
+    *,
+    max_koplo: int = 1,
+    max_per_artist: int = 2,
+    limit: int = 25,
+) -> List[Dict[str, Any]]:
+    if not items:
+        return []
+
+    seen_video_ids: set[str] = set()
+    seen_titles: set[str] = set()
+    mainstream: List[Dict[str, Any]] = []
+    koplo: List[Dict[str, Any]] = []
+
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        vid = str(item.get("videoId") or item.get("id") or "").strip()
+        title_key = _normalize_title_dedupe_key(str(item.get("title") or ""))
+        if vid and vid in seen_video_ids:
+            continue
+        if title_key and title_key in seen_titles:
+            continue
+        if vid:
+            seen_video_ids.add(vid)
+        if title_key:
+            seen_titles.add(title_key)
+
+        entry = dict(item)
+        if _is_koplo_or_dangdut_item(entry):
+            koplo.append(entry)
+        else:
+            mainstream.append(entry)
+
+    selected: List[Dict[str, Any]] = []
+    artist_counts: Dict[str, int] = {}
+    deferred_mainstream: List[Dict[str, Any]] = []
+
+    for item in mainstream:
+        artists = item.get("artists") or []
+        primary_artist = (
+            str(artists[0].get("name") or "").strip().lower()
+            if artists and isinstance(artists[0], Mapping)
+            else ""
+        )
+        if primary_artist and max_per_artist > 0:
+            count = artist_counts.get(primary_artist, 0)
+            if count >= max_per_artist:
+                deferred_mainstream.append(item)
+                continue
+            artist_counts[primary_artist] = count + 1
+        selected.append(item)
+        if len(selected) >= limit:
+            return selected
+
+    for item in deferred_mainstream:
+        if len(selected) >= limit:
+            break
+        selected.append(item)
+
+    if max_koplo > 0 and koplo:
+        allowed_koplo = max_koplo if selected else min(len(koplo), limit)
+        for item in koplo[:allowed_koplo]:
+            if len(selected) >= limit:
+                break
+            selected.append(item)
+
+    return selected[:limit]
+
+
+def _diversify_indonesia_artists(
+    artists: List[Dict[str, Any]],
+    fallback_tracks: List[Dict[str, Any]],
+    *,
+    max_koplo: int = 1,
+    limit: int = 12,
+) -> List[Dict[str, Any]]:
+    mainstream: List[Dict[str, Any]] = []
+    koplo: List[Dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    seen_names: set[str] = set()
+
+    for art in artists:
+        if not isinstance(art, Mapping):
+            continue
+        name = str(art.get("title") or art.get("name") or "").strip()
+        aid = str(art.get("id") or art.get("browseId") or "").strip()
+        if not name or _is_excluded_regional_text(name):
+            continue
+        lname = name.lower()
+        if (aid and aid in seen_ids) or lname in seen_names:
+            continue
+        if aid:
+            seen_ids.add(aid)
+        seen_names.add(lname)
+        entry = dict(art)
+        if lname in KOPLO_DANGDUT_ARTISTS or KOPLO_DANGDUT_KEYWORD_RE.search(lname):
+            koplo.append(entry)
+        else:
+            mainstream.append(entry)
+
+    out = list(mainstream)
+    # If chart artists were heavily skewed toward Koplo, promote real artists from diversified trending tracks
+    if len(koplo) >= 2:
+        for track in fallback_tracks:
+            if len(out) >= limit:
+                break
+            for ref in track.get("artists") or []:
+                if not isinstance(ref, Mapping):
+                    continue
+                rname = str(ref.get("name") or "").strip()
+                rid = str(ref.get("id") or "").strip()
+                if not rname or not rid.startswith("UC"):
+                    continue
+                lrname = rname.lower()
+                if lrname in seen_names or rid in seen_ids:
+                    continue
+                if lrname in KOPLO_DANGDUT_ARTISTS or KOPLO_DANGDUT_KEYWORD_RE.search(lrname):
+                    continue
+                if _is_excluded_regional_text(rname):
+                    continue
+                seen_ids.add(rid)
+                seen_names.add(lrname)
+                out.append(
+                    {
+                        "id": rid,
+                        "videoId": None,
+                        "browseId": rid,
+                        "playlistId": None,
+                        "title": rname,
+                        "artists": [{"id": rid, "name": rname}],
+                        "album": None,
+                        "duration": None,
+                        "durationSeconds": None,
+                        "thumbnail": track.get("thumbnail"),
+                        "type": "artist",
+                        "year": None,
+                        "views": "Artis Trending Indonesia",
+                        "isExplicit": False,
+                        "description": None,
+                        "published": None,
+                        "podcastId": None,
+                        "creditsBrowseId": None,
+                    }
+                )
+                break
+
+    for art in koplo[: max(0, max_koplo)]:
+        if len(out) >= limit:
+            break
+        out.append(art)
+
+    return out[:limit]
+
+
+
 LRC_TAG_RE = re.compile(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
 STREAM_CACHE_DIR = os.environ.get("SOUNDCLEAR_STREAM_CACHE_DIR", "/tmp/soundclear_stream_cache")
 VERCEL_MAX_STREAM_CHUNK_BYTES = 1_572_864  # 1.5 MiB (stays safely below Vercel 4.5 MB payload limit)
@@ -982,6 +1247,45 @@ class MusicProvider:
         self._cache.set(cache_key, result, ttl_seconds=300)
         return result
 
+    def _search_trending_indonesia_playlists(
+        self,
+        query: str,
+        *,
+        max_playlists: int = 1,
+        track_limit: int = 25,
+    ) -> List[Dict[str, Any]]:
+        try:
+            raw_results = self._call_with_retry(
+                lambda: self._gateway.search(query, filter="playlists", limit=8)
+            )
+        except Exception:
+            return []
+
+        playlist_ids: List[str] = []
+        for entry in raw_results or []:
+            norm = normalize_yt_item(entry)
+            if not norm or norm.get("type") != "playlist":
+                continue
+            title = str(norm.get("title") or "").strip()
+            if _is_excluded_catalog_item(norm) or _is_unwanted_playlist_title(title):
+                continue
+            pl_id = _clean_playlist_id(str(norm.get("playlistId") or norm.get("id") or ""))
+            if pl_id and pl_id not in playlist_ids:
+                playlist_ids.append(pl_id)
+            if len(playlist_ids) >= max_playlists:
+                break
+
+        collected: List[Dict[str, Any]] = []
+        for pl_id in playlist_ids:
+            try:
+                pl_detail = self.get_playlist(pl_id, limit=track_limit)
+                for tr in pl_detail.get("tracks") or []:
+                    if not _is_excluded_catalog_item(tr):
+                        collected.append(tr)
+            except Exception:
+                continue
+        return collected
+
     def get_home(self, limit: int = 8) -> Dict[str, Any]:
         safe_limit = max(1, min(20, int(limit)))
         cache_key = f"home:{safe_limit}"
@@ -990,7 +1294,7 @@ class MusicProvider:
             return cached
 
         raw_sections = self._call_with_retry(lambda: self._gateway.get_home(limit=safe_limit))
-        sections: List[Dict[str, Any]] = []
+        base_sections: List[Dict[str, Any]] = []
         for sec in raw_sections:
             if not isinstance(sec, Mapping):
                 continue
@@ -1005,10 +1309,77 @@ class MusicProvider:
                 norm = normalize_yt_item(raw_item)
                 if norm and not _is_excluded_catalog_item(norm):
                     norm_items.append(norm)
-            if norm_items:
-                sections.append({"title": title.strip(), "items": norm_items})
+            if not norm_items:
+                continue
 
-        result = {"sections": sections}
+            if self._country == "ID":
+                playable_count = sum(1 for item in norm_items if item.get("type") in ("song", "video"))
+                if playable_count >= 2:
+                    norm_items = _diversify_indonesia_tracks(
+                        norm_items,
+                        max_koplo=1,
+                        max_per_artist=2,
+                        limit=20,
+                    )
+            if norm_items:
+                base_sections.append({"title": title.strip(), "items": norm_items})
+
+        sections: List[Dict[str, Any]] = []
+        if self._country == "ID":
+            # Enrich home with live non-AI trending Indonesian Pop/Indie playlists when real playlist catalog search is available
+            pop_tracks = _diversify_indonesia_tracks(
+                self._search_trending_indonesia_playlists(
+                    "Lagu Pop Indonesia Terbaru",
+                    max_playlists=1,
+                    track_limit=22,
+                ),
+                max_koplo=0,
+                max_per_artist=2,
+                limit=12,
+            )
+            indie_tracks = _diversify_indonesia_tracks(
+                self._search_trending_indonesia_playlists(
+                    "Top 50 Lagu Indie Indonesia",
+                    max_playlists=1,
+                    track_limit=20,
+                ),
+                max_koplo=0,
+                max_per_artist=2,
+                limit=12,
+            )
+
+            if pop_tracks or indie_tracks:
+                trending_songs: List[Dict[str, Any]] = []
+                try:
+                    charts_data = self.get_charts("ID")
+                    trending_songs = _diversify_indonesia_tracks(
+                        charts_data.get("songs") or [],
+                        max_koplo=1,
+                        max_per_artist=2,
+                        limit=12,
+                    )
+                except Exception:
+                    trending_songs = []
+
+                if trending_songs:
+                    sections.append({"title": "Sedang Trending di Indonesia", "items": trending_songs})
+                if pop_tracks:
+                    sections.append({"title": "Pop & Hits Indonesia Terbaru", "items": pop_tracks})
+                if indie_tracks:
+                    sections.append({"title": "Indie & Viral Indonesia", "items": indie_tracks})
+
+        seen_section_titles = {sec["title"].lower() for sec in sections}
+        for sec in base_sections:
+            lower_title = sec["title"].lower()
+            if lower_title in seen_section_titles:
+                continue
+            # Avoid duplicate raw YouTube trending shelf when we already built a balanced Indonesian trending shelf
+            if sections and "trending songs" in lower_title:
+                continue
+            seen_section_titles.add(lower_title)
+            sections.append(sec)
+
+        result = {"sections": sections[: max(safe_limit, 6)]}
         self._cache.set(cache_key, result)
         return result
 
@@ -1046,8 +1417,9 @@ class MusicProvider:
         trending = _norm_list(raw.get("trending"))
 
         # In unauthenticated mode, charts['songs'] may be empty while charts['videos'] lists chart playlists
+        chart_pool: List[Dict[str, Any]] = []
         if not songs and chart_playlist_ids:
-            for pl_id in chart_playlist_ids[:2]:
+            for pl_id in chart_playlist_ids[:3]:
                 try:
                     pl_detail = self.get_playlist(pl_id, limit=35)
                     tracks = [
@@ -1056,14 +1428,72 @@ class MusicProvider:
                         if not _is_excluded_catalog_item(t)
                     ]
                     if tracks:
-                        if not songs:
-                            songs = tracks[:20]
-                        elif not trending:
-                            trending = tracks[:20]
+                        chart_pool.extend(tracks)
                 except Exception:
                     continue
+            if chart_pool:
+                songs = chart_pool[:25]
 
-        if not trending and songs:
+        if cc == "ID":
+            koplo_song_count = sum(1 for s in songs if _is_koplo_or_dangdut_item(s))
+            mainstream_song_count = len(songs) - koplo_song_count
+            koplo_artist_count = sum(1 for a in artists if _is_koplo_or_dangdut_item(a))
+
+            should_enrich_id = (
+                koplo_song_count >= 2
+                or koplo_artist_count >= 2
+                or (len(songs) >= 4 and mainstream_song_count < 8)
+            )
+            if should_enrich_id:
+                id_hits = self._search_trending_indonesia_playlists(
+                    "Top 100 Indonesia Songs",
+                    max_playlists=1,
+                    track_limit=25,
+                )
+                id_pop = self._search_trending_indonesia_playlists(
+                    "Lagu Pop Indonesia Terbaru",
+                    max_playlists=1,
+                    track_limit=20,
+                )
+                # Interleave live Indonesian Top Hits & Pop playlists with non-koplo chart songs
+                # so top 10 reflects mainstream trending Indonesian music alongside global hits
+                chart_mainstream = [s for s in songs if not _is_koplo_or_dangdut_item(s)]
+                chart_koplo = [s for s in songs if _is_koplo_or_dangdut_item(s)]
+                interleaved: List[Dict[str, Any]] = []
+                max_len = max(len(id_hits), len(id_pop), len(chart_mainstream))
+                for idx in range(max_len):
+                    if idx < len(id_hits):
+                        interleaved.append(id_hits[idx])
+                    if idx < len(id_pop):
+                        interleaved.append(id_pop[idx])
+                    if idx < len(chart_mainstream):
+                        interleaved.append(chart_mainstream[idx])
+                blended_songs = interleaved + chart_koplo
+                songs = _diversify_indonesia_tracks(
+                    blended_songs,
+                    max_koplo=1,
+                    max_per_artist=2,
+                    limit=25,
+                )
+            elif len(songs) > 1:
+                songs = _diversify_indonesia_tracks(
+                    songs,
+                    max_koplo=1,
+                    max_per_artist=2,
+                    limit=25,
+                )
+
+            if koplo_artist_count >= 2 or len(artists) > 2:
+                artists = _diversify_indonesia_artists(
+                    artists,
+                    songs,
+                    max_koplo=1,
+                    limit=12,
+                )
+
+        if trending and cc == "ID" and len(trending) > 1:
+            trending = _diversify_indonesia_tracks(trending, max_koplo=1, max_per_artist=2, limit=20)
+        elif not trending and songs:
             trending = songs[:12]
 
         result = {

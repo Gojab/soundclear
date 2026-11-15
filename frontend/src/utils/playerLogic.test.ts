@@ -4,6 +4,7 @@ import {
   buildSearchFollowUps,
   computeNextIndex,
   computePrevIndex,
+  diversifyIndonesianTracks,
   extractTracksFromArtistDetail,
   filterHomeMediaItems,
   findActiveLyricIndex,
@@ -15,6 +16,7 @@ import {
   isCollectionPlayableType,
   isExcludedRegionalItem,
   isExcludedRegionalText,
+  isKoploOrDangdutItem,
   isLocalTrack,
   isPlayableTrack,
   isYouTubeVideoId,
@@ -310,4 +312,55 @@ test('parseDeepLinkSearch parses play and open deep links safely', () => {
   assert.equal(parseDeepLinkSearch('?open=unknown:123'), null);
   assert.equal(parseDeepLinkSearch('?play=undefined'), null);
   assert.equal(parseDeepLinkSearch(''), null);
+});
+
+test('isKoploOrDangdutItem and diversifyIndonesianTracks keep Indonesian trending mixes balanced', () => {
+  const koplo1: MediaItem = {
+    id: 'k1',
+    videoId: 'k1',
+    title: 'Laut Kidul',
+    artists: [{ id: 'a1', name: 'Jeyma Monica' }],
+    type: 'song',
+  };
+  const koplo2: MediaItem = {
+    id: 'k2',
+    videoId: 'k2',
+    title: 'DAHLIA (OFFICIAL LIVE MUSIC VIDEO)',
+    artists: [{ id: 'a2', name: 'Denny Caknan' }],
+    type: 'song',
+  };
+  const koplo3: MediaItem = {
+    id: 'k3',
+    videoId: 'k3',
+    title: 'Terbelah Jadi Dua ~ Cover by: Della Monica',
+    artists: [{ id: 'a3', name: 'Della Monica' }],
+    type: 'song',
+  };
+  const pop1 = makeTrack('p1', 'Teh Hijau');
+  const pop2: MediaItem = {
+    id: 'p2',
+    videoId: 'p2',
+    title: 'Dunia Yang Nanti',
+    artists: [{ id: 'a4', name: 'Raim Laode' }],
+    type: 'song',
+  };
+  const pop3: MediaItem = {
+    id: 'p3',
+    videoId: 'p3',
+    title: 'Panggil Aku Bayangan',
+    artists: [{ id: 'a5', name: 'Lyodra' }],
+    type: 'song',
+  };
+
+  assert.equal(isKoploOrDangdutItem(koplo1), true);
+  assert.equal(isKoploOrDangdutItem(koplo2), true);
+  assert.equal(isKoploOrDangdutItem(koplo3), true);
+  assert.equal(isKoploOrDangdutItem(pop1), false);
+  assert.equal(isKoploOrDangdutItem(pop2), false);
+
+  const diversified = diversifyIndonesianTracks([koplo1, koplo2, koplo3, pop1, pop2, pop3], 1, 2);
+  assert.deepEqual(
+    diversified.map((t) => t.id),
+    ['p1', 'p2', 'p3', 'k1'],
+  );
 });

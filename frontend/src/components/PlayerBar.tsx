@@ -241,7 +241,11 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           </>
         ) : (
           <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-md bg-[#181818]" />
+            <img
+              src="/soundclear-logo.png"
+              alt="SoundClear"
+              className="w-12 h-12 rounded-lg object-contain shrink-0"
+            />
             <div>
               <p className="text-sm font-semibold text-white/70">SoundClear</p>
               <p className="text-xs text-white/40">Pilih lagu untuk diputar</p>

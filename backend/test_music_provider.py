@@ -912,6 +912,133 @@ class MusicProviderTests(unittest.TestCase):
             finally:
                 main_app.provider = orig_provider
 
+    def test_indonesia_trending_charts_and_home_diversification_without_ai(self) -> None:
+        class KoploHeavyIndonesiaGateway(FakeYTMusicGateway):
+            def search(self, query: str, filter=None, limit: int = 20):
+                if filter == "playlists":
+                    return [
+                        {
+                            "resultType": "playlist",
+                            "title": "Cover AI Lagu Lawas Koplo",
+                            "browseId": "VLPLaiCoverSkip",
+                        },
+                        {
+                            "resultType": "playlist",
+                            "title": "Top 100 Indonesia Songs 2026" if "100" in query else (
+                                "Lagu Pop Indonesia Terbaru 2026" if "Pop" in query else "Top 50 Lagu Indie Indonesia"
+                            ),
+                            "browseId": (
+                                "VLPLidTop100"
+                                if "100" in query
+                                else ("VLPLidPop2026" if "Pop" in query else "VLPLidIndie50")
+                            ),
+                        },
+                    ]
+                return super().search(query, filter=filter, limit=limit)
+
+            def get_charts(self, country: str = "ID"):
+                return {
+                    "videos": [
+                        {
+                            "title": "Trending 20 Indonesia",
+                            "playlistId": "OLAK5uy_koploChart",
+                            "thumbnails": [{"url": "https://yt3.googleusercontent.com/c=s192", "width": 192, "height": 192}],
+                        }
+                    ],
+                    "artists": [
+                        {"title": "Denny Caknan", "browseId": "UCdenny", "subscribers": "7M"},
+                        {"title": "Yeni Inka", "browseId": "UCyeni", "subscribers": "3M"},
+                        {"title": "Jeyma Monica", "browseId": "UCjeyma", "subscribers": "2M"},
+                        {"title": "Tulus", "browseId": "UC_DHlXllTSMB8pTC38_leFg", "subscribers": "5M"},
+                    ],
+                    "songs": [],
+                    "trending": [],
+                }
+
+            def get_home(self, limit: int = 8):
+                return [
+                    {
+                        "title": "Autumn J-Pop",
+                        "contents": [{"title": "Idol", "videoId": "jp001", "artists": [{"name": "YOASOBI"}]}],
+                    },
+                    {
+                        "title": "Quick picks",
+                        "contents": [
+                            {"title": "Negoro Angin", "videoId": "kp001", "artists": [{"name": "Denny Caknan", "id": "UCdenny"}]},
+                            {"title": "Laut Kidul", "videoId": "kp002", "artists": [{"name": "Jeyma Monica", "id": "UCjeyma"}]},
+                            {"title": "Terbelah Jadi Dua", "videoId": "kp003", "artists": [{"name": "Yeni Inka", "id": "UCyeni"}]},
+                            {"title": "Teh Hijau", "videoId": "pop001", "artists": [{"name": "Tulus", "id": "UCtulus123456"}]},
+                        ],
+                    },
+                ]
+
+            def get_playlist(self, playlist_id: str, limit: int = 100):
+                if playlist_id == "OLAK5uy_koploChart":
+                    return {
+                        "id": playlist_id,
+                        "title": "Trending 20 Indonesia",
+                        "tracks": [
+                            {"videoId": "kp1", "title": "Laut Kidul", "artists": [{"name": "Jeyma Monica", "id": "UCjeyma"}]},
+                            {"videoId": "kp2", "title": "DAHLIA (OFFICIAL LIVE MUSIC VIDEO)", "artists": [{"name": "DC. PRODUCTION", "id": "UCdcp"}]},
+                            {"videoId": "kp3", "title": "TERBELAH JADI DUA ~ Cover by: Della Monica", "artists": [{"name": "Della Monica", "id": "UCdella"}]},
+                            {"videoId": "kp4", "title": "MUTIARA (Live Dangdut Jamming Session)", "artists": [{"name": "Shinta Gisul", "id": "UCshinta"}]},
+                            {"videoId": "popChart1", "title": "Teh Hijau", "artists": [{"name": "Tulus", "id": "UCtulus123456"}]},
+                        ],
+                    }
+                if playlist_id == "PLidPop2026":
+                    return {
+                        "id": playlist_id,
+                        "title": "Lagu Pop Indonesia Terbaru 2026",
+                        "tracks": [
+                            {"videoId": "pop2", "title": "Panggil Aku Bayangan", "artists": [{"name": "Lyodra", "id": "UClyodra123"}]},
+                            {"videoId": "pop3", "title": "maha benar", "artists": [{"name": "Salma Salsabil", "id": "UCsalma123"}]},
+                            {"videoId": "pop4", "title": "2001x", "artists": [{"name": "Adrian Khalif", "id": "UCadrian123"}]},
+                        ],
+                    }
+                if playlist_id == "PLidIndie50":
+                    return {
+                        "id": playlist_id,
+                        "title": "Top 50 Lagu Indie Indonesia",
+                        "tracks": [
+                            {"videoId": "ind1", "title": "Sesi Potret", "artists": [{"name": "enau", "id": "UCenau123"}]},
+                            {"videoId": "ind2", "title": "Sadrah", "artists": [{"name": "for Revenge", "id": "UCforrev123"}]},
+                        ],
+                    }
+                return {
+                    "id": playlist_id,
+                    "title": "Top 100 Indonesia Songs 2026",
+                    "tracks": [
+                        {"videoId": "top1", "title": "Dunia Yang Nanti", "artists": [{"name": "Raim Laode", "id": "UCraim123"}]},
+                        {"videoId": "top2", "title": "Jangan Paksa Rindu", "artists": [{"name": "Ifan Seventeen", "id": "UCifan123"}]},
+                        {"videoId": "kp1", "title": "Laut Kidul", "artists": [{"name": "Jeyma Monica", "id": "UCjeyma"}]},
+                    ],
+                }
+
+        provider = MusicProvider(gateway=KoploHeavyIndonesiaGateway(), sleep_fn=lambda _d: None)  # type: ignore[arg-type]
+
+        charts = provider.get_charts("ID")
+        song_titles = [s["title"] for s in charts["songs"]]
+        # Non-koplo Indonesian trending tracks come first, Koplo capped to at most 1
+        self.assertIn("Teh Hijau", song_titles[:3])
+        self.assertIn("Dunia Yang Nanti", song_titles)
+        self.assertIn("Panggil Aku Bayangan", song_titles)
+        koplo_in_charts = [t for t in song_titles if "Laut Kidul" in t or "DAHLIA" in t or "TERBELAH" in t]
+        self.assertLessEqual(len(koplo_in_charts), 1)
+        # Artists diversified: Tulus and real pop artists promoted above Koplo flood
+        artist_names = [a["title"] for a in charts["artists"]]
+        self.assertEqual(artist_names[0], "Tulus")
+        self.assertIn("Raim Laode", artist_names)
+
+        home = provider.get_home(8)
+        section_titles = [sec["title"] for sec in home["sections"]]
+        self.assertIn("Sedang Trending di Indonesia", section_titles)
+        self.assertIn("Pop & Hits Indonesia Terbaru", section_titles)
+        self.assertIn("Indie & Viral Indonesia", section_titles)
+        self.assertNotIn("Autumn J-Pop", section_titles)
+        quick_picks = next(sec for sec in home["sections"] if sec["title"] == "Quick picks")
+        self.assertEqual(quick_picks["items"][0]["title"], "Teh Hijau")
+        self.assertLessEqual(len(quick_picks["items"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -326,6 +326,133 @@ export function isExcludedRegionalItem(
   return isExcludedRegionalText(parts.join(' '));
 }
 
+const KOPLO_DANGDUT_KEYWORD_RE =
+  /\b(?:koplo|dangdut|campursari|gamelan|tayub|tarling|jaipong|orgen\s*tunggal|elekton|om\s+adella|new\s+pallapa|om\s+monata|new\s+monata|ageng\s+music|dc\.?\s*production|dc\s+musik|ta\s*pro\s*music|lembayung\s+music|berkah\s+talenta|aneeska|savana\s+music|sri\s+surya|bajol\s+ndanu|one\s+nada|mahesa\s+music|pantura|sinden|ketipung|kendang|gedruk|jandhut|ambyar(?:\s+everywhere)?|da7|dj\s+tiktok|jedag\s+jedug|full\s+bass|live\s+dangdut|dangdut\s+jamming|cover\s+ai|ai\s+cover|karaoke|jeyma\s+monica|denny\s+caknan|yeni\s+inka|della\s+monica|dini\s+kurnia|shinta\s+gisul|laila\s+ayu|ajeng\s+febria|happy\s+asmara|sasya\s+arkhisna|silvy\s+kumalasari|maulana\s+ardiansyah|melly\s+lee|ndarboy\s+genk|guyon\s+waton|gilga\s+sahid|difarina\s+indra|arlida\s+putri|tasya\s+rosmala|niken\s+salindry)\b/i;
+
+const KOPLO_DANGDUT_ARTISTS = new Set([
+  'jeyma monica',
+  'denny caknan',
+  'yeni inka',
+  'della monica',
+  'dini kurnia',
+  'shinta gisul',
+  'laila ayu',
+  'ajeng febria',
+  'happy asmara',
+  'sasya arkhisna',
+  'silvy kumalasari',
+  'maulana ardiansyah',
+  'ndarboy genk',
+  'ndarboy',
+  'guyon waton',
+  'aftershine',
+  'gilga sahid',
+  'gildcoustic',
+  'masdddho',
+  'difarina indra',
+  'arlida putri',
+  'tasya rosmala',
+  'syahiba saufa',
+  'niken salindry',
+  'lala widy',
+  'vita alvia',
+  'safira inema',
+  'esa risty',
+  'woro widowati',
+  'damara de',
+  'via vallen',
+  'nella kharisma',
+  'ayu ting ting',
+  'siti badriah',
+  'farel prayoga',
+  'abah lala',
+  'om adella',
+  'new pallapa',
+  'dc. production',
+  'dc production',
+  'ta pro music & publishing',
+  'ta pro music',
+  'lembayung music',
+  'berkah talenta',
+  'ageng music',
+]);
+
+export function isKoploOrDangdutItem(
+  item: Pick<MediaItem, 'title' | 'artists' | 'album' | 'description'> | null | undefined,
+): boolean {
+  if (!item) return false;
+  const parts: string[] = [item.title || ''];
+  for (const a of item.artists || []) {
+    const name = a?.name?.trim();
+    if (!name) continue;
+    if (KOPLO_DANGDUT_ARTISTS.has(name.toLowerCase())) return true;
+    parts.push(name);
+  }
+  if (item.album?.name) parts.push(item.album.name);
+  if (item.description) parts.push(item.description);
+  const combined = parts.join(' ');
+  if (KOPLO_DANGDUT_KEYWORD_RE.test(combined)) return true;
+  if (/~\s*cover\s+by\s*:/i.test(combined)) return true;
+  return false;
+}
+
+export function diversifyIndonesianTracks<
+  T extends Pick<MediaItem, 'id' | 'videoId' | 'title' | 'artists' | 'album' | 'description'>,
+>(items: T[], maxKoplo = 1, maxPerArtist = 2): T[] {
+  if (!items || items.length === 0) return [];
+  const seenIds = new Set<string>();
+  const seenTitles = new Set<string>();
+  const mainstream: T[] = [];
+  const koplo: T[] = [];
+
+  for (const item of items) {
+    const vid = (item.videoId || item.id || '').trim();
+    const cleanTitle = (item.title || '')
+      .replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+    if (vid && seenIds.has(vid)) continue;
+    if (cleanTitle && seenTitles.has(cleanTitle)) continue;
+    if (vid) seenIds.add(vid);
+    if (cleanTitle) seenTitles.add(cleanTitle);
+
+    if (isKoploOrDangdutItem(item)) {
+      koplo.push(item);
+    } else {
+      mainstream.push(item);
+    }
+  }
+
+  const selected: T[] = [];
+  const deferred: T[] = [];
+  const artistCounts = new Map<string, number>();
+
+  for (const item of mainstream) {
+    const primaryArtist = (item.artists?.[0]?.name || '').trim().toLowerCase();
+    if (primaryArtist && maxPerArtist > 0) {
+      const count = artistCounts.get(primaryArtist) ?? 0;
+      if (count >= maxPerArtist) {
+        deferred.push(item);
+        continue;
+      }
+      artistCounts.set(primaryArtist, count + 1);
+    }
+    selected.push(item);
+  }
+
+  for (const item of deferred) {
+    selected.push(item);
+  }
+
+  if (maxKoplo > 0 && koplo.length > 0) {
+    const allowed = selected.length > 0 ? maxKoplo : koplo.length;
+    selected.push(...koplo.slice(0, allowed));
+  }
+
+  return selected;
+}
+
 export interface SearchFollowUpItem {
   id: string;
   label: string;
