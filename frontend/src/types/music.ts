@@ -245,6 +245,27 @@ export interface AccountLibraryResponse {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
+export type DjTransitionStyle = 'smooth' | 'bass-swap' | 'filter-sweep' | 'cut';
+
+export type DjVolumeCurve = 'equal-power' | 's-curve' | 'linear';
+
+export interface PlaylistMixSettings {
+  enabled: boolean;
+  durationSeconds: number;
+  transitionStyle: DjTransitionStyle;
+  beatMatch: boolean;
+  eqBlend: boolean;
+  volumeCurve: DjVolumeCurve;
+}
+
+export interface TrackBpmAnalysis {
+  bpm: number;
+  confidence: number;
+  source: 'decoded' | 'estimated';
+  beatIntervalSec: number;
+  firstBeatSec: number;
+}
+
 export interface LocalPlaylist {
   id: string;
   name: string;
@@ -256,6 +277,7 @@ export interface LocalPlaylist {
   updatedAt?: number;
   lastPlayedAt?: number | null;
   tracks: MediaItem[];
+  mixConfig?: PlaylistMixSettings;
 }
 
 export interface PlaylistFolder {
@@ -426,6 +448,7 @@ export interface LocalAudioProfile {
   gaplessPlayback: boolean;
   fadeOnPlayPause: boolean;
   skipSilence: boolean;
+  djMix?: PlaylistMixSettings;
 }
 
 export interface LocalAudioFileRecord {

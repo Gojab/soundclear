@@ -5,26 +5,41 @@ import {
   resolvePlayableYoutube,
 } from '../api/client';
 import {
+  analyzeAudioBlobBpm,
   applyAudioProfileToGraph,
+  applyDeckDjMixFrame,
+  cacheFallbackTrackBpm,
+  clearElementPrimingFlag,
   computeLiveAnalyserRms,
   engageBackgroundDirectDeck,
   ensureAudioGraph,
+  ensurePlaybackAudioSession,
   getActivePlaybackElement,
+  getCachedTrackBpm,
   incrementSkipSilenceCount,
   measureAndEstimateLufs,
+  resetDeckDjStage,
   resetDirectDeck,
   restoreDspDeckFromBackground,
   resumeAudioContext,
+  revokeDirectDeckUrl,
   setAudioOutputDevice,
   setDynamicMeasuredLufs,
   startSilentKeepaliveAudio,
   stopSilentKeepaliveAudio,
+  subscribeAudioContextInterrupted,
 } from '../audio/soundclearAudioEngine';
 import { db } from '../db/soundclearDb';
 import { useLibraryStore } from '../store/libraryStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import type { ActiveStreamMeta, ConcreteQualityTier, MediaItem } from '../types/music';
+import type {
+  ActiveStreamMeta,
+  ConcreteQualityTier,
+  LocalAudioProfile,
+  MediaItem,
+  PlaylistMixSettings,
+} from '../types/music';
 import {
   clampYoutubeVolume,
   classifyStreamQualityBadge,
@@ -32,6 +47,14 @@ import {
   resolveEffectiveCrossfadeSeconds,
   resolveTargetStreamQuality,
 } from '../utils/audioMath';
+import {
+  clampEffectiveTransitionSeconds,
+  computeBeatMatchPlan,
+  computeDjTransitionFrame,
+  computePhaseAlignedCueOffset,
+  DEFAULT_PLAYLIST_MIX_SETTINGS,
+  normalizePlaylistMixSettings,
+} from '../utils/djMixLogic';
 import {
   formatArtists,
   getPlayableVideoId,
@@ -50,6 +73,56 @@ import {
   probeStreamWithCache,
   shouldFastRouteToIframe,
 } from '../utils/streamProbeCache';
+import {
+  clampSeekTarget,
+  isMobileAudioEnvironment,
+  shouldEngageDirectDeckOnHide,
+  shouldLoadTrackDirectlyOnDirectDeck,
+} from '../utils/backgroundAudioLogic';
+
+interface ActiveTransitionState {
+  mode: 'dj' | 'crossfade';
+  startedAtMs: number;
+  effectiveSec: number;
+  outgoingIdx: 0 | 1;
+  incomingIdx: 0 | 1;
+  targetKey: string;
+  manual: boolean;
+  beatMatched: boolean;
+  incomingStartRate: number;
+  outgoingBpm: number | null;
+  incomingBpm: number | null;
+  baseRate: number;
+  style: PlaylistMixSettings['transitionStyle'];
+  eqBlend: boolean;
+  volumeCurve: PlaylistMixSettings['volumeCurve'];
+}
+
+function resolveEffectiveMixSettings(
+  activeMixConfig: PlaylistMixSettings | null,
+  profile: LocalAudioProfile,
+): PlaylistMixSettings | null {
+  if (profile.directMode) return null;
+  if (activeMixConfig?.enabled) {
+    return normalizePlaylistMixSettings(activeMixConfig);
+  }
+  if (profile.djMix?.enabled) {
+    return normalizePlaylistMixSettings(profile.djMix);
+  }
+  return null;
+}
+
+function setElementRatePreservingPitch(el: HTMLAudioElement, rate: number): void {
+  el.playbackRate = rate;
+  const m = el as HTMLAudioElement & {
+    preservesPitch?: boolean;
+    webkitPreservesPitch?: boolean;
+    mozPreservesPitch?: boolean;
+  };
+  m.preservesPitch = true;
+  m.webkitPreservesPitch = true;
+  m.mozPreservesPitch = true;
+}
 
 function revokeDeckUrl(
   objectUrls: [string | null, string | null],
@@ -120,12 +193,17 @@ export function LocalAudioEngine() {
 
   const loadedKeyRef = useRef<string | null>(null);
   const transitionInProgressRef = useRef(false);
+  const transitionStateRef = useRef<ActiveTransitionState | null>(null);
+  const lastHandledManualMixRef = useRef<number>(0);
   const pauseTimerRef = useRef<number | null>(null);
   const stallTimerRef = useRef<number | null>(null);
   const silenceAccumMsRef = useRef(0);
   const lastSilentSeekAtRef = useRef(0);
+  const lastProgressTickAtRef = useRef(0);
   const dynamicLufsDoneRef = useRef(false);
   const fallbackAttemptedRef = useRef(false);
+  const isLoadingAudioRef = useRef(false);
+  const manualMixRequestVersion = usePlayerStore((s) => s.manualMixRequestVersion);
 
   // Sync output device (setSinkId) when configured
   useEffect(() => {
@@ -157,6 +235,13 @@ export function LocalAudioEngine() {
         null,
     });
 
+    const graph = ensureAudioGraph();
+    if (graph) {
+      graph.directDeck.volume = isMuted
+        ? 0
+        : Math.max(0, Math.min(1, effectiveVolume / 100));
+    }
+
     const currentMeta = usePlayerStore.getState().activeStreamMeta;
     if (
       currentMeta &&
@@ -182,27 +267,21 @@ export function LocalAudioEngine() {
     offlineRec,
   ]);
 
-  // Apply playbackRate with pitch preservation
+  // Apply playbackRate with pitch preservation (unless currently tempo-gliding back from beat match)
   useEffect(() => {
     const graph = ensureAudioGraph();
     if (graph) {
       [...graph.decks, graph.directDeck].forEach((deck) => {
-        deck.playbackRate = playbackRate;
-        const m = deck as HTMLAudioElement & {
-          preservesPitch?: boolean;
-          webkitPreservesPitch?: boolean;
-        };
-        m.preservesPitch = true;
-        m.webkitPreservesPitch = true;
+        setElementRatePreservingPitch(deck, playbackRate);
       });
     }
   }, [playbackRate]);
 
-  // Keep active user-unlocked audio playing seamlessly across tab switches / screen lock,
-  // using direct-deck handoff only as a guarded fallback if AudioContext suspends in background.
+  // Keep active user-unlocked audio playing seamlessly across iOS/Android lockscreen and tab switches.
   useEffect(() => {
     if (typeof document === 'undefined') return;
     let fallbackCheckTimer: number | null = null;
+    const isMobile = isMobileAudioEnvironment();
 
     const clearFallbackTimer = () => {
       if (fallbackCheckTimer !== null) {
@@ -211,14 +290,52 @@ export function LocalAudioEngine() {
       }
     };
 
+    const getEffectiveVol = (latest: ReturnType<typeof usePlayerStore.getState>) =>
+      isLocalTrack(latest.currentTrack)
+        ? latest.volume
+        : clampYoutubeVolume(
+            latest.volume,
+            useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+            latest.isMuted,
+          );
+
+    const tryEngageDirectDeck = () => {
+      const latest = usePlayerStore.getState();
+      const g = ensureAudioGraph();
+      if (!g || !latest.isPlaying || isYoutubeIframeActive(latest.activeStreamMeta)) return;
+
+      const activeDeck = g.decks[g.activeDeck];
+      if (
+        shouldEngageDirectDeckOnHide({
+          isPlaying: latest.isPlaying,
+          isYoutubeIframe: isYoutubeIframeActive(latest.activeStreamMeta),
+          hasActiveDeckSrc: Boolean(activeDeck.src),
+          isMobile,
+          contextState: g.ctx.state,
+          backgroundDirectActive: g.backgroundDirectActive,
+        })
+      ) {
+        void engageBackgroundDirectDeck(getEffectiveVol(latest), latest.isMuted);
+      }
+    };
+
     const keepAliveOrFallbackForBackground = () => {
       const graph = ensureAudioGraph();
       const state = usePlayerStore.getState();
       if (!graph || !state.isPlaying || isYoutubeIframeActive(state.activeStreamMeta)) return;
 
-      startSilentKeepaliveAudio();
-      void resumeAudioContext();
+      ensurePlaybackAudioSession();
 
+      // Bridge gap ONLY if async stream resolution/load is still in progress
+      if (isLoadingAudioRef.current && !graph.backgroundDirectActive) {
+        startSilentKeepaliveAudio();
+      }
+
+      // On iOS/Android or when AudioContext is already suspended/interrupted,
+      // hand off synchronously within the visibilitychange / pagehide grace window.
+      tryEngageDirectDeck();
+
+      // Desktop safety timer in case AudioContext suspends shortly after tab hide
       clearFallbackTimer();
       fallbackCheckTimer = window.setTimeout(() => {
         fallbackCheckTimer = null;
@@ -231,20 +348,14 @@ export function LocalAudioEngine() {
         const activeDeck = g.decks[g.activeDeck];
         if (!activeDeck.src) return;
 
-        // Only switch to directDeck if AudioContext remained suspended or activeDeck stalled
         if (g.ctx.state !== 'running') {
-          const effectiveVolume = isLocalTrack(latest.currentTrack)
-            ? latest.volume
-            : clampYoutubeVolume(
-                latest.volume,
-                useSettingsStore.getState().youtubeSound.maxVolumeLimit,
-                latest.isMuted,
-              );
-          void engageBackgroundDirectDeck(effectiveVolume, latest.isMuted);
+          void engageBackgroundDirectDeck(getEffectiveVol(latest), latest.isMuted);
         } else if (activeDeck.paused && !activeDeck.ended) {
-          void activeDeck.play().catch(() => {});
+          void activeDeck.play().catch(() => {
+            void engageBackgroundDirectDeck(getEffectiveVol(latest), latest.isMuted);
+          });
         }
-      }, 350);
+      }, 180);
     };
 
     const onVisibility = () => {
@@ -260,19 +371,25 @@ export function LocalAudioEngine() {
         void restoreDspDeckFromBackground();
       } else if (graph && state.isPlaying && !isYoutubeIframeActive(state.activeStreamMeta)) {
         void resumeAudioContext();
-        startSilentKeepaliveAudio();
         const activeEl = getActivePlaybackElement(graph);
-        if (activeEl.src && activeEl.paused && !activeEl.ended) {
+        if (activeEl.src && activeEl.paused && !activeEl.ended && activeEl.dataset.scPriming !== '1') {
           void activeEl.play().catch(() => {});
         }
       }
     };
+
+    const unsubscribeInterrupt = subscribeAudioContextInterrupted(() => {
+      if (document.visibilityState === 'hidden') {
+        tryEngageDirectDeck();
+      }
+    });
 
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', keepAliveOrFallbackForBackground);
     window.addEventListener('pageshow', onVisibility);
     return () => {
       clearFallbackTimer();
+      unsubscribeInterrupt();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', keepAliveOrFallbackForBackground);
       window.removeEventListener('pageshow', onVisibility);
@@ -309,8 +426,9 @@ export function LocalAudioEngine() {
       const activeAudio = getActivePlaybackElement(graph);
       const settingsProfile = useSettingsStore.getState().localProfile;
       const upcoming = st.manualQueue[0] ?? st.sourceQueue[0] ?? null;
+      const isManualDjTransition = Boolean(transitionStateRef.current?.manual);
       const nextKey =
-        st.repeat !== 'one' && upcoming
+        (st.repeat !== 'one' || isManualDjTransition) && upcoming
           ? isLocalTrack(upcoming)
             ? getTrackUniqueId(upcoming)
             : getPlayableVideoId(upcoming)
@@ -324,12 +442,28 @@ export function LocalAudioEngine() {
         graph.trackIds[standbyIdx] === nextKey
       ) {
         activeAudio.pause();
+        resetDeckDjStage(graph, activeIdx, true);
+        resetDeckDjStage(graph, standbyIdx, false);
         graph.deckGains[activeIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
         graph.deckGains[standbyIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
         graph.activeDeck = standbyIdx;
         graph.crossfadeTargetId = nextKey;
         transitionInProgressRef.current = false;
-        st.handleTrackEnded();
+        transitionStateRef.current = null;
+        st.setDjTransitionStatus({
+          active: false,
+          progress: 0,
+          style: st.djTransitionStatus.style,
+          beatMatched: false,
+          outgoingBpm: null,
+          incomingBpm: null,
+          tempoRatio: 1,
+        });
+        if (isManualDjTransition) {
+          st.nextTrack();
+        } else {
+          st.handleTrackEnded();
+        }
         return;
       }
 
@@ -343,10 +477,12 @@ export function LocalAudioEngine() {
       ) {
         const standby = graph.decks[standbyIdx];
         standby.currentTime = 0;
+        resetDeckDjStage(graph, standbyIdx, true);
         void standby
           .play()
           .then(() => {
             activeAudio.pause();
+            resetDeckDjStage(graph, activeIdx, true);
             graph.deckGains[activeIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
             graph.deckGains[standbyIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
             graph.activeDeck = standbyIdx;
@@ -356,12 +492,14 @@ export function LocalAudioEngine() {
           .catch(() => {
             // Standby deck blocked without gesture in background — reuse unlocked deck
             transitionInProgressRef.current = false;
+            transitionStateRef.current = null;
             st.handleTrackEnded();
           });
         return;
       }
 
       transitionInProgressRef.current = false;
+      transitionStateRef.current = null;
       st.handleTrackEnded();
     };
 
@@ -445,14 +583,37 @@ export function LocalAudioEngine() {
       return;
     }
 
-    // Handle pre-started crossfade / gapless standby deck
+    // Handle pre-started crossfade / DJ / gapless standby deck
     const expectedStandbyId = localActive ? trackUniqueId : rawVideoId;
     if (expectedStandbyId && graph.crossfadeTargetId === expectedStandbyId) {
       graph.crossfadeTargetId = null;
       loadedKeyRef.current = htmlAudioTrackKey;
       transitionInProgressRef.current = false;
+      transitionStateRef.current = null;
       dynamicLufsDoneRef.current = false;
       setDynamicMeasuredLufs(null);
+      resetDeckDjStage(graph, graph.activeDeck, false);
+
+      // Smoothly glide beat-matched deck playbackRate back to original track speed
+      const promotedDeck = graph.decks[graph.activeDeck];
+      const targetRate = usePlayerStore.getState().playbackRate || 1;
+      if (Math.abs(promotedDeck.playbackRate - targetRate) > 0.005) {
+        const startRate = promotedDeck.playbackRate;
+        const glideStart = performance.now();
+        const glideMs = 1400;
+        const stepGlide = () => {
+          if (graph.decks[graph.activeDeck] !== promotedDeck) return;
+          const p = Math.min(1, (performance.now() - glideStart) / glideMs);
+          const nextR = startRate + (targetRate - startRate) * p;
+          setElementRatePreservingPitch(promotedDeck, nextR);
+          if (p < 1) {
+            window.setTimeout(stepGlide, 60);
+          } else {
+            setElementRatePreservingPitch(promotedDeck, targetRate);
+          }
+        };
+        window.setTimeout(stepGlide, 60);
+      }
       return;
     }
 
@@ -461,6 +622,17 @@ export function LocalAudioEngine() {
     loadedKeyRef.current = htmlAudioTrackKey;
     dynamicLufsDoneRef.current = false;
     fallbackAttemptedRef.current = false;
+    transitionInProgressRef.current = false;
+    transitionStateRef.current = null;
+    usePlayerStore.getState().setDjTransitionStatus({
+      active: false,
+      progress: 0,
+      style: DEFAULT_PLAYLIST_MIX_SETTINGS.transitionStyle,
+      beatMatched: false,
+      outgoingBpm: null,
+      incomingBpm: null,
+      tempoRatio: 1,
+    });
     setDynamicMeasuredLufs(null);
     silenceAccumMsRef.current = 0;
 
@@ -475,15 +647,49 @@ export function LocalAudioEngine() {
     };
 
     const loadSource = async () => {
-      resetDirectDeck();
+      isLoadingAudioRef.current = true;
+      ensurePlaybackAudioSession();
+
+      const useDirectTarget = shouldLoadTrackDirectlyOnDirectDeck({
+        visibilityState:
+          typeof document !== 'undefined' ? document.visibilityState : 'visible',
+        backgroundDirectActive: graph.backgroundDirectActive,
+        isMobile: isMobileAudioEnvironment(),
+        contextState: graph.ctx.state,
+      });
+
+      const storeAtStart = usePlayerStore.getState();
+      if (
+        storeAtStart.isPlaying &&
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'hidden'
+      ) {
+        // Hold background audio session alive across async network probe/load gap
+        startSilentKeepaliveAudio();
+      }
+
       const nextDeckIdx: 0 | 1 = graph.activeDeck;
       const otherDeckIdx: 0 | 1 = nextDeckIdx === 0 ? 1 : 0;
-      graph.decks[otherDeckIdx].pause();
-      graph.deckGains[otherDeckIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
-      graph.deckGains[nextDeckIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
 
-      const audio = graph.decks[nextDeckIdx];
+      if (useDirectTarget) {
+        graph.backgroundDirectActive = true;
+        graph.decks[0].pause();
+        graph.decks[1].pause();
+        clearElementPrimingFlag(graph.directDeck);
+      } else {
+        resetDirectDeck();
+        graph.decks[otherDeckIdx].pause();
+        clearElementPrimingFlag(graph.decks[nextDeckIdx]);
+        resetDeckDjStage(graph, nextDeckIdx, true);
+        resetDeckDjStage(graph, otherDeckIdx, true);
+        graph.deckGains[otherDeckIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
+        graph.deckGains[nextDeckIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
+      }
+
+      const audio = useDirectTarget ? graph.directDeck : graph.decks[nextDeckIdx];
       let urlToLoad: string | null = null;
+      let isObjectUrl = false;
+      let resolvedTrackKey: string | null = null;
       let metaToReport: ActiveStreamMeta | null = null;
       let streamMetaFetchTarget: {
         streamVideoId: string;
@@ -502,16 +708,30 @@ export function LocalAudioEngine() {
           (await db.localFiles.get(trackUniqueId));
         if (cancelled) return;
         if (!record) {
+          isLoadingAudioRef.current = false;
           usePlayerStore
             .getState()
             .setPlayerError('File audio lokal tidak ditemukan di penyimpanan browser.');
           usePlayerStore.getState().setIsPlaying(false);
           return;
         }
-        revokeDeckUrl(graph.objectUrls, nextDeckIdx);
+        if (useDirectTarget) {
+          revokeDirectDeckUrl(graph);
+        } else {
+          revokeDeckUrl(graph.objectUrls, nextDeckIdx);
+        }
         urlToLoad = URL.createObjectURL(record.blob);
-        graph.objectUrls[nextDeckIdx] = urlToLoad;
-        graph.trackIds[nextDeckIdx] = record.id;
+        isObjectUrl = true;
+        resolvedTrackKey = record.id;
+
+        void analyzeAudioBlobBpm(record.id, record.blob).then((analysis) => {
+          if (analysis) {
+            usePlayerStore.getState().setTrackBpm(record.id, analysis);
+          } else if (currentTrack) {
+            const est = cacheFallbackTrackBpm(record.id, currentTrack);
+            usePlayerStore.getState().setTrackBpm(record.id, est);
+          }
+        });
 
         const badge = classifyStreamQualityBadge({
           codec: record.codec || record.mimeType,
@@ -537,10 +757,23 @@ export function LocalAudioEngine() {
           replayGainDb: record.replayGainDb ?? null,
         };
       } else if (useOfflineBlob && offlineRec) {
-        revokeDeckUrl(graph.objectUrls, nextDeckIdx);
+        if (useDirectTarget) {
+          revokeDirectDeckUrl(graph);
+        } else {
+          revokeDeckUrl(graph.objectUrls, nextDeckIdx);
+        }
         urlToLoad = URL.createObjectURL(offlineRec.blob);
-        graph.objectUrls[nextDeckIdx] = urlToLoad;
-        graph.trackIds[nextDeckIdx] = offlineRec.id;
+        isObjectUrl = true;
+        resolvedTrackKey = offlineRec.id;
+
+        void analyzeAudioBlobBpm(offlineRec.id, offlineRec.blob).then((analysis) => {
+          if (analysis) {
+            usePlayerStore.getState().setTrackBpm(offlineRec.id, analysis);
+          } else if (currentTrack) {
+            const est = cacheFallbackTrackBpm(offlineRec.id, currentTrack);
+            usePlayerStore.getState().setTrackBpm(offlineRec.id, est);
+          }
+        });
 
         const badge = classifyStreamQualityBadge({
           codec: offlineRec.codec,
@@ -566,7 +799,13 @@ export function LocalAudioEngine() {
           replayGainDb: offlineRec.replayGainDb ?? null,
         };
       } else if (rawVideoId && currentTrack) {
-        revokeDeckUrl(graph.objectUrls, nextDeckIdx);
+        const est = cacheFallbackTrackBpm(trackUniqueId || rawVideoId, currentTrack);
+        usePlayerStore.getState().setTrackBpm(trackUniqueId || rawVideoId, est);
+        if (useDirectTarget) {
+          revokeDirectDeckUrl(graph);
+        } else {
+          revokeDeckUrl(graph.objectUrls, nextDeckIdx);
+        }
         let streamVideoId = rawVideoId;
         const artistName = formatArtists(currentTrack.artists);
 
@@ -605,6 +844,7 @@ export function LocalAudioEngine() {
           );
           if (cancelled) return;
           if (decideOnlineStreamAction(probeMeta) === 'use-youtube-iframe') {
+            isLoadingAudioRef.current = false;
             audio.pause();
             audio.removeAttribute('src');
             usePlayerStore
@@ -634,6 +874,7 @@ export function LocalAudioEngine() {
           };
         } catch {
           if (cancelled) return;
+          isLoadingAudioRef.current = false;
           audio.pause();
           audio.removeAttribute('src');
           usePlayerStore
@@ -645,12 +886,34 @@ export function LocalAudioEngine() {
         }
 
         urlToLoad = buildStreamAudioUrl(streamVideoId, streamQueryMeta);
-        graph.trackIds[nextDeckIdx] = rawVideoId;
+        resolvedTrackKey = rawVideoId;
         usePlayerStore.getState().setActiveStreamMeta(metaToReport);
         streamMetaFetchTarget = null;
       }
 
-      if (!urlToLoad || cancelled) return;
+      if (!urlToLoad || cancelled) {
+        isLoadingAudioRef.current = false;
+        return;
+      }
+
+      if (useDirectTarget) {
+        graph.directDeckObjectUrl = isObjectUrl ? urlToLoad : null;
+        graph.directDeckTrackId = resolvedTrackKey;
+        const stVol = usePlayerStore.getState();
+        const directEffVol = localActive
+          ? stVol.volume
+          : clampYoutubeVolume(
+              stVol.volume,
+              useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+              stVol.isMuted,
+            );
+        audio.volume = stVol.isMuted
+          ? 0
+          : Math.max(0, Math.min(1, directEffVol / 100));
+      } else {
+        graph.objectUrls[nextDeckIdx] = isObjectUrl ? urlToLoad : null;
+        graph.trackIds[nextDeckIdx] = resolvedTrackKey;
+      }
 
       audio.crossOrigin = urlToLoad.startsWith('blob:') ? null : 'anonymous';
       audio.src = urlToLoad;
@@ -664,8 +927,8 @@ export function LocalAudioEngine() {
         if (cancelled) return;
         hasLoadedMeta = true;
         clearStallTimer();
-        if (targetSeek > 0 && Number.isFinite(audio.duration) && targetSeek < audio.duration) {
-          audio.currentTime = targetSeek;
+        if (targetSeek > 0 && Number.isFinite(audio.duration) && audio.duration > 0) {
+          audio.currentTime = clampSeekTarget(targetSeek, audio.duration);
         }
         const st = usePlayerStore.getState();
         st.clearPendingSeek();
@@ -726,16 +989,29 @@ export function LocalAudioEngine() {
           }
         }
         if (st.isPlaying) {
-          void resumeAudioContext();
-          startSilentKeepaliveAudio();
-          void audio.play().then(() => {
-            if (document.visibilityState === 'hidden') {
-              window.setTimeout(() => {
-                if (document.visibilityState !== 'hidden') return;
+          ensurePlaybackAudioSession();
+          if (!useDirectTarget) {
+            void resumeAudioContext();
+          }
+          void audio
+            .play()
+            .then(() => {
+              if (cancelled) return;
+              stopSilentKeepaliveAudio();
+              if (!useDirectTarget && document.visibilityState === 'hidden') {
                 const latest = usePlayerStore.getState();
                 const g = ensureAudioGraph();
-                if (!latest.isPlaying || !g || g.backgroundDirectActive) return;
-                if (g.ctx.state !== 'running') {
+                if (
+                  g &&
+                  shouldEngageDirectDeckOnHide({
+                    isPlaying: latest.isPlaying,
+                    isYoutubeIframe: false,
+                    hasActiveDeckSrc: Boolean(audio.src),
+                    isMobile: isMobileAudioEnvironment(),
+                    contextState: g.ctx.state,
+                    backgroundDirectActive: g.backgroundDirectActive,
+                  })
+                ) {
                   const effectiveVol = isLocalTrack(latest.currentTrack)
                     ? latest.volume
                     : clampYoutubeVolume(
@@ -745,25 +1021,35 @@ export function LocalAudioEngine() {
                       );
                   void engageBackgroundDirectDeck(effectiveVol, latest.isMuted);
                 }
-              }, 250);
-            }
-          }).catch((err: unknown) => {
-            if (!cancelled && err instanceof DOMException && err.name === 'NotAllowedError') {
-              const latest = usePlayerStore.getState();
-              latest.setIsPlaying(false);
-              latest.setAutoplayBlockedPendingResume(true);
-              latest.setIsBuffering(false);
-              stopSilentKeepaliveAudio();
-            }
-          });
+              }
+            })
+            .catch((err: unknown) => {
+              if (!cancelled && err instanceof DOMException && err.name === 'NotAllowedError') {
+                const latest = usePlayerStore.getState();
+                latest.setIsPlaying(false);
+                latest.setAutoplayBlockedPendingResume(true);
+                latest.setIsBuffering(false);
+                stopSilentKeepaliveAudio();
+              }
+            });
         }
       };
 
       const handlePlaying = () => {
         if (cancelled) return;
+        isLoadingAudioRef.current = false;
         clearStallTimer();
-        usePlayerStore.getState().setIsBuffering(false);
-        usePlayerStore.getState().setPlayerError(null);
+        stopSilentKeepaliveAudio();
+        const st = usePlayerStore.getState();
+        st.setIsBuffering(false);
+        st.setPlayerError(null);
+        if ('mediaSession' in navigator) {
+          try {
+            navigator.mediaSession.playbackState = st.isPlaying ? 'playing' : 'paused';
+          } catch {
+            // Ignore
+          }
+        }
       };
 
       const handleWaiting = () => {
@@ -780,6 +1066,7 @@ export function LocalAudioEngine() {
 
       const handleMediaError = () => {
         if (cancelled) return;
+        isLoadingAudioRef.current = false;
         clearStallTimer();
         if (!localActive && !useOfflineBlob && rawVideoId && currentTrack && !fallbackAttemptedRef.current) {
           fallbackAttemptedRef.current = true;
@@ -833,6 +1120,7 @@ export function LocalAudioEngine() {
         }
         usePlayerStore.getState().setIsBuffering(false);
         usePlayerStore.getState().setIsPlaying(false);
+        stopSilentKeepaliveAudio();
         usePlayerStore
           .getState()
           .setPlayerError(
@@ -863,6 +1151,7 @@ export function LocalAudioEngine() {
 
     return () => {
       cancelled = true;
+      isLoadingAudioRef.current = false;
       clearStallTimer();
       detachListeners?.();
     };
@@ -899,9 +1188,11 @@ export function LocalAudioEngine() {
     const now = graph.ctx.currentTime;
 
     if (isPlaying) {
-      void resumeAudioContext();
-      startSilentKeepaliveAudio();
-      if (activeAudio.src) {
+      ensurePlaybackAudioSession();
+      if (!graph.backgroundDirectActive) {
+        void resumeAudioContext();
+      }
+      if (activeAudio.src && activeAudio.dataset.scPriming !== '1') {
         activeGain.cancelScheduledValues(now);
         if (useFade) {
           activeGain.setValueAtTime(0.02, now);
@@ -910,7 +1201,9 @@ export function LocalAudioEngine() {
           activeGain.setValueAtTime(1, now);
         }
         if (activeAudio.paused) {
-          void activeAudio.play().catch((err: unknown) => {
+          void activeAudio.play().then(() => {
+            stopSilentKeepaliveAudio();
+          }).catch((err: unknown) => {
             if (err instanceof DOMException && err.name === 'NotAllowedError') {
               const st = usePlayerStore.getState();
               st.setIsPlaying(false);
@@ -919,6 +1212,8 @@ export function LocalAudioEngine() {
             }
           });
         }
+      } else if (document.visibilityState === 'hidden') {
+        startSilentKeepaliveAudio();
       }
     } else if (!activeAudio.paused) {
       stopSilentKeepaliveAudio();
@@ -941,7 +1236,7 @@ export function LocalAudioEngine() {
     }
   }, [isPlaying, htmlAudioTrackKey, activeStreamSourceMode]);
 
-  // Explicit Seek
+  // Explicit Seek (cancels any active transition cleanly)
   useEffect(() => {
     const graph = ensureAudioGraph();
     if (!htmlAudioTrackKey || pendingSeekSeconds === null || !graph) return;
@@ -949,12 +1244,218 @@ export function LocalAudioEngine() {
 
     const activeAudio = getActivePlaybackElement(graph);
     if (Number.isFinite(activeAudio.duration) && activeAudio.duration > 0) {
+      if (transitionInProgressRef.current) {
+        const activeIdx = graph.activeDeck;
+        const standbyIdx: 0 | 1 = activeIdx === 0 ? 1 : 0;
+        transitionInProgressRef.current = false;
+        transitionStateRef.current = null;
+        graph.decks[standbyIdx].pause();
+        resetDeckDjStage(graph, activeIdx, true);
+        resetDeckDjStage(graph, standbyIdx, true);
+        graph.deckGains[standbyIdx].gain.setTargetAtTime(0, graph.ctx.currentTime, 0.025);
+        graph.deckGains[activeIdx].gain.setTargetAtTime(1, graph.ctx.currentTime, 0.025);
+        usePlayerStore.getState().setDjTransitionStatus({
+          active: false,
+          progress: 0,
+          style: DEFAULT_PLAYLIST_MIX_SETTINGS.transitionStyle,
+          beatMatched: false,
+          outgoingBpm: null,
+          incomingBpm: null,
+          tempoRatio: 1,
+        });
+      }
       activeAudio.currentTime = Math.max(0, Math.min(pendingSeekSeconds, activeAudio.duration));
       usePlayerStore.getState().clearPendingSeek();
+      if (usePlayerStore.getState().isPlaying && activeAudio.paused) {
+        void activeAudio.play().catch(() => {});
+      }
     }
   }, [seekVersion, pendingSeekSeconds, htmlAudioTrackKey]);
 
-  // Progress polling, crossfade (0-12s), gapless preloading, dynamic LUFS, skip silence, sleep timer fade
+  // Manual "Mix Sekarang" trigger from DJ controls
+  useEffect(() => {
+    if (manualMixRequestVersion === 0 || manualMixRequestVersion === lastHandledManualMixRef.current) {
+      return;
+    }
+    lastHandledManualMixRef.current = manualMixRequestVersion;
+
+    const st = usePlayerStore.getState();
+    const upcoming = st.manualQueue[0] ?? st.sourceQueue[0] ?? null;
+    if (!upcoming) return;
+
+    const graph = ensureAudioGraph();
+    const settingsState = useSettingsStore.getState();
+    const profile = settingsState.localProfile;
+    const djSettings = resolveEffectiveMixSettings(st.activeMixConfig, profile) ?? {
+      ...DEFAULT_PLAYLIST_MIX_SETTINGS,
+      enabled: true,
+    };
+
+    if (!graph || profile.directMode || graph.backgroundDirectActive || isYoutubeIframeActive(st.activeStreamMeta)) {
+      st.nextTrack();
+      return;
+    }
+
+    const nextKey = isLocalTrack(upcoming)
+      ? getTrackUniqueId(upcoming)
+      : getPlayableVideoId(upcoming);
+    if (!nextKey) {
+      st.nextTrack();
+      return;
+    }
+
+    const activeIdx = graph.activeDeck;
+    const standbyIdx: 0 | 1 = activeIdx === 0 ? 1 : 0;
+    const standby = graph.decks[standbyIdx];
+    const activeAudio = graph.decks[activeIdx];
+
+    const startManualTransition = () => {
+      if (graph.trackIds[standbyIdx] !== nextKey || standby.readyState < 1) {
+        st.nextTrack();
+        return;
+      }
+      const curId = st.currentTrack ? getTrackUniqueId(st.currentTrack) || st.currentTrack.id : '';
+      const outBpmInfo =
+        st.trackBpmMap[curId] ??
+        getCachedTrackBpm(curId) ??
+        (st.currentTrack ? cacheFallbackTrackBpm(curId, st.currentTrack) : null);
+      const inBpmInfo =
+        st.trackBpmMap[nextKey] ??
+        getCachedTrackBpm(nextKey) ??
+        cacheFallbackTrackBpm(nextKey, upcoming);
+
+      const plan = computeBeatMatchPlan(
+        outBpmInfo?.bpm ?? 120,
+        inBpmInfo?.bpm ?? 120,
+        djSettings.beatMatch,
+      );
+
+      const outDur = Number.isFinite(activeAudio.duration) ? activeAudio.duration : 180;
+      const inDur = Number.isFinite(standby.duration) ? standby.duration : upcoming.durationSeconds;
+      const remaining = Math.max(0.8, outDur - activeAudio.currentTime);
+      const requested = djSettings.durationSeconds;
+      const effectiveSec = Math.max(
+        1.2,
+        Math.min(
+          requested,
+          remaining > 1.5 ? Math.max(1.2, remaining) : requested,
+          typeof inDur === 'number' && inDur > 2 ? inDur * 0.55 : requested,
+        ),
+      );
+
+      const initFrame = computeDjTransitionFrame(0, djSettings);
+      applyDeckDjMixFrame(graph, activeIdx, standbyIdx, initFrame, 0.02, true);
+
+      const cueOffset = djSettings.beatMatch
+        ? computePhaseAlignedCueOffset(activeAudio.currentTime, outBpmInfo, inBpmInfo, inDur)
+        : 0;
+      standby.currentTime = cueOffset;
+      const baseRate = st.playbackRate || 1;
+      setElementRatePreservingPitch(standby, baseRate * plan.incomingStartRate);
+
+      transitionInProgressRef.current = true;
+      transitionStateRef.current = {
+        mode: 'dj',
+        startedAtMs: Date.now(),
+        effectiveSec,
+        outgoingIdx: activeIdx,
+        incomingIdx: standbyIdx,
+        targetKey: nextKey,
+        manual: true,
+        beatMatched: plan.beatMatched,
+        incomingStartRate: plan.incomingStartRate,
+        outgoingBpm: outBpmInfo?.bpm ?? null,
+        incomingBpm: inBpmInfo?.bpm ?? null,
+        baseRate,
+        style: djSettings.transitionStyle,
+        eqBlend: djSettings.eqBlend,
+        volumeCurve: djSettings.volumeCurve,
+      };
+      st.setDjTransitionStatus({
+        active: true,
+        progress: 0,
+        style: djSettings.transitionStyle,
+        beatMatched: plan.beatMatched,
+        outgoingBpm: outBpmInfo?.bpm ?? null,
+        incomingBpm: inBpmInfo?.bpm ?? null,
+        tempoRatio: plan.incomingStartRate,
+      });
+
+      void resumeAudioContext();
+      void standby.play().catch(() => {
+        transitionInProgressRef.current = false;
+        transitionStateRef.current = null;
+        st.nextTrack();
+      });
+    };
+
+    if (graph.trackIds[standbyIdx] === nextKey && standby.readyState >= 1) {
+      startManualTransition();
+      return;
+    }
+
+    const loadStandbyAndMix = async () => {
+      if (isLocalTrack(upcoming)) {
+        const rec =
+          useLibraryStore.getState().localFiles.find((f) => f.id === nextKey) ||
+          (await db.localFiles.get(nextKey));
+        if (!rec) {
+          st.nextTrack();
+          return;
+        }
+        revokeDeckUrl(graph.objectUrls, standbyIdx);
+        const url = URL.createObjectURL(rec.blob);
+        graph.objectUrls[standbyIdx] = url;
+        graph.trackIds[standbyIdx] = rec.id;
+        standby.crossOrigin = null;
+        standby.src = url;
+        void analyzeAudioBlobBpm(rec.id, rec.blob).then((a) => {
+          if (a) usePlayerStore.getState().setTrackBpm(rec.id, a);
+        });
+      } else {
+        const off = useLibraryStore.getState().offlineDownloads.find((d) => d.id === nextKey);
+        if (hasPlayableOfflineAudio(off) && off) {
+          revokeDeckUrl(graph.objectUrls, standbyIdx);
+          const url = URL.createObjectURL(off.blob);
+          graph.objectUrls[standbyIdx] = url;
+          graph.trackIds[standbyIdx] = nextKey;
+          standby.crossOrigin = null;
+          standby.src = url;
+          void analyzeAudioBlobBpm(off.id, off.blob).then((a) => {
+            if (a) usePlayerStore.getState().setTrackBpm(off.id, a);
+          });
+        } else {
+          const streamQueryMeta = {
+            title: upcoming.title,
+            artist: formatArtists(upcoming.artists),
+            durationSeconds: upcoming.durationSeconds,
+            quality: targetStreamTier,
+          };
+          const probe = await fetchStreamAudioMeta(nextKey, streamQueryMeta).catch(() => null);
+          if (decideOnlineStreamAction(probe) === 'use-youtube-iframe') {
+            st.nextTrack();
+            return;
+          }
+          revokeDeckUrl(graph.objectUrls, standbyIdx);
+          const streamUrl = buildStreamAudioUrl(nextKey, streamQueryMeta);
+          graph.trackIds[standbyIdx] = nextKey;
+          standby.crossOrigin = 'anonymous';
+          standby.src = streamUrl;
+        }
+      }
+
+      const onCanMix = () => {
+        standby.removeEventListener('canplay', onCanMix);
+        startManualTransition();
+      };
+      standby.addEventListener('canplay', onCanMix, { once: true });
+      standby.load();
+    };
+
+    void loadStandbyAndMix();
+  }, [manualMixRequestVersion, targetStreamTier]);
+
+  // Progress polling, DJ Mix Engine + crossfade (1-12s), gapless preloading, dynamic LUFS, skip silence, sleep timer fade
   useEffect(() => {
     if (!htmlAudioTrackKey || !isPlaying || activeStreamSourceMode === 'youtube-iframe') return;
     const graph = ensureAudioGraph();
@@ -994,8 +1495,17 @@ export function LocalAudioEngine() {
         const standby = graph.decks[standbyIdx];
         standby.crossOrigin = null;
         standby.src = url;
-        standby.playbackRate = usePlayerStore.getState().playbackRate;
+        setElementRatePreservingPitch(standby, usePlayerStore.getState().playbackRate);
         standby.load();
+
+        void analyzeAudioBlobBpm(record.id, record.blob).then((analysis) => {
+          if (analysis) {
+            usePlayerStore.getState().setTrackBpm(record.id, analysis);
+          } else {
+            const est = cacheFallbackTrackBpm(record.id, nextInfo.track);
+            usePlayerStore.getState().setTrackBpm(record.id, est);
+          }
+        });
       } else {
         const offlineBlobRec = useLibraryStore
           .getState()
@@ -1008,10 +1518,22 @@ export function LocalAudioEngine() {
           const standby = graph.decks[standbyIdx];
           standby.crossOrigin = null;
           standby.src = url;
-          standby.playbackRate = usePlayerStore.getState().playbackRate;
+          setElementRatePreservingPitch(standby, usePlayerStore.getState().playbackRate);
           standby.load();
+
+          void analyzeAudioBlobBpm(offlineBlobRec.id, offlineBlobRec.blob).then((analysis) => {
+            if (analysis) {
+              usePlayerStore.getState().setTrackBpm(offlineBlobRec.id, analysis);
+            } else {
+              const est = cacheFallbackTrackBpm(offlineBlobRec.id, nextInfo.track);
+              usePlayerStore.getState().setTrackBpm(offlineBlobRec.id, est);
+            }
+          });
           return;
         }
+        const est = cacheFallbackTrackBpm(nextInfo.key, nextInfo.track);
+        usePlayerStore.getState().setTrackBpm(nextInfo.key, est);
+
         const streamQueryMeta = {
           title: nextInfo.track.title,
           artist: formatArtists(nextInfo.track.artists),
@@ -1029,16 +1551,22 @@ export function LocalAudioEngine() {
         const standby = graph.decks[standbyIdx];
         standby.crossOrigin = 'anonymous';
         standby.src = streamUrl;
-        standby.playbackRate = usePlayerStore.getState().playbackRate;
+        setElementRatePreservingPitch(standby, usePlayerStore.getState().playbackRate);
         standby.load();
       }
     };
 
-    const interval = window.setInterval(() => {
+    lastProgressTickAtRef.current = Date.now();
+
+    const syncProgressTick = () => {
+      const nowTickMs = Date.now();
+      const deltaMs = Math.max(0, Math.min(500, nowTickMs - lastProgressTickAtRef.current));
+      lastProgressTickAtRef.current = nowTickMs;
+
       const activeIdx = graph.activeDeck;
       const standbyIdx: 0 | 1 = activeIdx === 0 ? 1 : 0;
       const audio = getActivePlaybackElement(graph);
-      if (!audio.src) return;
+      if (!audio.src || audio.dataset.scPriming === '1') return;
 
       const cur = audio.currentTime;
       const dur = Number.isFinite(audio.duration) ? audio.duration : 0;
@@ -1060,7 +1588,7 @@ export function LocalAudioEngine() {
         try {
           navigator.mediaSession.setPositionState({
             duration: dur,
-            playbackRate: store.playbackRate,
+            playbackRate: store.playbackRate || 1,
             position: Math.min(cur, dur),
           });
         } catch {
@@ -1069,6 +1597,7 @@ export function LocalAudioEngine() {
       }
 
       if (
+        !graph.backgroundDirectActive &&
         !profile.directMode &&
         profile.normalizationTarget !== 'off' &&
         !dynamicLufsDoneRef.current &&
@@ -1093,6 +1622,7 @@ export function LocalAudioEngine() {
       }
 
       if (
+        !graph.backgroundDirectActive &&
         !profile.directMode &&
         profile.skipSilence &&
         dur > 3 &&
@@ -1102,10 +1632,9 @@ export function LocalAudioEngine() {
       ) {
         const rms = computeLiveAnalyserRms();
         if (rms < 0.0032) {
-          silenceAccumMsRef.current += 100;
-          const nowMs = Date.now();
-          if (silenceAccumMsRef.current >= 450 && nowMs - lastSilentSeekAtRef.current >= 450) {
-            lastSilentSeekAtRef.current = nowMs;
+          silenceAccumMsRef.current += deltaMs > 0 ? deltaMs : 100;
+          if (silenceAccumMsRef.current >= 450 && nowTickMs - lastSilentSeekAtRef.current >= 450) {
+            lastSilentSeekAtRef.current = nowTickMs;
             silenceAccumMsRef.current = 0;
             audio.currentTime = Math.min(dur - 0.3, cur + 0.5);
             incrementSkipSilenceCount();
@@ -1119,45 +1648,201 @@ export function LocalAudioEngine() {
 
       const upcoming = store.manualQueue[0] ?? store.sourceQueue[0] ?? null;
       const nextInfo = store.repeat !== 'one' ? resolveStandbyInfo(upcoming) : null;
-      const effectiveCrossfade = resolveEffectiveCrossfadeSeconds(profile);
+      const activeDjSettings = resolveEffectiveMixSettings(store.activeMixConfig, profile);
 
-      if (transitionInProgressRef.current && effectiveCrossfade <= 0) {
-        transitionInProgressRef.current = false;
-        graph.decks[standbyIdx].pause();
-        graph.deckGains[standbyIdx].gain.setTargetAtTime(0, graph.ctx.currentTime, 0.03);
-        graph.deckGains[activeIdx].gain.setTargetAtTime(1, graph.ctx.currentTime, 0.03);
-      }
+      const effectiveCrossfade = activeDjSettings
+        ? clampEffectiveTransitionSeconds(
+            activeDjSettings.durationSeconds,
+            dur,
+            nextInfo?.track.durationSeconds,
+          )
+        : clampEffectiveTransitionSeconds(
+            resolveEffectiveCrossfadeSeconds(profile),
+            dur,
+            nextInfo?.track.durationSeconds,
+          );
 
+      // Keep next track standby preloaded early whenever DJ Mix or Crossfade/Gapless is eligible
       if (
+        !graph.backgroundDirectActive &&
         nextInfo &&
         !profile.directMode &&
-        dur > 0 &&
-        dur - cur <= Math.max(8, effectiveCrossfade + 3)
+        (activeDjSettings !== null ||
+          effectiveCrossfade > 0 ||
+          profile.gaplessPlayback) &&
+        (activeDjSettings !== null ||
+          (dur > 0 && dur - cur <= Math.max(12, effectiveCrossfade + 5)))
       ) {
         void preloadStandbyTrack(nextInfo);
       }
 
+      // Cancel active transition if disabled mid-way
+      if (transitionInProgressRef.current && effectiveCrossfade <= 0 && !transitionStateRef.current?.manual) {
+        transitionInProgressRef.current = false;
+        transitionStateRef.current = null;
+        graph.decks[standbyIdx].pause();
+        resetDeckDjStage(graph, activeIdx, false);
+        resetDeckDjStage(graph, standbyIdx, true);
+        graph.deckGains[standbyIdx].gain.setTargetAtTime(0, graph.ctx.currentTime, 0.03);
+        graph.deckGains[activeIdx].gain.setTargetAtTime(1, graph.ctx.currentTime, 0.03);
+        store.setDjTransitionStatus({
+          active: false,
+          progress: 0,
+          style: activeDjSettings?.transitionStyle ?? 'smooth',
+          beatMatched: false,
+          outgoingBpm: null,
+          incomingBpm: null,
+          tempoRatio: 1,
+        });
+      }
+
+      // Drive active transition (either automatic near end of track OR manual "Mix Sekarang")
+      const activeTransition = transitionStateRef.current;
       if (
+        !graph.backgroundDirectActive &&
+        activeTransition &&
+        transitionInProgressRef.current &&
+        activeTransition.outgoingIdx === activeIdx
+      ) {
+        const elapsedSec = (Date.now() - activeTransition.startedAtMs) / 1000;
+        const progress = activeTransition.manual
+          ? Math.min(1, elapsedSec / Math.max(0.5, activeTransition.effectiveSec))
+          : dur > 0
+            ? Math.min(1, 1 - Math.max(0, (dur - cur) / Math.max(0.5, activeTransition.effectiveSec)))
+            : 1;
+
+        if (activeTransition.mode === 'dj') {
+          const liveSettings = activeDjSettings ?? {
+            transitionStyle: activeTransition.style,
+            eqBlend: activeTransition.eqBlend,
+            volumeCurve: activeTransition.volumeCurve,
+          };
+          const frame = computeDjTransitionFrame(progress, liveSettings);
+          applyDeckDjMixFrame(graph, activeIdx, standbyIdx, frame, 0.03, false);
+
+          // Gradually begin pulling beat-matched speed slightly closer to 1.0 in last 25%
+          if (activeTransition.beatMatched && Math.abs(activeTransition.incomingStartRate - 1) > 0.002 && progress > 0.75) {
+            const settle = (progress - 0.75) / 0.25;
+            const blendedRate =
+              activeTransition.incomingStartRate +
+              (1 - activeTransition.incomingStartRate) * (settle * 0.45);
+            setElementRatePreservingPitch(
+              graph.decks[standbyIdx],
+              activeTransition.baseRate * blendedRate,
+            );
+          }
+
+          store.setDjTransitionStatus({
+            active: true,
+            progress: Math.round(progress * 100) / 100,
+            style: liveSettings.transitionStyle,
+            beatMatched: activeTransition.beatMatched,
+            outgoingBpm: activeTransition.outgoingBpm,
+            incomingBpm: activeTransition.incomingBpm,
+            tempoRatio: activeTransition.incomingStartRate,
+          });
+        } else {
+          const { outGain, inGain } = computeEqualPowerCrossfade(progress);
+          graph.deckGains[activeIdx].gain.setTargetAtTime(outGain, graph.ctx.currentTime, 0.04);
+          graph.deckGains[standbyIdx].gain.setTargetAtTime(inGain, graph.ctx.currentTime, 0.04);
+        }
+
+        if (activeTransition.manual && progress >= 0.995) {
+          advanceOnTrackEnd.current();
+          return;
+        }
+      } else if (
+        !graph.backgroundDirectActive &&
         !profile.directMode &&
         nextInfo &&
         effectiveCrossfade > 0 &&
-        dur > effectiveCrossfade * 1.5 &&
+        dur > effectiveCrossfade * 1.4 &&
         dur - cur <= effectiveCrossfade &&
-        dur - cur > 0.05
+        dur - cur > 0.08
       ) {
         const standbyAudio = graph.decks[standbyIdx];
-        if (graph.trackIds[standbyIdx] === nextInfo.key) {
-          if (!transitionInProgressRef.current && standbyAudio.readyState >= 2) {
+        if (graph.trackIds[standbyIdx] === nextInfo.key && standbyAudio.readyState >= 2) {
+          if (activeDjSettings) {
+            const curId = store.currentTrack
+              ? getTrackUniqueId(store.currentTrack) || store.currentTrack.id
+              : '';
+            const outBpmInfo =
+              store.trackBpmMap[curId] ??
+              getCachedTrackBpm(curId) ??
+              (store.currentTrack ? cacheFallbackTrackBpm(curId, store.currentTrack) : null);
+            const inBpmInfo =
+              store.trackBpmMap[nextInfo.key] ??
+              getCachedTrackBpm(nextInfo.key) ??
+              cacheFallbackTrackBpm(nextInfo.key, nextInfo.track);
+            const plan = computeBeatMatchPlan(
+              outBpmInfo?.bpm ?? 120,
+              inBpmInfo?.bpm ?? 120,
+              activeDjSettings.beatMatch,
+            );
+            const initFrame = computeDjTransitionFrame(0, activeDjSettings);
+            applyDeckDjMixFrame(graph, activeIdx, standbyIdx, initFrame, 0.02, true);
+
+            const inDur = Number.isFinite(standbyAudio.duration)
+              ? standbyAudio.duration
+              : nextInfo.track.durationSeconds;
+            const cueOffset = activeDjSettings.beatMatch
+              ? computePhaseAlignedCueOffset(cur, outBpmInfo, inBpmInfo, inDur)
+              : 0;
+            standbyAudio.currentTime = cueOffset;
+            const baseRate = store.playbackRate || 1;
+            setElementRatePreservingPitch(standbyAudio, baseRate * plan.incomingStartRate);
+
             transitionInProgressRef.current = true;
+            transitionStateRef.current = {
+              mode: 'dj',
+              startedAtMs: Date.now(),
+              effectiveSec: effectiveCrossfade,
+              outgoingIdx: activeIdx,
+              incomingIdx: standbyIdx,
+              targetKey: nextInfo.key,
+              manual: false,
+              beatMatched: plan.beatMatched,
+              incomingStartRate: plan.incomingStartRate,
+              outgoingBpm: outBpmInfo?.bpm ?? null,
+              incomingBpm: inBpmInfo?.bpm ?? null,
+              baseRate,
+              style: activeDjSettings.transitionStyle,
+              eqBlend: activeDjSettings.eqBlend,
+              volumeCurve: activeDjSettings.volumeCurve,
+            };
+            store.setDjTransitionStatus({
+              active: true,
+              progress: 0,
+              style: activeDjSettings.transitionStyle,
+              beatMatched: plan.beatMatched,
+              outgoingBpm: outBpmInfo?.bpm ?? null,
+              incomingBpm: inBpmInfo?.bpm ?? null,
+              tempoRatio: plan.incomingStartRate,
+            });
+            void standbyAudio.play().catch(() => {});
+          } else {
+            transitionInProgressRef.current = true;
+            transitionStateRef.current = {
+              mode: 'crossfade',
+              startedAtMs: Date.now(),
+              effectiveSec: effectiveCrossfade,
+              outgoingIdx: activeIdx,
+              incomingIdx: standbyIdx,
+              targetKey: nextInfo.key,
+              manual: false,
+              beatMatched: false,
+              incomingStartRate: 1,
+              outgoingBpm: null,
+              incomingBpm: null,
+              baseRate: store.playbackRate || 1,
+              style: 'smooth',
+              eqBlend: false,
+              volumeCurve: 'equal-power',
+            };
             graph.deckGains[standbyIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
             standbyAudio.currentTime = 0;
+            setElementRatePreservingPitch(standbyAudio, store.playbackRate || 1);
             void standbyAudio.play().catch(() => {});
-          }
-          if (transitionInProgressRef.current) {
-            const progress = 1 - Math.max(0, (dur - cur) / effectiveCrossfade);
-            const { outGain, inGain } = computeEqualPowerCrossfade(progress);
-            graph.deckGains[activeIdx].gain.setTargetAtTime(outGain, graph.ctx.currentTime, 0.04);
-            graph.deckGains[standbyIdx].gain.setTargetAtTime(inGain, graph.ctx.currentTime, 0.04);
           }
         }
       }
@@ -1170,16 +1855,39 @@ export function LocalAudioEngine() {
             ? store.volume
             : clampYoutubeVolume(store.volume, ytSound.maxVolumeLimit, store.isMuted);
           const baseVol = store.isMuted ? 0 : cappedVol / 100;
-          graph.masterGain.gain.setTargetAtTime(baseVol * fadeFactor, graph.ctx.currentTime, 0.05);
+          if (graph.backgroundDirectActive) {
+            graph.directDeck.volume = Math.max(0, Math.min(1, baseVol * fadeFactor));
+          } else {
+            graph.masterGain.gain.setTargetAtTime(baseVol * fadeFactor, graph.ctx.currentTime, 0.05);
+          }
         }
       }
 
       if (dur > 0 && (audio.ended || dur - cur <= 0.06)) {
         advanceOnTrackEnd.current();
       }
-    }, 100);
+    };
 
-    return () => window.clearInterval(interval);
+    const interval = window.setInterval(syncProgressTick, 100);
+    const onTimeUpdate = (el: HTMLAudioElement) => () => {
+      if (getActivePlaybackElement(graph) === el) {
+        syncProgressTick();
+      }
+    };
+    const d0Time = onTimeUpdate(graph.decks[0]);
+    const d1Time = onTimeUpdate(graph.decks[1]);
+    const directTime = onTimeUpdate(graph.directDeck);
+
+    graph.decks[0].addEventListener('timeupdate', d0Time);
+    graph.decks[1].addEventListener('timeupdate', d1Time);
+    graph.directDeck.addEventListener('timeupdate', directTime);
+
+    return () => {
+      window.clearInterval(interval);
+      graph.decks[0].removeEventListener('timeupdate', d0Time);
+      graph.decks[1].removeEventListener('timeupdate', d1Time);
+      graph.directDeck.removeEventListener('timeupdate', directTime);
+    };
   }, [htmlAudioTrackKey, isPlaying, manualQueue, sourceQueue, localActive, targetStreamTier, activeStreamSourceMode]);
 
   return null;

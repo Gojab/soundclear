@@ -1,4 +1,4 @@
-import type { LocalAudioProfile } from '../types/music';
+import type { LocalAudioProfile, MediaItem, TrackBpmAnalysis } from '../types/music';
 import {
   bassBoostLevelToDb,
   computeNormalizationGain,
@@ -7,6 +7,12 @@ import {
   preampDbToLinear,
   stereoWidenerLevelToSideGain,
 } from '../utils/audioMath';
+import {
+  estimateBpmFromPcm,
+  estimateFallbackBpm,
+  type DjTransitionFrame,
+} from '../utils/djMixLogic';
+import { clampSeekTarget } from '../utils/backgroundAudioLogic';
 
 export type TestToneMode = 'sweep' | 'pink';
 
@@ -32,12 +38,23 @@ export interface AudioDiagnosticsSnapshot {
   activeNodes: ActiveNodeInfo[];
 }
 
+export interface DeckDjStage {
+  lowEq: BiquadFilterNode;
+  midEq: BiquadFilterNode;
+  highEq: BiquadFilterNode;
+  highpass: BiquadFilterNode;
+  lowpass: BiquadFilterNode;
+}
+
 export interface SharedAudioGraph {
   ctx: AudioContext;
   decks: [HTMLAudioElement, HTMLAudioElement];
   directDeck: HTMLAudioElement;
+  directDeckTrackId: string | null;
+  directDeckObjectUrl: string | null;
   backgroundDirectActive: boolean;
   deckSources: [MediaElementAudioSourceNode, MediaElementAudioSourceNode];
+  deckDjStages: [DeckDjStage, DeckDjStage];
   deckGains: [GainNode, GainNode];
   inputBus: GainNode;
   dspPathGain: GainNode;
@@ -62,6 +79,7 @@ export interface SharedAudioGraph {
 
 let sharedGraph: SharedAudioGraph | null = null;
 let backgroundHandoffInProgress = false;
+let foregroundRestoreInProgress = false;
 let keepaliveAudio: HTMLAudioElement | null = null;
 let keepaliveBlobUrl: string | null = null;
 let testToneMode: TestToneMode | null = null;
@@ -75,7 +93,40 @@ let currentSinkId = '';
 let lastAppliedProfile: LocalAudioProfile | null = null;
 let gestureHooked = false;
 
+const unlockedAudioElements = new WeakSet<HTMLAudioElement>();
+const contextInterruptedListeners = new Set<() => void>();
 const listeners = new Set<() => void>();
+
+export function ensurePlaybackAudioSession(): void {
+  if (typeof navigator === 'undefined') return;
+  try {
+    const nav = navigator as Navigator & {
+      audioSession?: { type?: string };
+    };
+    if (nav.audioSession && nav.audioSession.type !== 'playback') {
+      nav.audioSession.type = 'playback';
+    }
+  } catch {
+    // Ignore unsupported audioSession transitions
+  }
+}
+
+export function subscribeAudioContextInterrupted(listener: () => void): () => void {
+  contextInterruptedListeners.add(listener);
+  return () => {
+    contextInterruptedListeners.delete(listener);
+  };
+}
+
+function notifyContextInterruptedListeners(): void {
+  contextInterruptedListeners.forEach((cb) => {
+    try {
+      cb();
+    } catch {
+      // Ignore subscriber errors
+    }
+  });
+}
 
 function notifyDiagnosticsListeners(): void {
   listeners.forEach((cb) => {
@@ -161,7 +212,57 @@ function ensureKeepaliveAudioElement(): HTMLAudioElement | null {
   return el;
 }
 
+export function clearElementPrimingFlag(el: HTMLAudioElement): void {
+  delete el.dataset.scPriming;
+  el.muted = false;
+}
+
+function primeAudioElementOnGesture(el: HTMLAudioElement): void {
+  if (unlockedAudioElements.has(el)) return;
+  if (!el.paused || el.getAttribute('src') || el.dataset.scPriming === '1') {
+    if (!el.paused) unlockedAudioElements.add(el);
+    return;
+  }
+
+  const silentUrl = createSilentWavBlobUrl();
+  el.dataset.scPriming = '1';
+  el.muted = true;
+  el.src = silentUrl;
+  try {
+    const playPromise = el.play();
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise
+        .then(() => {
+          unlockedAudioElements.add(el);
+          if (el.dataset.scPriming === '1') {
+            el.pause();
+            el.muted = false;
+            el.removeAttribute('src');
+            el.load();
+            delete el.dataset.scPriming;
+          }
+        })
+        .catch(() => {
+          if (el.dataset.scPriming === '1') {
+            el.muted = false;
+            el.removeAttribute('src');
+            delete el.dataset.scPriming;
+          }
+        });
+    } else {
+      unlockedAudioElements.add(el);
+    }
+  } catch {
+    if (el.dataset.scPriming === '1') {
+      el.muted = false;
+      el.removeAttribute('src');
+      delete el.dataset.scPriming;
+    }
+  }
+}
+
 export function startSilentKeepaliveAudio(): void {
+  ensurePlaybackAudioSession();
   const el = ensureKeepaliveAudioElement();
   if (!el) return;
   if (el.paused) {
@@ -178,11 +279,25 @@ export function stopSilentKeepaliveAudio(): void {
 
 export function unlockPlaybackOnUserGesture(): void {
   if (typeof window === 'undefined') return;
+  ensurePlaybackAudioSession();
   const graph = ensureAudioGraph();
-  if (graph && graph.ctx.state !== 'running') {
-    void graph.ctx.resume().catch(() => {});
+  if (graph) {
+    if (graph.ctx.state !== 'running') {
+      void graph.ctx.resume().catch(() => {});
+    }
+    primeAudioElementOnGesture(graph.decks[0]);
+    primeAudioElementOnGesture(graph.decks[1]);
+    primeAudioElementOnGesture(graph.directDeck);
+    const hasPlayingHtmlAudio =
+      (!graph.decks[0].paused && Boolean(graph.decks[0].src) && graph.decks[0].dataset.scPriming !== '1') ||
+      (!graph.decks[1].paused && Boolean(graph.decks[1].src) && graph.decks[1].dataset.scPriming !== '1') ||
+      (!graph.directDeck.paused && Boolean(graph.directDeck.src) && graph.directDeck.dataset.scPriming !== '1');
+    if (!hasPlayingHtmlAudio) {
+      startSilentKeepaliveAudio();
+    }
+  } else {
+    startSilentKeepaliveAudio();
   }
-  startSilentKeepaliveAudio();
 }
 
 function configureAudioElement(audio: HTMLAudioElement, useCors: boolean): void {
@@ -204,6 +319,8 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
   if (sharedGraph) return sharedGraph;
   if (typeof window === 'undefined') return null;
 
+  ensurePlaybackAudioSession();
+
   const AudioCtx =
     window.AudioContext ||
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -220,6 +337,51 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
     ctx.createMediaElementSource(decks[0]),
     ctx.createMediaElementSource(decks[1]),
   ];
+
+  const createDeckDjStage = (): DeckDjStage => {
+    const lowEq = ctx.createBiquadFilter();
+    lowEq.type = 'lowshelf';
+    lowEq.frequency.value = 220;
+    lowEq.Q.value = 0.707;
+    lowEq.gain.value = 0;
+    lowEq.channelCount = 2;
+    lowEq.channelCountMode = 'explicit';
+
+    const midEq = ctx.createBiquadFilter();
+    midEq.type = 'peaking';
+    midEq.frequency.value = 1000;
+    midEq.Q.value = 0.85;
+    midEq.gain.value = 0;
+    midEq.channelCount = 2;
+    midEq.channelCountMode = 'explicit';
+
+    const highEq = ctx.createBiquadFilter();
+    highEq.type = 'highshelf';
+    highEq.frequency.value = 4200;
+    highEq.Q.value = 0.707;
+    highEq.gain.value = 0;
+    highEq.channelCount = 2;
+    highEq.channelCountMode = 'explicit';
+
+    const highpass = ctx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.value = 20;
+    highpass.Q.value = 0.707;
+    highpass.channelCount = 2;
+    highpass.channelCountMode = 'explicit';
+
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 20000;
+    lowpass.Q.value = 0.707;
+    lowpass.channelCount = 2;
+    lowpass.channelCountMode = 'explicit';
+
+    return { lowEq, midEq, highEq, highpass, lowpass };
+  };
+
+  const deckDjStages: [DeckDjStage, DeckDjStage] = [createDeckDjStage(), createDeckDjStage()];
+
   const deckGains: [GainNode, GainNode] = [ctx.createGain(), ctx.createGain()];
   deckGains[0].gain.value = 1;
   deckGains[1].gain.value = 0;
@@ -296,11 +458,17 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
   analyser.fftSize = 512;
   analyser.smoothingTimeConstant = 0.78;
 
-  // Wire sources -> inputBus
-  deckSources[0].connect(deckGains[0]);
-  deckSources[1].connect(deckGains[1]);
-  deckGains[0].connect(inputBus);
-  deckGains[1].connect(inputBus);
+  // Wire sources -> per-deck DJ stage -> deckGains -> inputBus
+  for (let i = 0; i < 2; i += 1) {
+    const stage = deckDjStages[i];
+    deckSources[i].connect(stage.lowEq);
+    stage.lowEq.connect(stage.midEq);
+    stage.midEq.connect(stage.highEq);
+    stage.highEq.connect(stage.highpass);
+    stage.highpass.connect(stage.lowpass);
+    stage.lowpass.connect(deckGains[i]);
+    deckGains[i].connect(inputBus);
+  }
   testToneGain.connect(inputBus);
 
   // Branch A: Direct bypass path
@@ -350,8 +518,11 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
     ctx,
     decks,
     directDeck,
+    directDeckTrackId: null,
+    directDeckObjectUrl: null,
     backgroundDirectActive: false,
     deckSources,
+    deckDjStages,
     deckGains,
     inputBus,
     dspPathGain,
@@ -375,15 +546,22 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
   };
 
   ctx.addEventListener('statechange', () => {
+    const g = sharedGraph;
     if (
-      sharedGraph &&
-      (sharedGraph.ctx.state === 'suspended' || (sharedGraph.ctx.state as string) === 'interrupted') &&
-      (sharedGraph.decks.some((d) => !d.paused) ||
-        sharedGraph.backgroundDirectActive ||
-        testToneMode !== null)
+      g &&
+      (g.ctx.state === 'suspended' || (g.ctx.state as string) === 'interrupted')
     ) {
-      startSilentKeepaliveAudio();
-      void sharedGraph.ctx.resume().catch(() => {});
+      const hasDeckActivity =
+        g.decks.some((d) => !d.paused && d.dataset.scPriming !== '1') ||
+        g.backgroundDirectActive ||
+        testToneMode !== null;
+      if (hasDeckActivity) {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+          notifyContextInterruptedListeners();
+        } else {
+          void g.ctx.resume().catch(() => {});
+        }
+      }
     }
     notifyDiagnosticsListeners();
   });
@@ -396,14 +574,24 @@ export function getActivePlaybackElement(graph: SharedAudioGraph): HTMLAudioElem
   return graph.backgroundDirectActive ? graph.directDeck : graph.decks[graph.activeDeck];
 }
 
+export function revokeDirectDeckUrl(graph: SharedAudioGraph): void {
+  if (graph.directDeckObjectUrl) {
+    URL.revokeObjectURL(graph.directDeckObjectUrl);
+    graph.directDeckObjectUrl = null;
+  }
+}
+
 export function resetDirectDeck(): void {
   const graph = sharedGraph;
   if (!graph) return;
   graph.backgroundDirectActive = false;
+  graph.directDeckTrackId = null;
+  clearElementPrimingFlag(graph.directDeck);
   if (!graph.directDeck.paused) {
     graph.directDeck.pause();
   }
   graph.directDeck.removeAttribute('src');
+  revokeDirectDeckUrl(graph);
 }
 
 export async function engageBackgroundDirectDeck(
@@ -415,76 +603,170 @@ export async function engageBackgroundDirectDeck(
     return Boolean(graph?.backgroundDirectActive);
   }
   const activeDeck = graph.decks[graph.activeDeck];
-  if (!activeDeck.src || activeDeck.paused) return false;
+  if (!activeDeck.src || activeDeck.ended || activeDeck.dataset.scPriming === '1') {
+    return false;
+  }
 
+  ensurePlaybackAudioSession();
   backgroundHandoffInProgress = true;
   const targetSrc = activeDeck.src;
   const resumeAt = Number.isFinite(activeDeck.currentTime) ? activeDeck.currentTime : 0;
   const targetRate = activeDeck.playbackRate || 1;
   const directVol = isMuted ? 0 : Math.max(0, Math.min(1, volume0to100 / 100));
 
+  clearElementPrimingFlag(graph.directDeck);
+  revokeDirectDeckUrl(graph);
+  graph.directDeckTrackId = graph.trackIds[graph.activeDeck];
+
+  const applyResumeSeek = () => {
+    if (resumeAt <= 0.2) return;
+    const clamped = clampSeekTarget(
+      resumeAt,
+      Number.isFinite(graph.directDeck.duration) ? graph.directDeck.duration : null,
+    );
+    if (clamped > 0 && Math.abs(graph.directDeck.currentTime - clamped) > 0.4) {
+      try {
+        graph.directDeck.currentTime = clamped;
+      } catch {
+        // Ignore seek error while metadata settles
+      }
+    }
+  };
+
+  let detachMetaSeek: (() => void) | null = null;
+  const onMetaReady = () => {
+    applyResumeSeek();
+  };
+
   try {
     graph.directDeck.crossOrigin = targetSrc.startsWith('blob:') ? null : 'anonymous';
-    graph.directDeck.src = targetSrc;
     graph.directDeck.volume = directVol;
     graph.directDeck.playbackRate = targetRate;
-    if (resumeAt > 0) {
-      graph.directDeck.currentTime = resumeAt;
+    graph.directDeck.src = targetSrc;
+    graph.directDeck.addEventListener('loadedmetadata', onMetaReady, { once: true });
+    detachMetaSeek = () => {
+      graph.directDeck.removeEventListener('loadedmetadata', onMetaReady);
+    };
+    graph.directDeck.load();
+    if (graph.directDeck.readyState >= 1) {
+      applyResumeSeek();
     }
-    await graph.directDeck.play();
+
+    // Call .play() synchronously inside the visibility/hide tick before awaiting
+    const playPromise = graph.directDeck.play();
+    await playPromise;
+    applyResumeSeek();
+    unlockedAudioElements.add(graph.directDeck);
     graph.backgroundDirectActive = true;
     activeDeck.pause();
+    stopSilentKeepaliveAudio();
     notifyDiagnosticsListeners();
     return true;
   } catch {
     graph.backgroundDirectActive = false;
+    graph.directDeckTrackId = null;
     graph.directDeck.pause();
     graph.directDeck.removeAttribute('src');
     return false;
   } finally {
+    detachMetaSeek?.();
     backgroundHandoffInProgress = false;
   }
 }
 
 export async function restoreDspDeckFromBackground(): Promise<void> {
   const graph = sharedGraph;
-  if (!graph || !graph.backgroundDirectActive) return;
+  if (!graph || !graph.backgroundDirectActive || foregroundRestoreInProgress) return;
 
-  const activeDeck = graph.decks[graph.activeDeck];
+  foregroundRestoreInProgress = true;
+  const activeDeckIdx = graph.activeDeck;
+  const activeDeck = graph.decks[activeDeckIdx];
+  const directSrc = graph.directDeck.src;
   const resumeAt = Number.isFinite(graph.directDeck.currentTime)
     ? graph.directDeck.currentTime
     : activeDeck.currentTime;
+  const targetRate = graph.directDeck.playbackRate || activeDeck.playbackRate || 1;
   const wasPlaying = !graph.directDeck.paused;
 
-  graph.backgroundDirectActive = false;
-  graph.directDeck.pause();
-
   try {
+    ensurePlaybackAudioSession();
     if (graph.ctx.state !== 'running') {
-      await graph.ctx.resume();
+      await graph.ctx.resume().catch(() => {});
     }
-  } catch {
-    // Best-effort resume
-  }
 
-  if (activeDeck.src && Number.isFinite(resumeAt)) {
-    try {
-      activeDeck.currentTime = resumeAt;
-    } catch {
-      // Ignore seek error
+    const srcDiffers = Boolean(directSrc && activeDeck.src !== directSrc);
+    if (srcDiffers) {
+      clearElementPrimingFlag(activeDeck);
+      if (graph.objectUrls[activeDeckIdx] && graph.objectUrls[activeDeckIdx] !== directSrc) {
+        URL.revokeObjectURL(graph.objectUrls[activeDeckIdx]!);
+      }
+      graph.objectUrls[activeDeckIdx] = graph.directDeckObjectUrl;
+      graph.directDeckObjectUrl = null;
+      graph.trackIds[activeDeckIdx] = graph.directDeckTrackId;
+
+      activeDeck.crossOrigin = directSrc.startsWith('blob:') ? null : 'anonymous';
+      activeDeck.playbackRate = targetRate;
+      activeDeck.src = directSrc;
+
+      await new Promise<void>((resolve) => {
+        if (activeDeck.readyState >= 1) {
+          resolve();
+          return;
+        }
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          activeDeck.removeEventListener('loadedmetadata', finish);
+          activeDeck.removeEventListener('error', finish);
+          resolve();
+        };
+        const timer = window.setTimeout(finish, 2500);
+        activeDeck.addEventListener('loadedmetadata', finish, { once: true });
+        activeDeck.addEventListener('error', finish, { once: true });
+        activeDeck.load();
+      });
     }
-  }
-  if (wasPlaying && activeDeck.src) {
-    try {
+
+    const liveResumeAt = Number.isFinite(graph.directDeck.currentTime)
+      ? graph.directDeck.currentTime
+      : resumeAt;
+
+    if (activeDeck.src && Number.isFinite(liveResumeAt)) {
+      try {
+        activeDeck.currentTime = clampSeekTarget(
+          liveResumeAt,
+          Number.isFinite(activeDeck.duration) ? activeDeck.duration : null,
+        );
+      } catch {
+        // Ignore seek error
+      }
+    }
+
+    resetDeckDjStage(graph, activeDeckIdx, true);
+    graph.deckGains[activeDeckIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
+
+    if (wasPlaying && activeDeck.src) {
       await activeDeck.play();
-    } catch {
-      // Re-engage direct deck cleanly if foreground DSP play fails
+      unlockedAudioElements.add(activeDeck);
     }
+
+    graph.backgroundDirectActive = false;
+    graph.directDeckTrackId = null;
+    graph.directDeck.pause();
+    graph.directDeck.removeAttribute('src');
+    revokeDirectDeckUrl(graph);
+    notifyDiagnosticsListeners();
+  } catch {
+    // Keep directDeck playing seamlessly if foreground DSP restore fails
+  } finally {
+    foregroundRestoreInProgress = false;
   }
-  notifyDiagnosticsListeners();
 }
 
 export async function resumeAudioContext(): Promise<AudioContextState | 'unavailable'> {
+  ensurePlaybackAudioSession();
   const graph = ensureAudioGraph();
   if (!graph) return 'unavailable';
   if (graph.ctx.state === 'suspended' || (graph.ctx.state as string) === 'interrupted') {
@@ -502,10 +784,15 @@ function installFirstGestureResume(): void {
   if (gestureHooked || typeof window === 'undefined') return;
   gestureHooked = true;
   const onGesture = () => {
+    ensurePlaybackAudioSession();
     const graph = sharedGraph;
-    if (graph && graph.ctx.state === 'suspended') {
+    if (!graph) return;
+    if (graph.ctx.state === 'suspended' || (graph.ctx.state as string) === 'interrupted') {
       void graph.ctx.resume().then(notifyDiagnosticsListeners).catch(() => {});
     }
+    primeAudioElementOnGesture(graph.decks[0]);
+    primeAudioElementOnGesture(graph.decks[1]);
+    primeAudioElementOnGesture(graph.directDeck);
   };
   ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((evt) => {
     window.addEventListener(evt, onGesture, { passive: true, capture: true });
@@ -515,12 +802,15 @@ function installFirstGestureResume(): void {
     if (
       graph &&
       (graph.ctx.state === 'suspended' || (graph.ctx.state as string) === 'interrupted') &&
-      (graph.decks.some((d) => !d.paused) ||
+      (graph.decks.some((d) => !d.paused && d.dataset.scPriming !== '1') ||
         graph.backgroundDirectActive ||
         testToneMode !== null)
     ) {
-      startSilentKeepaliveAudio();
-      void graph.ctx.resume().then(notifyDiagnosticsListeners).catch(() => {});
+      if (document.visibilityState === 'visible') {
+        void graph.ctx.resume().then(notifyDiagnosticsListeners).catch(() => {});
+      } else {
+        notifyContextInterruptedListeners();
+      }
     }
   });
 }
@@ -945,3 +1235,167 @@ export function getAudioDiagnosticsSnapshot(
     activeNodes,
   };
 }
+
+const bpmAnalysisCache = new Map<string, TrackBpmAnalysis>();
+const bpmInflightMap = new Map<string, Promise<TrackBpmAnalysis | null>>();
+
+export function getCachedTrackBpm(trackId: string): TrackBpmAnalysis | null {
+  return bpmAnalysisCache.get(trackId) ?? null;
+}
+
+export function cacheFallbackTrackBpm(trackId: string, track: MediaItem): TrackBpmAnalysis {
+  const existing = bpmAnalysisCache.get(trackId);
+  if (existing) return existing;
+  const est = estimateFallbackBpm(track);
+  bpmAnalysisCache.set(trackId, est);
+  return est;
+}
+
+export async function analyzeAudioBlobBpm(
+  trackId: string,
+  blob: Blob,
+): Promise<TrackBpmAnalysis | null> {
+  if (!trackId || !blob || blob.size < 2048) return null;
+  const cached = bpmAnalysisCache.get(trackId);
+  if (cached && cached.source === 'decoded') return cached;
+
+  const inflight = bpmInflightMap.get(trackId);
+  if (inflight) return inflight;
+
+  const task = (async (): Promise<TrackBpmAnalysis | null> => {
+    const graph = ensureAudioGraph();
+    if (!graph) return null;
+    try {
+      // Bound decode payload for extreme huge uncompressed WAVs while preserving container headers
+      const maxDirectBytes = 18 * 1024 * 1024;
+      const sourceBlob =
+        blob.size > maxDirectBytes && blob.type.includes('wav')
+          ? blob.slice(0, maxDirectBytes)
+          : blob;
+      const buf = await sourceBlob.arrayBuffer();
+      const decoded = await graph.ctx.decodeAudioData(buf.slice(0));
+      const sr = decoded.sampleRate;
+      const maxSeconds = 36;
+      const sampleCount = Math.min(decoded.length, Math.floor(sr * maxSeconds));
+      if (sampleCount < sr * 3) return null;
+
+      // Downmix first channels into compact ~11025 Hz mono buffer for fast, low-RAM autocorrelation
+      const targetRate = 11025;
+      const decim = Math.max(1, Math.round(sr / targetRate));
+      const effectiveSr = sr / decim;
+      const outLen = Math.floor(sampleCount / decim);
+      const mono = new Float32Array(outLen);
+      const ch0 = decoded.getChannelData(0);
+      const ch1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : null;
+
+      for (let i = 0; i < outLen; i += 1) {
+        const srcIdx = i * decim;
+        mono[i] = ch1 ? 0.5 * (ch0[srcIdx] + ch1[srcIdx]) : ch0[srcIdx];
+      }
+
+      const analysis = estimateBpmFromPcm(mono, effectiveSr);
+      if (analysis) {
+        bpmAnalysisCache.set(trackId, analysis);
+        return analysis;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      bpmInflightMap.delete(trackId);
+    }
+  })();
+
+  bpmInflightMap.set(trackId, task);
+  return task;
+}
+
+export function resetDeckDjStage(
+  graph: SharedAudioGraph,
+  deckIdx: 0 | 1,
+  immediate = false,
+): void {
+  const stage = graph.deckDjStages[deckIdx];
+  const now = graph.ctx.currentTime;
+  if (immediate) {
+    stage.lowEq.gain.setValueAtTime(0, now);
+    stage.midEq.gain.setValueAtTime(0, now);
+    stage.highEq.gain.setValueAtTime(0, now);
+    stage.highpass.frequency.setValueAtTime(20, now);
+    stage.lowpass.frequency.setValueAtTime(20000, now);
+  } else {
+    stage.lowEq.gain.setTargetAtTime(0, now, 0.03);
+    stage.midEq.gain.setTargetAtTime(0, now, 0.03);
+    stage.highEq.gain.setTargetAtTime(0, now, 0.03);
+    stage.highpass.frequency.setTargetAtTime(20, now, 0.03);
+    stage.lowpass.frequency.setTargetAtTime(20000, now, 0.03);
+  }
+}
+
+export function applyDeckDjMixFrame(
+  graph: SharedAudioGraph,
+  outgoingIdx: 0 | 1,
+  incomingIdx: 0 | 1,
+  frame: DjTransitionFrame,
+  timeConstant = 0.035,
+  immediate = false,
+): void {
+  const now = graph.ctx.currentTime;
+  const outStage = graph.deckDjStages[outgoingIdx];
+  const inStage = graph.deckDjStages[incomingIdx];
+
+  const applyParam = (param: AudioParam, value: number) => {
+    if (immediate) {
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(value, now);
+    } else {
+      param.setTargetAtTime(value, now, timeConstant);
+    }
+  };
+
+  applyParam(graph.deckGains[outgoingIdx].gain, frame.outGain);
+  applyParam(graph.deckGains[incomingIdx].gain, frame.inGain);
+
+  applyParam(outStage.lowEq.gain, frame.outLowDb);
+  applyParam(outStage.midEq.gain, frame.outMidDb);
+  applyParam(outStage.highEq.gain, frame.outHighDb);
+  applyParam(outStage.highpass.frequency, frame.outHighpassHz);
+  applyParam(outStage.lowpass.frequency, 20000);
+
+  applyParam(inStage.lowEq.gain, frame.inLowDb);
+  applyParam(inStage.midEq.gain, frame.inMidDb);
+  applyParam(inStage.highEq.gain, frame.inHighDb);
+  applyParam(inStage.highpass.frequency, 20);
+  applyParam(inStage.lowpass.frequency, frame.inLowpassHz);
+}
+
+export function getLiveDjEngineSnapshot(): {
+  activeDeck: 0 | 1;
+  deckGains: [number, number];
+  deckRates: [number, number];
+  deckHighpassHz: [number, number];
+  deckLowpassHz: [number, number];
+  deckLowEqDb: [number, number];
+} | null {
+  const g = sharedGraph;
+  if (!g) return null;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    activeDeck: g.activeDeck,
+    deckGains: [round2(g.deckGains[0].gain.value), round2(g.deckGains[1].gain.value)],
+    deckRates: [round2(g.decks[0].playbackRate), round2(g.decks[1].playbackRate)],
+    deckHighpassHz: [
+      Math.round(g.deckDjStages[0].highpass.frequency.value),
+      Math.round(g.deckDjStages[1].highpass.frequency.value),
+    ],
+    deckLowpassHz: [
+      Math.round(g.deckDjStages[0].lowpass.frequency.value),
+      Math.round(g.deckDjStages[1].lowpass.frequency.value),
+    ],
+    deckLowEqDb: [
+      round2(g.deckDjStages[0].lowEq.gain.value),
+      round2(g.deckDjStages[1].lowEq.gain.value),
+    ],
+  };
+}
+

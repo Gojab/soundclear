@@ -15,11 +15,13 @@ import type {
   OfflineDownloadRecord,
   PlayHistoryEntry,
   PlaylistFolder,
+  PlaylistMixSettings,
   RecentSearchEntry,
   SavedAlbumEntry,
   SavedPodcastEntry,
 } from '../types/music';
 import { classifyStreamQualityBadge } from '../utils/audioMath';
+import { normalizePlaylistMixSettings } from '../utils/djMixLogic';
 import { isSupportedLocalAudioFile, parseLocalAudioFile } from '../utils/localAudioImport';
 import {
   formatArtists,
@@ -81,8 +83,14 @@ interface LibraryState {
   ) => LocalPlaylist;
   updatePlaylist: (
     playlistId: string,
-    patch: Partial<Pick<LocalPlaylist, 'name' | 'description' | 'coverUrl' | 'folderId' | 'pinned'>>,
+    patch: Partial<
+      Pick<LocalPlaylist, 'name' | 'description' | 'coverUrl' | 'folderId' | 'pinned' | 'mixConfig'>
+    >,
   ) => void;
+  updatePlaylistMixConfig: (
+    playlistId: string,
+    patch: Partial<PlaylistMixSettings>,
+  ) => PlaylistMixSettings;
   deletePlaylist: (playlistId: string) => void;
   togglePinPlaylist: (playlistId: string) => void;
   hasTrackInPlaylist: (playlistId: string, track: MediaItem) => boolean;
@@ -314,6 +322,18 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         return next;
       }),
     }));
+  },
+
+  updatePlaylistMixConfig: (playlistId, patch) => {
+    const pl = get().playlists.find((p) => p.id === playlistId);
+    const nextConfig = normalizePlaylistMixSettings({
+      ...(pl?.mixConfig || {}),
+      ...patch,
+    });
+    if (pl) {
+      get().updatePlaylist(playlistId, { mixConfig: nextConfig });
+    }
+    return nextConfig;
   },
 
   deletePlaylist: (playlistId) => {

@@ -21,6 +21,7 @@ import type {
   EqPreset,
   HomeSectionId,
   LocalAudioProfile,
+  PlaylistMixSettings,
   UserSettings,
   YouTubeSoundSettings,
 } from '../types/music';
@@ -32,6 +33,7 @@ import {
   computeNextCrossfadeState,
   resolveEffectiveCrossfadeSeconds,
 } from '../utils/audioMath';
+import { normalizePlaylistMixSettings } from '../utils/djMixLogic';
 import {
   DEFAULT_CUSTOM_BACKGROUND,
   isSafeBackgroundImageUrl,
@@ -65,6 +67,7 @@ interface SettingsState extends UserSettings {
   ) => void;
   setEpisodePlaybackRate: (episodeId: string, rate: number | null) => void;
   updateLocalProfile: (patch: Partial<LocalAudioProfile>) => void;
+  updateDjMix: (patch: Partial<PlaylistMixSettings>) => void;
   toggleCrossfade: (enabled?: boolean) => void;
   setCrossfadeDuration: (seconds: number) => void;
   applyEqPreset: (presetId: string) => void;
@@ -361,6 +364,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
 
     scheduleBackendAudioSettingsSync(get());
+  },
+
+  updateDjMix: (patch) => {
+    const currentDj = normalizePlaylistMixSettings(get().localProfile.djMix);
+    const nextDj = normalizePlaylistMixSettings({
+      ...currentDj,
+      ...patch,
+    });
+    get().updateLocalProfile({
+      djMix: nextDj,
+    });
   },
 
   toggleCrossfade: (enabled) => {

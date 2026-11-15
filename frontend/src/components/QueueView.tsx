@@ -1,9 +1,20 @@
-import { useState } from 'react';
-import { GripVertical, Play, Trash2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AudioWaveform, Disc3, GripVertical, Play, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { usePlayerStore } from '../store/playerStore';
-import type { MediaItem } from '../types/music';
-import { formatArtists } from '../utils/playerLogic';
+import { useSettingsStore } from '../store/settingsStore';
+import type { MediaItem, PlaylistMixSettings } from '../types/music';
+import {
+  computeBeatMatchPlan,
+  estimateFallbackBpm,
+  normalizePlaylistMixSettings,
+} from '../utils/djMixLogic';
+import { formatArtists, getPlayableVideoId, getTrackUniqueId, isLocalTrack } from '../utils/playerLogic';
 import { ArtworkImage } from './ArtworkImage';
+import {
+  formatBpmChip,
+  getTransitionStyleLabel,
+  PlaylistMixPanel,
+} from './PlaylistMixPanel';
 
 function QueueTrackItem({
   track,
@@ -81,16 +92,32 @@ function QueueTrackItem({
   );
 }
 
+function getBpmMapKey(track: MediaItem | null | undefined): string {
+  if (!track) return '';
+  if (isLocalTrack(track)) return getTrackUniqueId(track) || track.id;
+  return getPlayableVideoId(track) || getTrackUniqueId(track) || track.id;
+}
+
 export function QueueView() {
   const [dragState, setDragState] = useState<{ section: 'manual' | 'source'; index: number } | null>(
     null,
   );
+  const [mixSettingsOpen, setMixSettingsOpen] = useState(false);
 
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const manualQueue = usePlayerStore((s) => s.manualQueue);
   const sourceQueue = usePlayerStore((s) => s.sourceQueue);
   const sourceLabel = usePlayerStore((s) => s.sourceLabel);
+  const activeMixConfig = usePlayerStore((s) => s.activeMixConfig);
+  const djTransitionStatus = usePlayerStore((s) => s.djTransitionStatus);
+  const trackBpmMap = usePlayerStore((s) => s.trackBpmMap);
+  const activeStreamSourceMode = usePlayerStore((s) => s.activeStreamMeta?.sourceMode ?? null);
 
+  const localProfile = useSettingsStore((s) => s.localProfile);
+  const updateDjMix = useSettingsStore((s) => s.updateDjMix);
+
+  const setActiveMixConfig = usePlayerStore((s) => s.setActiveMixConfig);
+  const triggerDjTransitionNow = usePlayerStore((s) => s.triggerDjTransitionNow);
   const playFromManualQueue = usePlayerStore((s) => s.playFromManualQueue);
   const playFromSourceQueue = usePlayerStore((s) => s.playFromSourceQueue);
   const removeFromManualQueue = usePlayerStore((s) => s.removeFromManualQueue);
@@ -99,6 +126,35 @@ export function QueueView() {
   const reorderSourceQueue = usePlayerStore((s) => s.reorderSourceQueue);
   const clearManualQueue = usePlayerStore((s) => s.clearManualQueue);
   const clearSourceQueue = usePlayerStore((s) => s.clearSourceQueue);
+
+  const effectiveDj = useMemo(
+    () =>
+      activeMixConfig
+        ? normalizePlaylistMixSettings(activeMixConfig)
+        : normalizePlaylistMixSettings(localProfile.djMix),
+    [activeMixConfig, localProfile.djMix],
+  );
+
+  const upcomingTrack = manualQueue[0] ?? sourceQueue[0] ?? null;
+  const curKey = getBpmMapKey(currentTrack);
+  const nextKey = getBpmMapKey(upcomingTrack);
+
+  const curBpmInfo =
+    (curKey ? trackBpmMap[curKey] : undefined) ??
+    (currentTrack ? estimateFallbackBpm(currentTrack) : null);
+  const nextBpmInfo =
+    (nextKey ? trackBpmMap[nextKey] : undefined) ??
+    (upcomingTrack ? estimateFallbackBpm(upcomingTrack) : null);
+
+  const beatPlan = useMemo(
+    () =>
+      computeBeatMatchPlan(
+        curBpmInfo?.bpm ?? 120,
+        nextBpmInfo?.bpm ?? 120,
+        effectiveDj.beatMatch,
+      ),
+    [curBpmInfo?.bpm, nextBpmInfo?.bpm, effectiveDj.beatMatch],
+  );
 
   if (!currentTrack && manualQueue.length === 0 && sourceQueue.length === 0) {
     return (
@@ -125,25 +181,176 @@ export function QueueView() {
     setDragState(null);
   };
 
+  const handlePatchDj = (patch: Partial<PlaylistMixSettings>) => {
+    const next = normalizePlaylistMixSettings({ ...effectiveDj, ...patch });
+    updateDjMix(next);
+    if (patch.enabled === false) {
+      setActiveMixConfig(null);
+    } else if (activeMixConfig !== null || patch.enabled === true) {
+      setActiveMixConfig(next);
+    }
+  };
+
+  const transitionPct = Math.round(Math.max(0, Math.min(1, djTransitionStatus.progress)) * 100);
+  const tempoDeltaPct = Math.round((beatPlan.incomingStartRate - 1) * 1000) / 10;
+  const tempoLabel = !effectiveDj.beatMatch
+    ? 'Manual'
+    : Math.abs(tempoDeltaPct) < 0.2
+      ? 'Sinkron'
+      : `${tempoDeltaPct > 0 ? '+' : ''}${tempoDeltaPct.toFixed(1)}%`;
+
+  const isIframeMode = activeStreamSourceMode === 'youtube-iframe';
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {currentTrack && (
         <div>
-          <h4 className="text-xs font-semibold text-[#B3F7D1]/65 mb-2">Sedang diputar</h4>
-          <div className="flex items-center gap-3 p-2 rounded-xl bg-white/[0.075] backdrop-blur-xl border border-[#19EE8A]/25">
+          <h4 className="text-[11px] font-semibold text-[#B3F7D1]/65 mb-1.5">Sedang diputar</h4>
+          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.075] backdrop-blur-xl border border-[#19EE8A]/25">
             <ArtworkImage
               src={currentTrack.thumbnail}
               alt={currentTrack.title}
               type={currentTrack.type}
-              className="w-10 h-10"
+              className="w-9 h-9"
               roundedClass="rounded-lg"
             />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-[#19EE8A] truncate">{currentTrack.title}</p>
-              <p className="text-xs text-[#B3F7D1]/65 truncate">{formatArtists(currentTrack.artists)}</p>
+              <p className="text-xs font-medium text-[#19EE8A] truncate">{currentTrack.title}</p>
+              <p className="text-[11px] text-[#B3F7D1]/65 truncate">{formatArtists(currentTrack.artists)}</p>
             </div>
           </div>
         </div>
+      )}
+
+      {currentTrack && (
+        <section
+          aria-label="Kontrol Mode Mix DJ"
+          className={`rounded-xl border p-2.5 space-y-1.5 transition-colors ${
+            djTransitionStatus.active || effectiveDj.enabled
+              ? 'bg-[#19EE8A]/[0.06] border-[#19EE8A]/30'
+              : 'bg-white/[0.04] border-white/[0.09]'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                  djTransitionStatus.active || effectiveDj.enabled
+                    ? 'bg-[#19EE8A]/20 text-[#19EE8A]'
+                    : 'bg-white/[0.07] text-[#B3F7D1]/70'
+                }`}
+              >
+                <Disc3
+                  className={`w-4 h-4 ${djTransitionStatus.active ? 'animate-spin' : ''}`}
+                  strokeWidth={1.9}
+                />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[#E8FFF3] truncate">Mode Mix (DJ)</p>
+                <p className="text-[11px] text-[#B3F7D1]/65 truncate">
+                  {djTransitionStatus.active
+                    ? `Transisi aktif · ${getTransitionStyleLabel(djTransitionStatus.style)} · ${transitionPct}%`
+                    : effectiveDj.enabled
+                      ? `${getTransitionStyleLabel(effectiveDj.transitionStyle)} · ${effectiveDj.durationSeconds} dtk${
+                          effectiveDj.beatMatch ? ' · Beat Match' : ''
+                        }`
+                      : 'Campur transisi DJ antar lagu'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={effectiveDj.enabled}
+              aria-label="Aktifkan Mode Mix DJ"
+              onClick={() => handlePatchDj({ enabled: !effectiveDj.enabled })}
+              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                effectiveDj.enabled ? 'bg-sc-gradient' : 'bg-white/[0.15]'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${
+                  effectiveDj.enabled
+                    ? 'translate-x-5 bg-[#E8FFF3]'
+                    : 'translate-x-0.5 bg-[#B3F7D1]/75'
+                }`}
+              />
+            </button>
+          </div>
+
+          {djTransitionStatus.active && (
+            <div className="space-y-1">
+              <div className="h-1.5 w-full rounded-full bg-white/[0.1] overflow-hidden">
+                <div
+                  className="h-full bg-sc-gradient transition-all duration-150"
+                  style={{ width: `${transitionPct}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {(effectiveDj.enabled || djTransitionStatus.active) && upcomingTrack && !isIframeMode && (
+            <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-lg bg-black/25 border border-white/[0.07] px-2.5 py-1.5 text-[11px]">
+              <div className="flex items-center gap-1.5 min-w-0 text-[#B3F7D1]/80 font-mono-num tabular-nums">
+                <span>{formatBpmChip(curBpmInfo) ?? '—'}</span>
+                <span aria-hidden="true" className="text-[#19EE8A]">→</span>
+                <span>{formatBpmChip(nextBpmInfo) ?? '—'}</span>
+              </div>
+              <span
+                className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold tabular-nums ${
+                  beatPlan.beatMatched
+                    ? 'bg-[#19EE8A]/15 text-[#19EE8A]'
+                    : 'bg-white/[0.08] text-[#B3F7D1]/70'
+                }`}
+              >
+                {tempoLabel}
+              </span>
+            </div>
+          )}
+
+          {isIframeMode && effectiveDj.enabled && (
+            <p className="text-[11px] text-[#B3F7D1]/60">
+              Sumber stream memakai pemutar tersemat — transisi lagu dilanjutkan otomatis saat selesai.
+            </p>
+          )}
+
+          <div className="flex items-center gap-1.5 pt-0.5">
+            {upcomingTrack && !isIframeMode && (
+              <button
+                type="button"
+                disabled={djTransitionStatus.active || localProfile.directMode}
+                onClick={triggerDjTransitionNow}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#19EE8A]/15 hover:bg-[#19EE8A]/25 disabled:opacity-45 border border-[#19EE8A]/35 text-[11px] font-semibold text-[#19EE8A] transition-colors"
+              >
+                <AudioWaveform className="w-3.5 h-3.5" strokeWidth={2} />
+                {djTransitionStatus.active ? 'Sedang Transisi...' : 'Mix Sekarang'}
+              </button>
+            )}
+            <button
+              type="button"
+              aria-expanded={mixSettingsOpen}
+              onClick={() => setMixSettingsOpen((v) => !v)}
+              className={`inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${
+                mixSettingsOpen
+                  ? 'bg-white/[0.12] text-[#E8FFF3] border-white/[0.18]'
+                  : 'bg-white/[0.05] text-[#B3F7D1]/75 hover:text-[#E8FFF3] hover:bg-white/[0.1] border-white/[0.08]'
+              } ${!upcomingTrack || isIframeMode ? 'w-full' : ''}`}
+            >
+              <SlidersHorizontal className="w-3 h-3" strokeWidth={1.9} />
+              Pengaturan
+            </button>
+          </div>
+
+          {mixSettingsOpen && (
+            <PlaylistMixPanel
+              compact
+              settings={effectiveDj}
+              directModeActive={localProfile.directMode}
+              onChange={handlePatchDj}
+            />
+          )}
+        </section>
       )}
 
       {manualQueue.length > 0 && (

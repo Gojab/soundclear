@@ -10,6 +10,7 @@ import type {
   OfflineDownloadRecord,
   PlayHistoryEntry,
   PlaylistFolder,
+  PlaylistMixSettings,
   RecentSearchEntry,
   RepeatMode,
   SavedAlbumEntry,
@@ -22,6 +23,10 @@ import {
   clampCrossfadeSeconds,
   DEFAULT_CROSSFADE_SECONDS,
 } from '../utils/audioMath';
+import {
+  DEFAULT_PLAYLIST_MIX_SETTINGS,
+  normalizePlaylistMixSettings,
+} from '../utils/djMixLogic';
 import {
   DEFAULT_CUSTOM_BACKGROUND,
   isSafeBackgroundImageUrl,
@@ -67,6 +72,7 @@ export interface PersistedPlayerSession {
   repeat: RepeatMode;
   playbackRate: number;
   crossfadeSeconds: number;
+  activeMixConfig?: PlaylistMixSettings | null;
 }
 
 export const DEFAULT_HOME_SECTION_ORDER: HomeSectionId[] = [
@@ -118,6 +124,7 @@ export const DEFAULT_LOCAL_AUDIO_PROFILE: LocalAudioProfile = {
   gaplessPlayback: true,
   fadeOnPlayPause: true,
   skipSilence: true,
+  djMix: { ...DEFAULT_PLAYLIST_MIX_SETTINGS },
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -225,6 +232,7 @@ export function normalizeLocalAudioProfile(raw?: Partial<LocalAudioProfile> | nu
         ? safe.bands
         : [...DEFAULT_LOCAL_AUDIO_PROFILE.bands],
     customPresets: Array.isArray(safe.customPresets) ? safe.customPresets : [],
+    djMix: normalizePlaylistMixSettings(safe.djMix),
   };
 }
 

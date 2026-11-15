@@ -19,6 +19,10 @@ import {
   Upload,
 } from 'lucide-react';
 import { ArtworkImage } from '../components/ArtworkImage';
+import {
+  getTransitionStyleLabel,
+  PlaylistMixPanel,
+} from '../components/PlaylistMixPanel';
 import { TrackRow } from '../components/TrackRow';
 import { useContextMenuStore } from '../store/contextMenuStore';
 import {
@@ -30,7 +34,8 @@ import {
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import type { LocalPlaylist, MediaItem } from '../types/music';
+import type { LocalPlaylist, MediaItem, PlaylistMixSettings } from '../types/music';
+import { normalizePlaylistMixSettings } from '../utils/djMixLogic';
 import { localFileToMediaItem } from '../utils/localAudioImport';
 import {
   findDuplicateTrackIndices,
@@ -942,10 +947,14 @@ export function LocalPlaylistPage({
   const reorderPlaylistTracks = useLibraryStore((s) => s.reorderPlaylistTracks);
   const removeDuplicatesFromPlaylist = useLibraryStore((s) => s.removeDuplicatesFromPlaylist);
   const markPlaylistPlayed = useLibraryStore((s) => s.markPlaylistPlayed);
+  const updatePlaylistMixConfig = useLibraryStore((s) => s.updatePlaylistMixConfig);
   const downloadTracksOffline = useLibraryStore((s) => s.downloadTracksOffline);
-  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
+  const localProfile = useSettingsStore((s) => s.localProfile);
+  const downloadQuality = localProfile.downloadQuality;
   const showToast = useContextMenuStore((s) => s.showToast);
   const playTrackList = usePlayerStore((s) => s.playTrackList);
+  const sourceLabel = usePlayerStore((s) => s.sourceLabel);
+  const setActiveMixConfig = usePlayerStore((s) => s.setActiveMixConfig);
   const navigate = useNavigationStore((s) => s.navigate);
 
   const playlist = playlists.find((pl) => pl.id === id);
@@ -970,6 +979,14 @@ export function LocalPlaylistPage({
   const folder = playlist.folderId ? folders.find((f) => f.id === playlist.folderId) : null;
   const duplicateIndices = findDuplicateTrackIndices(playlist.tracks);
   const coverSrc = playlist.coverUrl || playlist.tracks[0]?.thumbnail;
+  const playlistMix = normalizePlaylistMixSettings(playlist.mixConfig);
+
+  const handleUpdateMix = (patch: Partial<PlaylistMixSettings>) => {
+    const next = updatePlaylistMixConfig(playlist.id, patch);
+    if (next && sourceLabel === playlist.name) {
+      setActiveMixConfig(next.enabled ? next : null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1023,12 +1040,30 @@ export function LocalPlaylistPage({
                   type="button"
                   onClick={() => {
                     markPlaylistPlayed(playlist.id);
-                    playTrackList(playlist.tracks, 0, playlist.name);
+                    playTrackList(
+                      playlist.tracks,
+                      0,
+                      playlist.name,
+                      playlistMix.enabled ? { mixConfig: playlistMix } : undefined,
+                    );
                   }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
                 >
                   <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                   Putar Semua
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={playlistMix.enabled}
+                  onClick={() => handleUpdateMix({ enabled: !playlistMix.enabled })}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                    playlistMix.enabled
+                      ? 'bg-[#19EE8A]/15 text-[#19EE8A] border border-[#19EE8A]/40'
+                      : 'bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-[#E8FFF3]'
+                  }`}
+                >
+                  <Disc3 className="w-3.5 h-3.5" strokeWidth={1.9} />
+                  Mix
                 </button>
                 <button
                   type="button"
@@ -1115,6 +1150,19 @@ export function LocalPlaylistPage({
         </div>
       </header>
 
+      {playlistMix.enabled && (
+        <PlaylistMixPanel
+          settings={playlistMix}
+          directModeActive={localProfile.directMode}
+          canStartMix={playlist.tracks.length > 0}
+          onChange={handleUpdateMix}
+          onStartMixPlayback={() => {
+            markPlaylistPlayed(playlist.id);
+            playTrackList(playlist.tracks, 0, playlist.name, { mixConfig: playlistMix });
+          }}
+        />
+      )}
+
       {playlist.tracks.length === 0 ? (
         <div className="glass-card rounded-2xl p-8 text-center space-y-3 max-w-lg">
           <p className="text-sm font-medium text-[#E8FFF3]/85">Playlist ini masih kosong</p>
@@ -1135,31 +1183,47 @@ export function LocalPlaylistPage({
             Seret baris lagu untuk mengatur ulang urutan
           </p>
           {playlist.tracks.map((track, idx) => (
-            <TrackRow
-              key={`${track.id}-${idx}`}
-              track={track}
-              index={idx}
-              draggable
-              onDragStartIndex={(fromIdx) => setDragIndex(fromIdx)}
-              onDropIndex={(toIdx) => {
-                if (dragIndex !== null && dragIndex !== toIdx) {
-                  reorderPlaylistTracks(playlist.id, dragIndex, toIdx);
+            <div key={`${track.id}-${idx}`} className="space-y-0.5">
+              <TrackRow
+                track={track}
+                index={idx}
+                draggable
+                onDragStartIndex={(fromIdx) => setDragIndex(fromIdx)}
+                onDropIndex={(toIdx) => {
+                  if (dragIndex !== null && dragIndex !== toIdx) {
+                    reorderPlaylistTracks(playlist.id, dragIndex, toIdx);
+                  }
+                  setDragIndex(null);
+                }}
+                onPlay={() => {
+                  markPlaylistPlayed(playlist.id);
+                  playTrackList(
+                    playlist.tracks,
+                    idx,
+                    playlist.name,
+                    playlistMix.enabled ? { mixConfig: playlistMix } : undefined,
+                  );
+                }}
+                onAddToPlaylist={onAddToPlaylist}
+                onRemove={() =>
+                  removeTrackFromPlaylist(
+                    playlist.id,
+                    getTrackUniqueId(track) || track.id,
+                    idx,
+                  )
                 }
-                setDragIndex(null);
-              }}
-              onPlay={() => {
-                markPlaylistPlayed(playlist.id);
-                playTrackList(playlist.tracks, idx, playlist.name);
-              }}
-              onAddToPlaylist={onAddToPlaylist}
-              onRemove={() =>
-                removeTrackFromPlaylist(
-                  playlist.id,
-                  getTrackUniqueId(track) || track.id,
-                  idx,
-                )
-              }
-            />
+              />
+              {playlistMix.enabled && idx < playlist.tracks.length - 1 && (
+                <div className="flex items-center gap-2 pl-12 pr-3 py-0.5 text-[10px] text-[#19EE8A]/70 select-none">
+                  <span className="h-px w-4 bg-[#19EE8A]/35" aria-hidden="true" />
+                  <span className="truncate">
+                    Transisi {playlistMix.durationSeconds} dtk ·{' '}
+                    {getTransitionStyleLabel(playlistMix.transitionStyle)}
+                    {playlistMix.beatMatch ? ' · Beat Match' : ''}
+                  </span>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}

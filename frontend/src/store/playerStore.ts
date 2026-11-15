@@ -16,9 +16,12 @@ import { db, type PersistedPlayerSession } from '../db/soundclearDb';
 import type {
   ActiveStreamMeta,
   ConcreteQualityTier,
+  DjTransitionStyle,
   MediaItem,
+  PlaylistMixSettings,
   RepeatMode,
   StreamOptionsResponse,
+  TrackBpmAnalysis,
 } from '../types/music';
 import {
   clampCrossfadeSeconds,
@@ -26,6 +29,7 @@ import {
   computeUnmutedVolume,
   resolveEffectiveCrossfadeSeconds,
 } from '../utils/audioMath';
+import { normalizePlaylistMixSettings } from '../utils/djMixLogic';
 import {
   getPlayableVideoId,
   getTrackUniqueId,
@@ -39,6 +43,16 @@ import { useSettingsStore } from './settingsStore';
 
 export type RightPanelTab = 'queue' | 'lyrics' | 'details';
 export type SleepTimerMode = 'off' | 'minutes' | 'end_of_track';
+
+export interface DjTransitionStatus {
+  active: boolean;
+  progress: number;
+  style: DjTransitionStyle;
+  beatMatched: boolean;
+  outgoingBpm: number | null;
+  incomingBpm: number | null;
+  tempoRatio: number;
+}
 
 interface AmbientColor {
   r: number;
@@ -95,6 +109,11 @@ interface PlayerState {
   bufferingStallCount: number;
   autoplayBlockedPendingResume: boolean;
 
+  activeMixConfig: PlaylistMixSettings | null;
+  djTransitionStatus: DjTransitionStatus;
+  trackBpmMap: Record<string, TrackBpmAnalysis>;
+  manualMixRequestVersion: number;
+
   hydrate: () => Promise<void>;
   playTrack: (
     track: MediaItem,
@@ -105,7 +124,12 @@ interface PlayerState {
       sourceLabel?: string;
     },
   ) => void;
-  playTrackList: (tracks: MediaItem[], startIndex?: number, sourceLabel?: string) => void;
+  playTrackList: (
+    tracks: MediaItem[],
+    startIndex?: number,
+    sourceLabel?: string,
+    options?: { mixConfig?: PlaylistMixSettings | null },
+  ) => void;
   playFromManualQueue: (index: number) => void;
   playFromSourceQueue: (index: number) => void;
   addToQueue: (track: MediaItem) => void;
@@ -156,6 +180,11 @@ interface PlayerState {
   resetBufferingStalls: () => void;
   setAutoplayBlockedPendingResume: (pending: boolean) => void;
   resumeBlockedPlayback: () => void;
+
+  setActiveMixConfig: (patch: Partial<PlaylistMixSettings> | null) => void;
+  setDjTransitionStatus: (status: DjTransitionStatus) => void;
+  setTrackBpm: (trackId: string, analysis: TrackBpmAnalysis) => void;
+  triggerDjTransitionNow: () => void;
 }
 
 const DEFAULT_AMBIENT: AmbientColor = { r: 22, g: 48, b: 40 };
@@ -223,6 +252,7 @@ function persistPlayerSession(state: PlayerState, force = false): void {
     repeat: state.repeat,
     playbackRate: state.playbackRate,
     crossfadeSeconds: state.crossfadeSeconds,
+    activeMixConfig: state.activeMixConfig,
   };
   void db.kvState.put({ key: 'player_session', value: payload }).catch(() => {});
 
@@ -377,6 +407,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   bufferingStallCount: 0,
   autoplayBlockedPendingResume: false,
 
+  activeMixConfig: null,
+  djTransitionStatus: {
+    active: false,
+    progress: 0,
+    style: 'bass-swap',
+    beatMatched: false,
+    outgoingBpm: null,
+    incomingBpm: null,
+    tempoRatio: 1,
+  },
+  trackBpmMap: {},
+  manualMixRequestVersion: 0,
+
   hydrate: async () => {
     installBackgroundLifecycleSync();
     try {
@@ -452,6 +495,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           repeat: remoteSession?.repeat ?? s.repeat ?? 'off',
           playbackRate: resolvePlaybackRateForTrack(activeTrack),
           crossfadeSeconds: resolveEffectiveCrossfadeSeconds(settingsState.localProfile),
+          activeMixConfig: s.activeMixConfig ? normalizePlaylistMixSettings(s.activeMixConfig) : null,
           pendingSeekSeconds: activeTrack && resumedTime > 2 ? resumedTime : null,
           rightPanelOpen: settingsRightPanel,
           isPlaying: Boolean(activeTrack && (ytSound.autoStartOnOpen || remoteSession?.isPlaying)),
@@ -525,6 +569,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       historyStack: prevTrack ? [prevTrack, ...state.historyStack].slice(0, 40) : state.historyStack,
       sourceQueue: options?.autoRadio === false ? [] : state.sourceQueue,
       sourceLabel: options?.sourceLabel ?? (isLocalTrack(track) ? 'File Lokal' : 'Radio Lagu'),
+      activeMixConfig: null,
       isPlaying: true,
       isBuffering: !isLocalTrack(track),
       currentTime: startAt,
@@ -549,7 +594,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     void hydrateTrackContext(track, options?.autoRadio ?? true, get, set);
   },
 
-  playTrackList: (tracks, startIndex = 0, sourceLabel = 'Daftar Putar') => {
+  playTrackList: (tracks, startIndex = 0, sourceLabel = 'Daftar Putar', options) => {
     const playable = filterHiddenAndExplicit(tracks.filter((t) => isPlayableTrack(t)));
     if (playable.length === 0) return;
     unlockPlaybackOnUserGesture();
@@ -561,12 +606,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     beginTrackTelemetry(target);
     const prevTrack = get().currentTrack;
     const targetRate = resolvePlaybackRateForTrack(target);
+    const resolvedMixConfig =
+      options && 'mixConfig' in options
+        ? options.mixConfig
+          ? normalizePlaylistMixSettings(options.mixConfig)
+          : null
+        : null;
 
     set((state) => ({
       currentTrack: target,
       historyStack: prevTrack ? [prevTrack, ...state.historyStack].slice(0, 40) : state.historyStack,
       sourceQueue: remaining,
       sourceLabel,
+      activeMixConfig: resolvedMixConfig,
       isPlaying: true,
       isBuffering: !isLocalTrack(target),
       currentTime: 0,
@@ -1106,5 +1158,54 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       notchManuallyHidden: false,
     });
     persistPlayerSession(get(), true);
+  },
+
+  setActiveMixConfig: (patch) => {
+    if (patch === null) {
+      set({ activeMixConfig: null });
+      persistPlayerSession(get(), true);
+      return;
+    }
+    const base =
+      get().activeMixConfig ??
+      normalizePlaylistMixSettings(useSettingsStore.getState().localProfile.djMix);
+    const next = normalizePlaylistMixSettings({ ...base, ...patch });
+    set({ activeMixConfig: next });
+    persistPlayerSession(get(), true);
+  },
+
+  setDjTransitionStatus: (djTransitionStatus) => set({ djTransitionStatus }),
+
+  setTrackBpm: (trackId, analysis) => {
+    if (!trackId) return;
+    set((state) => {
+      const prev = state.trackBpmMap[trackId];
+      if (
+        prev &&
+        prev.bpm === analysis.bpm &&
+        prev.source === analysis.source &&
+        prev.confidence === analysis.confidence
+      ) {
+        return state;
+      }
+      return {
+        trackBpmMap: {
+          ...state.trackBpmMap,
+          [trackId]: analysis,
+        },
+      };
+    });
+  },
+
+  triggerDjTransitionNow: () => {
+    const st = get();
+    if (!st.currentTrack) return;
+    const upcoming = st.manualQueue[0] ?? st.sourceQueue[0] ?? null;
+    if (!upcoming) return;
+    unlockPlaybackOnUserGesture();
+    set((state) => ({
+      isPlaying: true,
+      manualMixRequestVersion: state.manualMixRequestVersion + 1,
+    }));
   },
 }));

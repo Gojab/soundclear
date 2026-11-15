@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Bookmark, Check, Download, Play, UserCheck, UserPlus } from 'lucide-react';
+import { Bookmark, Check, Disc3, Download, Play, UserCheck, UserPlus } from 'lucide-react';
 import { fetchAlbum, fetchArtist, fetchPlaylist, postAccountSubscribe } from '../api/client';
 import { ArtworkImage } from '../components/ArtworkImage';
 import { MediaCard } from '../components/MediaCard';
+import { PlaylistMixPanel } from '../components/PlaylistMixPanel';
 import { ErrorBanner, TrackListSkeleton } from '../components/Skeletons';
 import { TrackRow } from '../components/TrackRow';
 import { useContextMenuStore } from '../store/contextMenuStore';
@@ -10,7 +12,8 @@ import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import type { MediaItem } from '../types/music';
+import type { MediaItem, PlaylistMixSettings } from '../types/music';
+import { normalizePlaylistMixSettings } from '../utils/djMixLogic';
 import { normalizeRouteId } from '../utils/playerLogic';
 
 interface DetailProps {
@@ -488,12 +491,20 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
 
 export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailProps) {
   const playTrackList = usePlayerStore((s) => s.playTrackList);
+  const setActiveMixConfig = usePlayerStore((s) => s.setActiveMixConfig);
+  const sourceLabel = usePlayerStore((s) => s.sourceLabel);
   const navigate = useNavigationStore((s) => s.navigate);
   const cleanId = normalizeRouteId(id);
   const resolvedFallback = fallbackQuery?.trim() || undefined;
   const downloadTracksOffline = useLibraryStore((s) => s.downloadTracksOffline);
-  const downloadQuality = useSettingsStore((s) => s.localProfile.downloadQuality);
+  const localProfile = useSettingsStore((s) => s.localProfile);
+  const downloadQuality = localProfile.downloadQuality;
+  const updateDjMix = useSettingsStore((s) => s.updateDjMix);
   const showToast = useContextMenuStore((s) => s.showToast);
+
+  const [mixSettings, setMixSettings] = useState<PlaylistMixSettings>(() =>
+    normalizePlaylistMixSettings(localProfile.djMix),
+  );
 
   const query = useQuery({
     queryKey: ['playlist', cleanId || '', resolvedFallback || ''],
@@ -539,6 +550,15 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
 
   const pl = query.data;
 
+  const handlePatchMix = (patch: Partial<PlaylistMixSettings>) => {
+    const next = normalizePlaylistMixSettings({ ...mixSettings, ...patch });
+    setMixSettings(next);
+    updateDjMix(next);
+    if (sourceLabel === pl.title) {
+      setActiveMixConfig(next.enabled ? next : null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row sm:items-end gap-5">
@@ -570,11 +590,31 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
             <div className="flex flex-wrap items-center gap-2.5 pt-2">
               <button
                 type="button"
-                onClick={() => playTrackList(pl.tracks, 0, pl.title)}
+                onClick={() =>
+                  playTrackList(
+                    pl.tracks,
+                    0,
+                    pl.title,
+                    mixSettings.enabled ? { mixConfig: mixSettings } : undefined,
+                  )
+                }
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Playlist
+              </button>
+              <button
+                type="button"
+                aria-pressed={mixSettings.enabled}
+                onClick={() => handlePatchMix({ enabled: !mixSettings.enabled })}
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                  mixSettings.enabled
+                    ? 'bg-[#19EE8A]/15 text-[#19EE8A] border border-[#19EE8A]/40'
+                    : 'bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-[#E8FFF3]'
+                }`}
+              >
+                <Disc3 className="w-4 h-4" strokeWidth={1.9} />
+                Mix
               </button>
               <button
                 type="button"
@@ -603,13 +643,32 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
         </div>
       </header>
 
+      {mixSettings.enabled && (
+        <PlaylistMixPanel
+          settings={mixSettings}
+          directModeActive={localProfile.directMode}
+          canStartMix={pl.tracks.length > 0}
+          onChange={handlePatchMix}
+          onStartMixPlayback={() =>
+            playTrackList(pl.tracks, 0, pl.title, { mixConfig: mixSettings })
+          }
+        />
+      )}
+
       <div className="space-y-1">
         {pl.tracks.map((track, idx) => (
           <TrackRow
             key={`${track.id}-${idx}`}
             track={track}
             index={idx}
-            onPlay={() => playTrackList(pl.tracks, idx, pl.title)}
+            onPlay={() =>
+              playTrackList(
+                pl.tracks,
+                idx,
+                pl.title,
+                mixSettings.enabled ? { mixConfig: mixSettings } : undefined,
+              )
+            }
             onAddToPlaylist={onAddToPlaylist}
           />
         ))}

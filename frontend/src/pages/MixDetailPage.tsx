@@ -1,15 +1,17 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Play, Shuffle } from 'lucide-react';
+import { Disc3, Play, Shuffle } from 'lucide-react';
 import { fetchCharts, fetchHome } from '../api/client';
 import { ArtworkImage } from '../components/ArtworkImage';
+import { PlaylistMixPanel } from '../components/PlaylistMixPanel';
 import { ErrorBanner, TrackListSkeleton } from '../components/Skeletons';
 import { TrackRow } from '../components/TrackRow';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import type { MediaItem } from '../types/music';
+import type { MediaItem, PlaylistMixSettings } from '../types/music';
+import { normalizePlaylistMixSettings } from '../utils/djMixLogic';
 import { buildDailyMixes } from '../utils/mixLogic';
 
 interface MixDetailPageProps {
@@ -19,6 +21,8 @@ interface MixDetailPageProps {
 
 export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
   const playTrackList = usePlayerStore((s) => s.playTrackList);
+  const setActiveMixConfig = usePlayerStore((s) => s.setActiveMixConfig);
+  const sourceLabel = usePlayerStore((s) => s.sourceLabel);
   const navigate = useNavigationStore((s) => s.navigate);
 
   const playHistory = useLibraryStore((s) => s.playHistory);
@@ -26,6 +30,12 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
   const hiddenTrackIds = useLibraryStore((s) => s.hiddenTrackIds);
   const excludedTasteIds = useLibraryStore((s) => s.excludedTasteIds);
   const hideExplicit = useSettingsStore((s) => s.hideExplicit);
+  const localProfile = useSettingsStore((s) => s.localProfile);
+  const updateDjMix = useSettingsStore((s) => s.updateDjMix);
+
+  const [mixSettings, setMixSettings] = useState<PlaylistMixSettings>(() =>
+    normalizePlaylistMixSettings(localProfile.djMix),
+  );
 
   const chartsQuery = useQuery({
     queryKey: ['charts', 'ID'],
@@ -83,6 +93,15 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
     );
   }
 
+  const handlePatchMix = (patch: Partial<PlaylistMixSettings>) => {
+    const next = normalizePlaylistMixSettings({ ...mixSettings, ...patch });
+    setMixSettings(next);
+    updateDjMix(next);
+    if (sourceLabel === mix.title) {
+      setActiveMixConfig(next.enabled ? next : null);
+    }
+  };
+
   const handleShufflePlay = () => {
     if (mix.tracks.length === 0) return;
     const shuffled = [...mix.tracks];
@@ -90,7 +109,12 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    playTrackList(shuffled, 0, mix.title);
+    playTrackList(
+      shuffled,
+      0,
+      mix.title,
+      mixSettings.enabled ? { mixConfig: mixSettings } : undefined,
+    );
   };
 
   return (
@@ -136,7 +160,14 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
           <div className="flex flex-wrap items-center gap-2.5 pt-2">
             <button
               type="button"
-              onClick={() => playTrackList(mix.tracks, 0, mix.title)}
+              onClick={() =>
+                playTrackList(
+                  mix.tracks,
+                  0,
+                  mix.title,
+                  mixSettings.enabled ? { mixConfig: mixSettings } : undefined,
+                )
+              }
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 transition"
             >
               <Play className="w-4 h-4 fill-current" strokeWidth={2} />
@@ -150,9 +181,34 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
               <Shuffle className="w-4 h-4" strokeWidth={1.85} />
               Acak
             </button>
+            <button
+              type="button"
+              aria-pressed={mixSettings.enabled}
+              onClick={() => handlePatchMix({ enabled: !mixSettings.enabled })}
+              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold transition border ${
+                mixSettings.enabled
+                  ? 'bg-[#19EE8A]/20 text-[#19EE8A] border-[#19EE8A]/45'
+                  : 'bg-white/[0.08] hover:bg-white/[0.14] border-white/[0.12] text-[#E8FFF3]'
+              }`}
+            >
+              <Disc3 className="w-4 h-4" strokeWidth={1.9} />
+              Mode Mix (DJ)
+            </button>
           </div>
         </div>
       </header>
+
+      {mixSettings.enabled && (
+        <PlaylistMixPanel
+          settings={mixSettings}
+          directModeActive={localProfile.directMode}
+          canStartMix={mix.tracks.length > 0}
+          onChange={handlePatchMix}
+          onStartMixPlayback={() =>
+            playTrackList(mix.tracks, 0, mix.title, { mixConfig: mixSettings })
+          }
+        />
+      )}
 
       <div className="space-y-1">
         {mix.tracks.map((track, idx) => (
@@ -160,7 +216,14 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
             key={`${track.id}-${idx}`}
             track={track}
             index={idx}
-            onPlay={() => playTrackList(mix.tracks, idx, mix.title)}
+            onPlay={() =>
+              playTrackList(
+                mix.tracks,
+                idx,
+                mix.title,
+                mixSettings.enabled ? { mixConfig: mixSettings } : undefined,
+              )
+            }
             onAddToPlaylist={onAddToPlaylist}
           />
         ))}

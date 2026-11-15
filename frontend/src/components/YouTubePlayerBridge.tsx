@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { resolvePlayableYoutube } from '../api/client';
 import {
+  ensurePlaybackAudioSession,
   startSilentKeepaliveAudio,
   stopSilentKeepaliveAudio,
 } from '../audio/soundclearAudioEngine';
@@ -250,6 +251,7 @@ export function YouTubePlayerBridge() {
   useEffect(() => {
     if (!('mediaSession' in navigator) || !currentTrack) return;
 
+    ensurePlaybackAudioSession();
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title,
@@ -415,7 +417,23 @@ export function YouTubePlayerBridge() {
         playerRef.current &&
         playerReadyRef.current
       ) {
+        ensurePlaybackAudioSession();
         startSilentKeepaliveAudio();
+        if ('mediaSession' in navigator && st.currentTrack) {
+          try {
+            navigator.mediaSession.metadata = new MediaMetadata({
+              title: st.currentTrack.title,
+              artist: formatArtists(st.currentTrack.artists),
+              album: st.currentTrack.album?.name || 'SoundClear',
+              artwork: st.currentTrack.thumbnail
+                ? [{ src: st.currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' }]
+                : [],
+            });
+            navigator.mediaSession.playbackState = 'playing';
+          } catch {
+            // Ignore
+          }
+        }
         try {
           const pState = playerRef.current.getPlayerState?.();
           if (pState !== 1 && pState !== 3) {
