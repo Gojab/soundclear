@@ -958,8 +958,8 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
         <h1 className="text-base sm:text-xl font-bold text-[#E8FFF3] tracking-tight text-center truncate">
           {mobileSubView !== null ? (
             <>
-              <span className="lg:hidden">{activeCategoryMeta.title}</span>
-              <span className="hidden lg:inline">Pengaturan</span>
+              <span className="@[720px]:hidden">{activeCategoryMeta.title}</span>
+              <span className="hidden @[720px]:inline">Pengaturan</span>
             </>
           ) : (
             'Pengaturan'
@@ -1016,12 +1016,12 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
         </div>
       )}
 
-      {/* Master-Detail Layout: Left/Hub follows IMG_4281 structure; Right renders detail on lg+ */}
-      <div className="flex flex-col lg:flex-row lg:items-start gap-6">
-        {/* HUB COLUMN (visible on desktop lg+, or on mobile when mobileSubView === null) */}
+      {/* Master-Detail Layout: Left/Hub follows IMG_4281 structure; Right renders detail on @[720px]+ */}
+      <div className="flex flex-col @[720px]:flex-row @[720px]:items-start gap-6">
+        {/* HUB COLUMN (visible on wide @[720px]+, or on narrow panes when mobileSubView === null) */}
         <div
-          className={`w-full lg:w-[390px] xl:w-[410px] shrink-0 space-y-5 ${
-            mobileSubView !== null ? 'hidden lg:block' : 'block'
+          className={`w-full @[720px]:w-[272px] @[900px]:w-[320px] @[1060px]:w-[372px] shrink-0 space-y-5 @[720px]:sticky @[720px]:top-4 @[720px]:self-start ${
+            mobileSubView !== null ? 'hidden @[720px]:block' : 'block'
           }`}
         >
           {/* 2-Column Quick Toggle Cards (IMG_4281 top grid) */}
@@ -1121,7 +1121,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     onClick={() => openCategory(cat.id)}
                     className={`w-full flex items-center gap-3.5 px-4 py-3.5 text-left transition-colors ${
                       isSelected
-                        ? 'lg:bg-white/[0.08] hover:bg-white/[0.09]'
+                        ? '@[720px]:bg-white/[0.08] hover:bg-white/[0.09]'
                         : 'hover:bg-white/[0.06]'
                     }`}
                   >
@@ -1134,7 +1134,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     </div>
                     <ChevronRight
                       className={`w-4 h-4 shrink-0 ${
-                        isSelected ? 'lg:text-[#19EE8A] text-[#B3F7D1]/55' : 'text-[#B3F7D1]/55'
+                        isSelected ? '@[720px]:text-[#19EE8A] text-[#B3F7D1]/55' : 'text-[#B3F7D1]/55'
                       }`}
                       strokeWidth={2}
                     />
@@ -1145,10 +1145,10 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
           </div>
         </div>
 
-        {/* DETAIL COLUMN (always shown on lg+, or on mobile when drilled into a category) */}
+        {/* DETAIL COLUMN (always shown on @[720px]+, or when drilled into a category) */}
         <div
           className={`flex-1 min-w-0 ${
-            mobileSubView === null ? 'hidden lg:block' : 'block'
+            mobileSubView === null ? 'hidden @[720px]:block' : 'block'
           }`}
         >
           {renderCategoryContent(activeCategory)}

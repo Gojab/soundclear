@@ -418,6 +418,66 @@ export function computeEqFrequencyResponseCurve(params: {
   return points;
 }
 
+export function formatEqBandShortLabel(freqHz: number): string {
+  if (!Number.isFinite(freqHz) || freqHz <= 0) return '0';
+  if (freqHz >= 1000) {
+    const khz = freqHz / 1000;
+    return Number.isInteger(khz) ? `${khz}K` : `${khz.toFixed(1)}K`;
+  }
+  return `${Math.round(freqHz)}`;
+}
+
+export function formatEqDb(db: number): string {
+  const rounded = Math.round(clampEqGainDb(db) * 10) / 10;
+  if (Object.is(rounded, -0) || rounded === 0) return '0';
+  return rounded > 0 ? `+${rounded}` : `${rounded}`;
+}
+
+export function buildSmoothSvgCurvePath(
+  points: Array<{ x: number; y: number }>,
+  baselineY: number,
+): { strokePath: string; fillPath: string } {
+  if (points.length === 0) {
+    return { strokePath: '', fillPath: '' };
+  }
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  if (points.length === 1) {
+    const p = points[0];
+    const strokePath = `M${round1(p.x)} ${round1(p.y)}`;
+    const fillPath = `${strokePath} L${round1(p.x)} ${round1(baselineY)} Z`;
+    return { strokePath, fillPath };
+  }
+  if (points.length === 2) {
+    const [p0, p1] = points;
+    const strokePath = `M${round1(p0.x)} ${round1(p0.y)} L${round1(p1.x)} ${round1(p1.y)}`;
+    const fillPath = `${strokePath} L${round1(p1.x)} ${round1(baselineY)} L${round1(p0.x)} ${round1(baselineY)} Z`;
+    return { strokePath, fillPath };
+  }
+
+  const segments: string[] = [`M${round1(points[0].x)} ${round1(points[0].y)}`];
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    segments.push(
+      `C${round1(cp1x)} ${round1(cp1y)} ${round1(cp2x)} ${round1(cp2y)} ${round1(p2.x)} ${round1(p2.y)}`,
+    );
+  }
+
+  const strokePath = segments.join(' ');
+  const first = points[0];
+  const last = points[points.length - 1];
+  const fillPath = `${strokePath} L${round1(last.x)} ${round1(baselineY)} L${round1(first.x)} ${round1(baselineY)} Z`;
+  return { strokePath, fillPath };
+}
+
 /**
  * Honest stream quality badge classification from actually loaded metadata only.
  * Never claims Lossless for lossy codecs, and never claims Hi-Res unless lossless AND (>16-bit or >44.1 kHz).

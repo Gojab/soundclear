@@ -399,7 +399,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
                 Putar semua
               </button>
             </div>
-            <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+            <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-3 @[440px]:gap-2 overflow-x-auto @[440px]:overflow-visible pb-1 @[440px]:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
               {continueTracks.slice(0, 5).map((item, idx) => (
                 <MediaCard
                   key={`cont-${item.id}-${idx}`}
@@ -443,7 +443,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
             {dailyMixQuery.isLoading ? (
               <TrackListSkeleton count={4} />
             ) : dailyMixTracks.length > 0 ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1">
+              <div className="grid grid-cols-1 @[700px]:grid-cols-2 gap-x-4 gap-y-1">
                 {dailyMixTracks.slice(0, 6).map((track, idx) => (
                   <TrackRow
                     key={`dmix-${track.id}-${idx}`}
@@ -479,7 +479,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
                 Putar semua
               </button>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1">
+            <div className="grid grid-cols-1 @[700px]:grid-cols-2 gap-x-4 gap-y-1">
               {frequentTracks.slice(0, 6).map((track, idx) => (
                 <TrackRow
                   key={`freq-${track.id}-${idx}`}
@@ -501,7 +501,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
             <h2 id="releases-heading" className="text-xl font-bold text-[#E8FFF3] tracking-tight">
               Rilisan Baru Artis yang Diikuti
             </h2>
-            <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+            <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-3 @[440px]:gap-2 overflow-x-auto @[440px]:overflow-visible pb-1 @[440px]:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
               {artistNewReleases.map((item) => (
                 <MediaCard key={`rel-${item.id}`} item={item} />
               ))}
@@ -542,7 +542,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
                 Buat Mix
               </button>
             </div>
-            <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2.5 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[162px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+            <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-3 @[440px]:gap-2.5 overflow-x-auto @[440px]:overflow-visible pb-1 @[440px]:pb-0 snap-x scrollbar-none [&>*]:w-[162px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
               {spotifyStyleMixes.map((mix) => (
                 <div
                   key={mix.id}
@@ -641,7 +641,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
             ) : (
               <div className="space-y-6">
                 {chartSongs.length > 0 && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="grid grid-cols-1 @[700px]:grid-cols-2 gap-x-4 gap-y-1">
                     {chartSongs.slice(0, 10).map((song, idx) => (
                       <TrackRow
                         key={`${song.id}-${idx}`}
@@ -658,7 +658,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
                 {chartPlaylists.length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-lg font-bold text-[#E8FFF3]">Daftar Putar Tangga Lagu</h3>
-                    <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+                    <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-3 @[440px]:gap-2 overflow-x-auto @[440px]:overflow-visible pb-1 @[440px]:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
                       {chartPlaylists.map((item) => (
                         <MediaCard key={item.id} item={item} subtitle="Tangga Lagu" />
                       ))}
@@ -669,7 +669,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
                 {chartArtists.length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-lg font-bold text-[#E8FFF3]">Artis Teratas Indonesia</h3>
-                    <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+                    <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-3 @[440px]:gap-2 overflow-x-auto @[440px]:overflow-visible pb-1 @[440px]:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
                       {chartArtists.slice(0, 10).map((artist) => (
                         <MediaCard
                           key={artist.id}
@@ -730,7 +730,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
                     </div>
 
                     {mostlyPlayable ? (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1">
+                      <div className="grid grid-cols-1 @[700px]:grid-cols-2 gap-x-4 gap-y-1">
                         {visibleItems.slice(0, 12).map((item, idx) => (
                           <TrackRow
                             key={`${item.id}-${idx}`}
@@ -749,7 +749,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
                         ))}
                       </div>
                     ) : (
-                      <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+                      <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-3 @[440px]:gap-2 overflow-x-auto @[440px]:overflow-visible pb-1 @[440px]:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
                         {visibleItems.slice(0, 10).map((item, idx) => (
                           <MediaCard
                             key={`${item.id}-${idx}`}
@@ -782,7 +782,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
                 Tampilkan semua
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 gap-2.5">
               {moodCategories.map((cat) => (
                 <button
                   key={cat.params}
@@ -856,7 +856,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
           {savedPodcasts.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-[#E8FFF3] tracking-tight">Podcast Tersimpan</h2>
-              <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+              <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-3 @[440px]:gap-2 overflow-x-auto @[440px]:overflow-visible pb-1 @[440px]:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
                 {savedPodcasts.map((entry) => (
                   <MediaCard key={entry.id} item={entry.item} subtitle="Podcast" />
                 ))}
@@ -882,7 +882,7 @@ export function HomePage({ onAddToPlaylist, onOpenProfileDrawer }: HomePageProps
             {podcastDiscoverQuery.isLoading ? (
               <CardGridSkeleton count={5} />
             ) : podcastDiscoverQuery.data && filterList(podcastDiscoverQuery.data.items).length > 0 ? (
-              <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+              <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-3 @[440px]:gap-2 overflow-x-auto @[440px]:overflow-visible pb-1 @[440px]:pb-0 snap-x scrollbar-none [&>*]:w-[154px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
                 {filterList(podcastDiscoverQuery.data.items).slice(0, 10).map((item) => (
                   <MediaCard key={item.id} item={item} />
                 ))}

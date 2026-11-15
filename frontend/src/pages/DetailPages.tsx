@@ -173,7 +173,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       {artist.albums.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Album</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.albums.map((alb) => (
               <MediaCard key={alb.id} item={alb} subtitle={alb.year || 'Album'} />
             ))}
@@ -184,7 +184,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       {artist.singles.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Singel & EP</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.singles.map((s) => (
               <MediaCard key={s.id} item={s} subtitle={s.year || 'Singel'} />
             ))}
@@ -195,7 +195,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       {artist.compilations.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Kompilasi</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.compilations.map((c) => (
               <MediaCard key={c.id} item={c} subtitle={c.year || 'Kompilasi'} />
             ))}
@@ -206,7 +206,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       {artist.appearsOn.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Muncul di</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.appearsOn.map((ap) => (
               <MediaCard key={ap.id} item={ap} />
             ))}
@@ -217,7 +217,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       {artist.videos.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Video Musik</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.videos.slice(0, 10).map((v) => (
               <MediaCard key={v.id} item={v} onAddToPlaylist={onAddToPlaylist} />
             ))}
@@ -228,7 +228,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       {artist.related.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Artis Serupa</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.related.map((rel) => (
               <MediaCard key={rel.id} item={rel} subtitle={rel.views || 'Artis'} />
             ))}
@@ -475,7 +475,7 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
       {album.moreFromArtist.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Lainnya dari Artis Ini</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {album.moreFromArtist.map((item) => (
               <MediaCard key={item.id} item={item} subtitle={item.year || 'Album'} />
             ))}

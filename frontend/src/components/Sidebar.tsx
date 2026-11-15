@@ -97,7 +97,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
   return (
     <aside
       aria-label="Koleksi Kamu"
-      className={`hidden md:flex flex-col w-[272px] lg:w-[296px] shrink-0 rounded-lg overflow-hidden transition-colors duration-300 border border-white/[0.08] ${
+      className={`hidden md:flex flex-col w-[228px] lg:w-[252px] xl:w-[288px] shrink-0 rounded-lg overflow-hidden transition-colors duration-300 border border-white/[0.08] ${
         glassPanels
           ? 'bg-black/35'
           : bgActive
@@ -106,23 +106,25 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
       }`}
     >
       {/* Top Koleksi Kamu Header */}
-      <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between gap-2">
+      <div className="px-3 xl:px-4 pt-3.5 pb-2.5 flex items-center justify-between gap-1.5">
         <button
           type="button"
           onClick={() => navigate({ name: 'library' })}
-          className="flex items-center gap-2.5 text-[#B3F7D1]/80 hover:text-[#E8FFF3] transition-colors min-w-0"
+          className="flex items-center gap-2 text-[#B3F7D1]/80 hover:text-[#E8FFF3] transition-colors min-w-0"
         >
-          <Library className="w-5 h-5 shrink-0 text-[#19EE8A]" strokeWidth={2} />
-          <span className="text-[15px] font-bold tracking-tight truncate">Koleksi Kamu</span>
+          <Library className="w-4.5 h-4.5 xl:w-5 xl:h-5 shrink-0 text-[#19EE8A]" strokeWidth={2} />
+          <span className="text-sm xl:text-[15px] font-bold tracking-tight truncate">
+            Koleksi Kamu
+          </span>
         </button>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-0.5 xl:gap-1 shrink-0">
           <button
             type="button"
             onClick={() => navigate({ name: 'create-mix' })}
             aria-label="Buat mix baru"
             title="Buat mix baru"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-7 h-7 xl:w-8 xl:h-8 rounded-full flex items-center justify-center transition-colors ${
               currentRoute.name === 'create-mix'
                 ? 'bg-[#19EE8A]/20 text-[#19EE8A]'
                 : 'text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09]'
@@ -135,16 +137,16 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
             onClick={onOpenCreatePlaylist}
             aria-label="Buat playlist baru"
             title="Buat playlist baru"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
+            className="w-7 h-7 xl:w-8 xl:h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
           >
-            <Plus className="w-4.5 h-4.5" strokeWidth={2} />
+            <Plus className="w-4 h-4 xl:w-4.5 xl:h-4.5" strokeWidth={2} />
           </button>
           <button
             type="button"
             onClick={() => navigate({ name: 'library' })}
             aria-label="Buka seluruh koleksi"
             title="Lihat semua koleksi"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
+            className="w-7 h-7 xl:w-8 xl:h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
           >
             <Maximize2 className="w-3.5 h-3.5" strokeWidth={2} />
           </button>
@@ -152,7 +154,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
       </div>
 
       {/* Interactive Filter Tabs */}
-      <div className="px-3 pb-2 flex items-center gap-1.5 overflow-x-auto">
+      <div className="px-2.5 xl:px-3 pb-2 flex items-center gap-1 xl:gap-1.5 overflow-x-auto scrollbar-none">
         {filterOptions.map((opt) => {
           const active = filter === opt.id;
           return (
@@ -160,7 +162,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               key={opt.id}
               type="button"
               onClick={() => setFilter(active && opt.id !== 'all' ? 'all' : opt.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-2.5 xl:px-3 py-1 xl:py-1.5 rounded-full text-[11px] xl:text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                 active
                   ? 'bg-[#19EE8A] text-[#0F1F17] font-semibold'
                   : 'bg-white/[0.06] text-[#E8FFF3]/85 hover:bg-white/[0.11]'

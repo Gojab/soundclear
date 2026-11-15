@@ -94,9 +94,7 @@ export function LocalAudioEngine() {
       : null;
 
   const useOfflineBlob =
-    hasPlayableOfflineAudio(offlineRec) &&
-    (sourceLabel === 'Unduhan Offline' ||
-      (typeof navigator !== 'undefined' && navigator.onLine === false));
+    hasPlayableOfflineAudio(offlineRec) && !selectedQualityOverride;
 
   const targetStreamTier: ConcreteQualityTier =
     selectedQualityOverride ??
@@ -200,42 +198,193 @@ export function LocalAudioEngine() {
     }
   }, [playbackRate]);
 
-  // Hand off to a native media element before the page is backgrounded or hidden.
+  // Keep active user-unlocked audio playing seamlessly across tab switches / screen lock,
+  // using direct-deck handoff only as a guarded fallback if AudioContext suspends in background.
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    const handoffForBackground = () => {
+    let fallbackCheckTimer: number | null = null;
+
+    const clearFallbackTimer = () => {
+      if (fallbackCheckTimer !== null) {
+        window.clearTimeout(fallbackCheckTimer);
+        fallbackCheckTimer = null;
+      }
+    };
+
+    const keepAliveOrFallbackForBackground = () => {
       const graph = ensureAudioGraph();
       const state = usePlayerStore.getState();
       if (!graph || !state.isPlaying || isYoutubeIframeActive(state.activeStreamMeta)) return;
 
       startSilentKeepaliveAudio();
-      const effectiveVolume = isLocalTrack(state.currentTrack)
-        ? state.volume
-        : clampYoutubeVolume(
-            state.volume,
-            useSettingsStore.getState().youtubeSound.maxVolumeLimit,
-            state.isMuted,
-          );
-      void engageBackgroundDirectDeck(effectiveVolume, state.isMuted);
+      void resumeAudioContext();
+
+      clearFallbackTimer();
+      fallbackCheckTimer = window.setTimeout(() => {
+        fallbackCheckTimer = null;
+        if (document.visibilityState !== 'hidden') return;
+        const latest = usePlayerStore.getState();
+        if (!latest.isPlaying || isYoutubeIframeActive(latest.activeStreamMeta)) return;
+
+        const g = ensureAudioGraph();
+        if (!g || g.backgroundDirectActive) return;
+        const activeDeck = g.decks[g.activeDeck];
+        if (!activeDeck.src) return;
+
+        // Only switch to directDeck if AudioContext remained suspended or activeDeck stalled
+        if (g.ctx.state !== 'running') {
+          const effectiveVolume = isLocalTrack(latest.currentTrack)
+            ? latest.volume
+            : clampYoutubeVolume(
+                latest.volume,
+                useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+                latest.isMuted,
+              );
+          void engageBackgroundDirectDeck(effectiveVolume, latest.isMuted);
+        } else if (activeDeck.paused && !activeDeck.ended) {
+          void activeDeck.play().catch(() => {});
+        }
+      }, 350);
     };
 
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        handoffForBackground();
+        keepAliveOrFallbackForBackground();
         return;
       }
 
+      clearFallbackTimer();
       const graph = ensureAudioGraph();
+      const state = usePlayerStore.getState();
       if (graph?.backgroundDirectActive) {
         void restoreDspDeckFromBackground();
+      } else if (graph && state.isPlaying && !isYoutubeIframeActive(state.activeStreamMeta)) {
+        void resumeAudioContext();
+        startSilentKeepaliveAudio();
+        const activeEl = getActivePlaybackElement(graph);
+        if (activeEl.src && activeEl.paused && !activeEl.ended) {
+          void activeEl.play().catch(() => {});
+        }
       }
     };
 
     document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', handoffForBackground);
+    window.addEventListener('pagehide', keepAliveOrFallbackForBackground);
+    window.addEventListener('pageshow', onVisibility);
     return () => {
+      clearFallbackTimer();
       document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', handoffForBackground);
+      window.removeEventListener('pagehide', keepAliveOrFallbackForBackground);
+      window.removeEventListener('pageshow', onVisibility);
+    };
+  }, []);
+
+  // Native `'ended'` event listener across all audio elements so track advance never stalls
+  // when background tabs throttle setInterval timers.
+  const endGuardRef = useRef<{ sig: string; at: number } | null>(null);
+  const advanceOnTrackEnd = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    const graph = ensureAudioGraph();
+    if (!graph) return;
+
+    const triggerEndOnce = () => {
+      const st = usePlayerStore.getState();
+      if (!st.currentTrack || !st.isPlaying) return;
+      if (isYoutubeIframeActive(st.activeStreamMeta)) return;
+
+      const sig = `${getTrackUniqueId(st.currentTrack) || st.currentTrack.id}::${graph.activeDeck}`;
+      const now = Date.now();
+      if (
+        endGuardRef.current &&
+        endGuardRef.current.sig === sig &&
+        now - endGuardRef.current.at < 1500
+      ) {
+        return;
+      }
+      endGuardRef.current = { sig, at: now };
+
+      const activeIdx = graph.activeDeck;
+      const standbyIdx: 0 | 1 = activeIdx === 0 ? 1 : 0;
+      const activeAudio = getActivePlaybackElement(graph);
+      const settingsProfile = useSettingsStore.getState().localProfile;
+      const upcoming = st.manualQueue[0] ?? st.sourceQueue[0] ?? null;
+      const nextKey =
+        st.repeat !== 'one' && upcoming
+          ? isLocalTrack(upcoming)
+            ? getTrackUniqueId(upcoming)
+            : getPlayableVideoId(upcoming)
+          : null;
+
+      if (
+        !graph.backgroundDirectActive &&
+        !settingsProfile.directMode &&
+        transitionInProgressRef.current &&
+        nextKey &&
+        graph.trackIds[standbyIdx] === nextKey
+      ) {
+        activeAudio.pause();
+        graph.deckGains[activeIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
+        graph.deckGains[standbyIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
+        graph.activeDeck = standbyIdx;
+        graph.crossfadeTargetId = nextKey;
+        transitionInProgressRef.current = false;
+        st.handleTrackEnded();
+        return;
+      }
+
+      if (
+        !graph.backgroundDirectActive &&
+        !settingsProfile.directMode &&
+        settingsProfile.gaplessPlayback &&
+        nextKey &&
+        graph.trackIds[standbyIdx] === nextKey &&
+        graph.decks[standbyIdx].readyState >= 2
+      ) {
+        const standby = graph.decks[standbyIdx];
+        standby.currentTime = 0;
+        void standby
+          .play()
+          .then(() => {
+            activeAudio.pause();
+            graph.deckGains[activeIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
+            graph.deckGains[standbyIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
+            graph.activeDeck = standbyIdx;
+            graph.crossfadeTargetId = nextKey;
+            st.handleTrackEnded();
+          })
+          .catch(() => {
+            // Standby deck blocked without gesture in background — reuse unlocked deck
+            transitionInProgressRef.current = false;
+            st.handleTrackEnded();
+          });
+        return;
+      }
+
+      transitionInProgressRef.current = false;
+      st.handleTrackEnded();
+    };
+
+    advanceOnTrackEnd.current = triggerEndOnce;
+
+    const onDeckEnded = (el: HTMLAudioElement) => () => {
+      const g = ensureAudioGraph();
+      if (!g) return;
+      if (getActivePlaybackElement(g) !== el) return;
+      triggerEndOnce();
+    };
+
+    const d0Handler = onDeckEnded(graph.decks[0]);
+    const d1Handler = onDeckEnded(graph.decks[1]);
+    const directHandler = onDeckEnded(graph.directDeck);
+
+    graph.decks[0].addEventListener('ended', d0Handler);
+    graph.decks[1].addEventListener('ended', d1Handler);
+    graph.directDeck.addEventListener('ended', directHandler);
+    return () => {
+      graph.decks[0].removeEventListener('ended', d0Handler);
+      graph.decks[1].removeEventListener('ended', d1Handler);
+      graph.directDeck.removeEventListener('ended', directHandler);
     };
   }, []);
 
@@ -579,7 +728,26 @@ export function LocalAudioEngine() {
         if (st.isPlaying) {
           void resumeAudioContext();
           startSilentKeepaliveAudio();
-          void audio.play().catch((err: unknown) => {
+          void audio.play().then(() => {
+            if (document.visibilityState === 'hidden') {
+              window.setTimeout(() => {
+                if (document.visibilityState !== 'hidden') return;
+                const latest = usePlayerStore.getState();
+                const g = ensureAudioGraph();
+                if (!latest.isPlaying || !g || g.backgroundDirectActive) return;
+                if (g.ctx.state !== 'running') {
+                  const effectiveVol = isLocalTrack(latest.currentTrack)
+                    ? latest.volume
+                    : clampYoutubeVolume(
+                        latest.volume,
+                        useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+                        latest.isMuted,
+                      );
+                  void engageBackgroundDirectDeck(effectiveVol, latest.isMuted);
+                }
+              }, 250);
+            }
+          }).catch((err: unknown) => {
             if (!cancelled && err instanceof DOMException && err.name === 'NotAllowedError') {
               const latest = usePlayerStore.getState();
               latest.setIsPlaying(false);
@@ -1007,38 +1175,7 @@ export function LocalAudioEngine() {
       }
 
       if (dur > 0 && (audio.ended || dur - cur <= 0.06)) {
-        if (
-          !profile.directMode &&
-          transitionInProgressRef.current &&
-          nextInfo &&
-          graph.trackIds[standbyIdx] === nextInfo.key
-        ) {
-          audio.pause();
-          graph.deckGains[activeIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
-          graph.deckGains[standbyIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
-          graph.activeDeck = standbyIdx;
-          graph.crossfadeTargetId = nextInfo.key;
-          transitionInProgressRef.current = false;
-          store.handleTrackEnded();
-        } else if (
-          !profile.directMode &&
-          profile.gaplessPlayback &&
-          nextInfo &&
-          graph.trackIds[standbyIdx] === nextInfo.key &&
-          graph.decks[standbyIdx].readyState >= 2
-        ) {
-          audio.pause();
-          graph.deckGains[activeIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
-          graph.deckGains[standbyIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
-          graph.decks[standbyIdx].currentTime = 0;
-          void graph.decks[standbyIdx].play().catch(() => {});
-          graph.activeDeck = standbyIdx;
-          graph.crossfadeTargetId = nextInfo.key;
-          store.handleTrackEnded();
-        } else {
-          transitionInProgressRef.current = false;
-          store.handleTrackEnded();
-        }
+        advanceOnTrackEnd.current();
       }
     }, 100);
 

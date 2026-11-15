@@ -520,7 +520,7 @@ export function SearchPage({
       {!submittedQuery ? (
         <div className="space-y-6">
           {/* Top 6 Compact Colored Quick-Access Cards (IMG_4319 2-col mobile / 3x2 desktop) */}
-          <section aria-label="Mulai jelajahi" className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          <section aria-label="Mulai jelajahi" className="grid grid-cols-2 @[520px]:grid-cols-3 gap-2.5">
             {quickBrowseCards.map((card) => (
               <button
                 key={card.id}
@@ -618,7 +618,7 @@ export function SearchPage({
               <h2 id="discover-other-heading" className="text-lg font-extrabold text-[#E8FFF3] tracking-tight">
                 Temukan sesuatu yang lain
               </h2>
-              <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-3 overflow-x-auto md:overflow-visible pb-1 scrollbar-none snap-x [&>*]:w-[136px] [&>*]:shrink-0 [&>*]:snap-start md:[&>*]:w-auto">
+              <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-6 gap-3 overflow-x-auto @[440px]:overflow-visible pb-1 scrollbar-none snap-x [&>*]:w-[136px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
                 {discoverMoreItems.map((item, idx) => (
                   <MediaCard
                     key={`disc-${item.id}-${idx}`}
@@ -646,7 +646,7 @@ export function SearchPage({
                   Hapus semua
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 @[500px]:grid-cols-2 @[760px]:grid-cols-3 gap-2">
                 {recentSearches.map((entry, idx) => (
                   <div
                     key={`${entry.query}-${entry.uid ?? idx}`}
@@ -681,7 +681,7 @@ export function SearchPage({
             <h2 id="browse-categories-heading" className="text-lg font-extrabold text-[#E8FFF3] tracking-tight">
               Jelajahi semua
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 gap-3">
               {allBrowseCards.map((card) => (
                 <button
                   key={card.id}
@@ -987,7 +987,7 @@ export function SearchPage({
                   Artis, Album, Playlist & Podcast
                 </h2>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
                 {collectionItems.map((item, idx) => (
                   <MediaCard
                     key={`${item.id}-${idx}`}

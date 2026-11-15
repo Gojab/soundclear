@@ -225,15 +225,23 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
   deckGains[1].gain.value = 0;
 
   const inputBus = ctx.createGain();
+  inputBus.channelCount = 2;
+  inputBus.channelCountMode = 'explicit';
   const dspPathGain = ctx.createGain();
+  dspPathGain.channelCount = 2;
+  dspPathGain.channelCountMode = 'explicit';
   dspPathGain.gain.value = 1;
   const directBypassGain = ctx.createGain();
   directBypassGain.gain.value = 0;
 
   const testToneGain = ctx.createGain();
+  testToneGain.channelCount = 2;
+  testToneGain.channelCountMode = 'explicit';
   testToneGain.gain.value = 0.28;
 
   const preampNode = ctx.createGain();
+  preampNode.channelCount = 2;
+  preampNode.channelCountMode = 'explicit';
   const eqNodes: BiquadFilterNode[] = EQ_FREQUENCIES.map((freq, idx) => {
     const filter = ctx.createBiquadFilter();
     filter.type =
@@ -241,6 +249,8 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
     filter.frequency.value = freq;
     filter.Q.value = idx === 0 || idx === EQ_FREQUENCIES.length - 1 ? 0.707 : 1.4;
     filter.gain.value = 0;
+    filter.channelCount = 2;
+    filter.channelCountMode = 'explicit';
     return filter;
   });
 
@@ -249,6 +259,8 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
   bassBoostNode.frequency.value = 80;
   bassBoostNode.Q.value = 0.707;
   bassBoostNode.gain.value = 0;
+  bassBoostNode.channelCount = 2;
+  bassBoostNode.channelCountMode = 'explicit';
 
   // Stereo Widener M/S matrix: L_out = 0.5*(L+R) + S*0.5*(L-R), R_out = 0.5*(L+R) - S*0.5*(L-R)
   const splitter = ctx.createChannelSplitter(2);
@@ -366,8 +378,11 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
     if (
       sharedGraph &&
       (sharedGraph.ctx.state === 'suspended' || (sharedGraph.ctx.state as string) === 'interrupted') &&
-      sharedGraph.decks.some((d) => !d.paused)
+      (sharedGraph.decks.some((d) => !d.paused) ||
+        sharedGraph.backgroundDirectActive ||
+        testToneMode !== null)
     ) {
+      startSilentKeepaliveAudio();
       void sharedGraph.ctx.resume().catch(() => {});
     }
     notifyDiagnosticsListeners();
@@ -500,8 +515,11 @@ function installFirstGestureResume(): void {
     if (
       graph &&
       (graph.ctx.state === 'suspended' || (graph.ctx.state as string) === 'interrupted') &&
-      graph.decks.some((d) => !d.paused)
+      (graph.decks.some((d) => !d.paused) ||
+        graph.backgroundDirectActive ||
+        testToneMode !== null)
     ) {
+      startSilentKeepaliveAudio();
       void graph.ctx.resume().then(notifyDiagnosticsListeners).catch(() => {});
     }
   });
@@ -509,6 +527,32 @@ function installFirstGestureResume(): void {
 
 export function getSharedAudioAnalyser(): AnalyserNode | null {
   return sharedGraph?.analyser ?? null;
+}
+
+export function getLiveEqNodeSnapshot(): {
+  contextState: AudioContextState | 'unavailable';
+  bandGainsDb: number[];
+  preampGainLinear: number;
+  bassBoostGainDb: number;
+  widenerSideGain: number;
+} {
+  const g = sharedGraph;
+  if (!g) {
+    return {
+      contextState: 'unavailable',
+      bandGainsDb: [],
+      preampGainLinear: 1,
+      bassBoostGainDb: 0,
+      widenerSideGain: 1,
+    };
+  }
+  return {
+    contextState: g.ctx.state,
+    bandGainsDb: g.eqNodes.map((n) => Math.round(n.gain.value * 100) / 100),
+    preampGainLinear: Math.round(g.preampNode.gain.value * 1000) / 1000,
+    bassBoostGainDb: Math.round(g.bassBoostNode.gain.value * 100) / 100,
+    widenerSideGain: Math.round(g.widenerSideGain.gain.value * 1000) / 1000,
+  };
 }
 
 export function applyAudioProfileToGraph(params: {

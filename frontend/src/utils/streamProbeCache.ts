@@ -74,8 +74,8 @@ function isBotOrRateLimitFallback(meta: StreamAudioMetaResponse): boolean {
   if (meta.available !== false || meta.fallbackMode !== 'youtube-iframe') {
     return false;
   }
-  const reason = (meta.reason || '').toLowerCase();
-  if (!reason) return true;
+  const reason = (meta.reason || '').toLowerCase().trim();
+  if (!reason) return false;
   return (
     reason.includes('dibatasi') ||
     reason.includes('verifikasi') ||

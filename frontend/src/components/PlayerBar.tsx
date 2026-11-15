@@ -141,7 +141,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   return (
     <footer
       aria-label="Pemutar musik"
-      className={`hidden md:grid grid-cols-[minmax(0,1fr)_minmax(360px,1.45fr)_minmax(0,1fr)] items-center gap-4 h-[84px] shrink-0 px-4 relative z-30 transition-colors duration-300 ${
+      className={`hidden md:grid grid-cols-[minmax(160px,1fr)_minmax(240px,1.35fr)_minmax(180px,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(340px,1.45fr)_minmax(0,1fr)] items-center gap-2 lg:gap-4 h-[84px] shrink-0 px-3 lg:px-4 relative z-30 transition-colors duration-300 ${
         glassPanels
           ? 'bg-black/55 backdrop-blur-xl border-t border-[#B3F7D1]/[0.08]'
           : bgActive
@@ -167,7 +167,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                 roundedClass="rounded-md"
               />
             </button>
-            <div className="min-w-0 max-w-[210px] xl:max-w-[250px]">
+            <div className="min-w-0 max-w-[140px] lg:max-w-[200px] xl:max-w-[250px]">
               <p className="text-sm font-semibold text-[#E8FFF3] truncate hover:underline cursor-pointer" onClick={() => setFullscreenNowPlaying(true)}>
                 {currentTrack.title}
               </p>
@@ -339,7 +339,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
       </div>
 
       {/* Right: Lyrics/Karaoke, Queue, Panel toggle, Speaker & Volume, PiP, Fullscreen */}
-      <div ref={popoverRef} className="flex items-center justify-end gap-1 relative">
+      <div ref={popoverRef} className="flex items-center justify-end gap-0.5 lg:gap-1 relative">
         <button
           type="button"
           onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
@@ -438,7 +438,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             style={{
               background: `linear-gradient(to right, #19EE8A ${(effectiveVolume / maxVolumeCap) * 100}%, rgba(179,247,209,0.22) ${(effectiveVolume / maxVolumeCap) * 100}%)`,
             }}
-            className="sc-range w-24 h-1 rounded-full"
+            className="sc-range w-14 lg:w-20 xl:w-24 h-1 rounded-full"
           />
         </div>
 

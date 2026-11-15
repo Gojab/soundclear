@@ -181,24 +181,9 @@ export function YouTubePlayerBridge() {
     };
   }, []);
 
-  // Media Session API (artwork thumbnail + music metadata + full lockscreen transport actions)
+  // Register Media Session transport action handlers once on mount
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !currentTrack) return;
-
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title,
-        artist: formatArtists(currentTrack.artists),
-        album: currentTrack.album?.name || 'SoundClear',
-        artwork: currentTrack.thumbnail
-          ? [{ src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' }]
-          : [],
-      });
-    } catch {
-      // Ignore
-    }
-
-    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    if (!('mediaSession' in navigator)) return;
 
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ['play', () => usePlayerStore.getState().setIsPlaying(true)],
@@ -259,6 +244,26 @@ export function YouTubePlayerBridge() {
     return () => {
       document.removeEventListener('visibilitychange', syncVisibilityPosition);
     };
+  }, []);
+
+  // Update Media Session artwork metadata & playbackState when active track or playing changes
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !currentTrack) return;
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: formatArtists(currentTrack.artists),
+        album: currentTrack.album?.name || 'SoundClear',
+        artwork: currentTrack.thumbnail
+          ? [{ src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' }]
+          : [],
+      });
+    } catch {
+      // Ignore
+    }
+
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
   }, [currentTrack, isPlaying]);
 
   // Pre-warm YouTube IFrame API & standby hidden player immediately on mount for 0ms fallback startup
@@ -338,6 +343,14 @@ export function YouTubePlayerBridge() {
                 st.setIsBuffering(true);
               } else if (stateCode === 2) {
                 st.setIsBuffering(false);
+                if (st.isPlaying && document.visibilityState === 'hidden') {
+                  startSilentKeepaliveAudio();
+                  try {
+                    event.target.playVideo();
+                  } catch {
+                    // Ignore background resume error
+                  }
+                }
               } else if (stateCode === 0) {
                 st.handleTrackEnded();
               }
@@ -392,10 +405,9 @@ export function YouTubePlayerBridge() {
       }
     };
 
-    const onVisibilityRecover = () => {
-      if (document.visibilityState === 'visible') {
-        void acquireWakeLock();
-      }
+    const recoverTimers: number[] = [];
+
+    const checkAndRecoverYt = () => {
       const st = usePlayerStore.getState();
       if (
         st.isPlaying &&
@@ -415,10 +427,25 @@ export function YouTubePlayerBridge() {
       }
     };
 
+    const onVisibilityRecover = () => {
+      if (document.visibilityState === 'visible') {
+        void acquireWakeLock();
+      }
+      recoverTimers.forEach((id) => window.clearTimeout(id));
+      recoverTimers.length = 0;
+
+      checkAndRecoverYt();
+      if (document.visibilityState === 'hidden') {
+        recoverTimers.push(window.setTimeout(checkAndRecoverYt, 250));
+        recoverTimers.push(window.setTimeout(checkAndRecoverYt, 800));
+      }
+    };
+
     void acquireWakeLock();
     document.addEventListener('visibilitychange', onVisibilityRecover);
     return () => {
       disposed = true;
+      recoverTimers.forEach((id) => window.clearTimeout(id));
       document.removeEventListener('visibilitychange', onVisibilityRecover);
       if (wakeSentinel) {
         void wakeSentinel.release().catch(() => {});
@@ -709,6 +736,14 @@ export function YouTubePlayerBridge() {
               } else if (stateCode === 2) {
                 // PAUSED
                 st.setIsBuffering(false);
+                if (st.isPlaying && document.visibilityState === 'hidden') {
+                  startSilentKeepaliveAudio();
+                  try {
+                    event.target.playVideo();
+                  } catch {
+                    // Ignore background resume error
+                  }
+                }
               } else if (stateCode === 0) {
                 // ENDED
                 st.handleTrackEnded();
@@ -808,6 +843,10 @@ export function YouTubePlayerBridge() {
         const cur = p.getCurrentTime?.() ?? 0;
         const dur = p.getDuration?.() ?? 0;
         const store = usePlayerStore.getState();
+        if (p.getPlayerState?.() === 0 && store.isPlaying) {
+          store.handleTrackEnded();
+          return;
+        }
         if (Number.isFinite(cur) && cur >= 0) {
           store.setProgress(cur, dur > 0 ? dur : undefined);
         }
@@ -839,7 +878,7 @@ export function YouTubePlayerBridge() {
     <div
       ref={iframeHostRef}
       aria-hidden="true"
-      className="fixed bottom-0 right-0 w-[200px] h-[112px] opacity-[0.001] pointer-events-none -z-10 overflow-hidden"
+      className="fixed bottom-0 right-0 w-[200px] h-[112px] opacity-[0.01] pointer-events-none z-0 overflow-hidden"
     />
   );
 }

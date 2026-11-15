@@ -613,7 +613,7 @@ export function LibraryOverviewPage({
 
           {/* Quick Spotlight Cards in 'Semua' */}
           {selectedFolderId === 'all' && filterType === 'all' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 @[660px]:grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => navigate({ name: 'liked' })}
@@ -700,7 +700,7 @@ export function LibraryOverviewPage({
               <p className="text-sm text-[#B3F7D1]/80">Belum ada item di filter koleksi ini.</p>
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
               {entries.map((entry) => (
                 <div
                   key={`${entry.kind}-${entry.id}`}

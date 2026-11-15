@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   bassBoostLevelToDb,
+  buildSmoothSvgCurvePath,
   BUILTIN_EQ_PRESETS,
   clampCrossfadeSeconds,
   clampEqGainDb,
@@ -16,6 +17,8 @@ import {
   computeUnmutedVolume,
   EQ_FREQUENCIES,
   estimateLoudnessFromRms,
+  formatEqBandShortLabel,
+  formatEqDb,
   getNextPlaybackRate,
   NORMALIZATION_TARGETS_LUFS,
   preampDbToLinear,
@@ -320,4 +323,37 @@ test('resolveTargetStreamQuality adapts to Data Saver and slow network stalls', 
   assert.equal(resolveTargetStreamQuality(baseProfile, true, false, '3g', 0), 'normal');
   assert.equal(resolveTargetStreamQuality(baseProfile, true, false, '4g', 1), 'high');
 });
+
+test('EQ short labels, dB formatting, and smooth Bezier SVG curve path work cleanly', () => {
+  assert.equal(formatEqBandShortLabel(31), '31');
+  assert.equal(formatEqBandShortLabel(500), '500');
+  assert.equal(formatEqBandShortLabel(1000), '1K');
+  assert.equal(formatEqBandShortLabel(16000), '16K');
+
+  assert.equal(formatEqDb(0), '0');
+  assert.equal(formatEqDb(-0), '0');
+  assert.equal(formatEqDb(6), '+6');
+  assert.equal(formatEqDb(-3.5), '-3.5');
+
+  const empty = buildSmoothSvgCurvePath([], 50);
+  assert.deepEqual(empty, { strokePath: '', fillPath: '' });
+
+  const single = buildSmoothSvgCurvePath([{ x: 10, y: 20 }], 50);
+  assert.equal(single.strokePath, 'M10 20');
+  assert.match(single.fillPath, /L10 50 Z$/);
+
+  const smooth = buildSmoothSvgCurvePath(
+    [
+      { x: 10, y: 50 },
+      { x: 50, y: 25 },
+      { x: 90, y: 40 },
+      { x: 130, y: 30 },
+    ],
+    56,
+  );
+  assert.ok(smooth.strokePath.startsWith('M10 50 '));
+  assert.ok(smooth.strokePath.includes(' C'), 'Expected cubic Bezier C segments');
+  assert.ok(smooth.fillPath.endsWith('L130 56 L10 56 Z'));
+});
+
 

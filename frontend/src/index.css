@@ -184,6 +184,46 @@ input[type="range"].sc-range-visible::-moz-range-thumb {
   border: 2px solid #0F1F17;
 }
 
+/* Native accessible vertical slider overlay for Spotify-clean EQ faders */
+input[type="range"].sc-eq-vertical {
+  -webkit-appearance: none;
+  appearance: none;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  cursor: ns-resize;
+}
+
+input[type="range"].sc-eq-vertical::-webkit-slider-runnable-track {
+  background: transparent;
+  width: 100%;
+}
+
+input[type="range"].sc-eq-vertical::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+}
+
+input[type="range"].sc-eq-vertical::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+
+input[type="range"].sc-eq-vertical::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+}
+
 @keyframes sc-notch-marquee {
   0%,
   16% {

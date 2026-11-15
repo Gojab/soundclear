@@ -265,7 +265,7 @@ export function RightPanel({ onAddToPlaylist }: RightPanelProps) {
   return (
     <aside
       aria-label="Panel sedang diputar"
-      className={`hidden lg:flex flex-col w-[312px] xl:w-[348px] shrink-0 rounded-lg overflow-hidden transition-all duration-200 border border-white/[0.08] ${
+      className={`hidden lg:flex flex-col w-[276px] xl:w-[336px] shrink-0 rounded-lg overflow-hidden transition-all duration-200 border border-white/[0.08] ${
         glassPanels
           ? 'bg-black/35'
           : bgActive

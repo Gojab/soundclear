@@ -232,7 +232,7 @@ export default function App() {
 
   return (
     <div
-      className={`relative h-screen w-screen overflow-hidden ${
+      className={`relative h-[100dvh] w-full overflow-hidden ${
         bgActive ? 'bg-transparent' : 'bg-black'
       } text-[#E8FFF3] flex flex-col`}
     >
@@ -240,7 +240,7 @@ export default function App() {
 
       {/* Desktop Top Bar */}
       <header
-        className={`relative hidden md:flex items-center justify-between gap-4 px-3 h-15 shrink-0 z-20 transition-[background-color,padding,height] duration-300 ${
+        className={`relative hidden md:flex items-center justify-between gap-2.5 lg:gap-4 px-3 h-15 shrink-0 z-20 transition-[background-color,padding,height] duration-300 ${
           glassPanels
             ? 'bg-black/30 border-b border-white/[0.08]'
             : bgActive
@@ -289,7 +289,7 @@ export default function App() {
         </div>
 
         {/* Center: Circular Home + Pill Search Bar with Moods Browse */}
-        <div className="flex items-center gap-2 flex-1 max-w-[540px] mx-auto">
+        <div className="flex items-center gap-2 flex-1 min-w-0 max-w-[540px] mx-auto">
           <button
             type="button"
             onClick={() => navigate({ name: 'home' })}
@@ -446,7 +446,7 @@ export default function App() {
         </div>
 
         {/* Right: Real SoundClear utility controls + PWA Install */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 lg:gap-1.5 shrink-0">
           <PWAInstallButton variant="compact" />
 
           <button
@@ -515,7 +515,7 @@ export default function App() {
 
         <main
           ref={mainScrollRef}
-          className={`flex-1 min-w-0 md:rounded-lg overflow-y-auto flex flex-col relative transition-colors duration-300 border border-white/[0.08] ${
+          className={`@container flex-1 min-w-0 md:rounded-lg overflow-y-auto flex flex-col relative transition-colors duration-300 border-0 md:border md:border-white/[0.08] ${
             glassPanels
               ? 'bg-black/25'
               : bgActive
@@ -588,11 +588,7 @@ export default function App() {
           )}
 
           {/* Scrollable page body */}
-          <div
-            className={`relative z-10 flex-1 px-4 sm:px-6 py-4 ${
-              currentTrack ? 'pb-40 md:pb-8' : 'pb-24 md:pb-8'
-            }`}
-          >
+          <div className="relative z-10 flex-1 px-4 sm:px-6 py-4 pb-4 md:pb-6">
             {currentRoute.name === 'home' && (
               <HomePage
                 onAddToPlaylist={openAddToPlaylistModal}
@@ -708,7 +704,14 @@ export default function App() {
           </div>
 
           <Footer />
-          <div className={currentTrack ? 'h-32 md:h-2 shrink-0' : 'h-16 md:h-2 shrink-0'} aria-hidden="true" />
+          <div
+            className={
+              currentTrack
+                ? 'h-[calc(132px+env(safe-area-inset-bottom,0px))] md:h-2 shrink-0'
+                : 'h-[calc(68px+env(safe-area-inset-bottom,0px))] md:h-2 shrink-0'
+            }
+            aria-hidden="true"
+          />
         </main>
 
         <RightPanel onAddToPlaylist={openAddToPlaylistModal} />

@@ -98,3 +98,21 @@ test('global YouTube bot-block fast-routes 11-char YouTube IDs in 0ms without hi
   assert.equal(isGlobalYoutubeBlocked(4999), true);
   assert.equal(isGlobalYoutubeBlocked(5100), false);
 });
+
+test('non-bot empty fallback reason does not trigger global YouTube block', async () => {
+  resetProbeCacheForTests();
+  const res = await probeStreamWithCache(
+    'nonBot12345',
+    { quality: 'high' },
+    async (vid) =>
+      makeMeta({
+        trackId: vid,
+        available: false,
+        fallbackMode: 'youtube-iframe',
+        reason: null,
+      }),
+    Date.now(),
+  );
+  assert.equal(res.fallbackMode, 'youtube-iframe');
+  assert.equal(isGlobalYoutubeBlocked(), false);
+});

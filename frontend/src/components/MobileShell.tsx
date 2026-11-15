@@ -146,7 +146,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
               setMobileExpanded(true);
             }
           }}
-          className={`md:hidden fixed left-2 right-2 bottom-[64px] z-30 rounded-xl overflow-hidden border border-white/[0.14] shadow-2xl ${
+          className={`md:hidden fixed left-2 right-2 bottom-[calc(66px+env(safe-area-inset-bottom,0px))] z-30 rounded-xl overflow-hidden border border-white/[0.14] shadow-2xl ${
             glassPanels ? 'bg-black/60 backdrop-blur-2xl' : 'bg-[#0B0F0D]/85 backdrop-blur-2xl'
           }`}
         >
@@ -241,7 +241,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
           }}
         >
           {/* Top Bar */}
-          <div className="pt-3 pb-2 px-4 flex items-center justify-between gap-2 shrink-0">
+          <div className="pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 px-4 flex items-center justify-between gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setMobileExpanded(false)}
@@ -268,9 +268,9 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
             </button>
           </div>
 
-          <div className="flex-1 flex flex-col justify-between px-6 pb-8 pt-2 gap-6">
+          <div className="flex-1 flex flex-col justify-between px-6 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-2 gap-6">
             {/* Large Square Cover Art */}
-            <div className="w-full max-w-[330px] aspect-square mx-auto shadow-2xl shadow-black/60 rounded-2xl overflow-hidden">
+            <div className="w-[min(78vw,36svh,330px)] aspect-square mx-auto shadow-2xl shadow-black/60 rounded-2xl overflow-hidden">
               <ArtworkImage
                 src={currentTrack.thumbnail}
                 alt={currentTrack.title}
@@ -473,7 +473,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
             onClick={() => setQueueDrawerOpen(false)}
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           />
-          <div className="relative z-10 w-full max-h-[80vh] rounded-t-3xl bg-[#101513] border-t border-white/[0.12] flex flex-col overflow-hidden">
+          <div className="relative z-10 w-full max-h-[82dvh] rounded-t-3xl bg-[#101513] border-t border-white/[0.12] flex flex-col overflow-hidden">
             <div className="px-5 py-3.5 border-b border-white/[0.08] flex items-center justify-between">
               <h3 className="text-sm font-bold text-[#E8FFF3]">Antrean Pemutaran</h3>
               <button
@@ -485,7 +485,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 pb-8">
+            <div className="flex-1 overflow-y-auto p-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
               <QueueView />
             </div>
           </div>
@@ -503,7 +503,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
 
       {/* Quick Create Menu Sheet (triggered by "Buat" tab) */}
       {createMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center p-3 pb-20">
+        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center p-3 pb-[calc(76px+env(safe-area-inset-bottom,0px))]">
           <button
             type="button"
             aria-label="Tutup menu buat"
@@ -581,7 +581,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
       {/* Mobile Bottom Tab Bar (5 tabs) */}
       <nav
         aria-label="Navigasi seluler"
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[60px] backdrop-blur-2xl border-t border-white/[0.1] grid grid-cols-5 ${
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(60px+env(safe-area-inset-bottom,0px))] pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-2xl border-t border-white/[0.1] grid grid-cols-5 ${
           glassPanels ? 'bg-black/65' : 'bg-[#080B09]/90'
         }`}
       >
