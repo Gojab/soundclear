@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 180" width="100%" role="img" aria-label="SoundClear Web Audio DSP Signal Pipeline">
+  <defs>
+    <linearGradient id="pipe-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070B0A" />
+      <stop offset="100%" stop-color="#0B1310" />
+    </linearGradient>
+    <linearGradient id="node-accent" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#14221D" />
+      <stop offset="100%" stop-color="#0D1613" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="180" rx="18" fill="url(#pipe-bg)" stroke="#FFFFFF" stroke-opacity="0.09" />
+  <text x="32" y="34" fill="#8EA69B" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" letter-spacing="1.6">WEB AUDIO API · SIGNAL PROCESSING CHAIN</text>
+
+  <!-- Signal bus line -->
+  <line x1="90" y1="102" x2="1110" y2="102" stroke="#2EE6A6" stroke-opacity="0.24" stroke-width="2" />
+
+  <!-- Traveling signal pulses -->
+  <circle cx="90" cy="102" r="4.5" fill="#2EE6A6">
+    <animate attributeName="cx" values="90;1110" dur="3.2s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="3.2s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="90" cy="102" r="3" fill="#FFFFFF">
+    <animate attributeName="cx" values="90;1110" dur="3.2s" begin="1.6s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0;0.9;0.9;0" keyTimes="0;0.08;0.92;1" dur="3.2s" begin="1.6s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Stage Nodes -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <g transform="translate(32, 66)">
+      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">01 · INPUT</text>
+      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Stream / Local</text>
+      <text x="16" y="64" fill="#8EA69B" font-size="11">Range · FLAC · MP3</text>
+    </g>
+
+    <g transform="translate(226, 66)">
+      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">02 · GAIN</text>
+      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Preamp &amp; LUFS</text>
+      <text x="16" y="64" fill="#8EA69B" font-size="11">ReplayGain · -14 LUFS</text>
+    </g>
+
+    <g transform="translate(420, 66)">
+      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#2EE6A6" stroke-opacity="0.35" />
+      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">03 · FILTER</text>
+      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">10-Band EQ</text>
+      <text x="16" y="64" fill="#8EA69B" font-size="11">BiquadFilterNode</text>
+    </g>
+
+    <g transform="translate(614, 66)">
+      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">04 · SPACE</text>
+      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Bass &amp; Widener</text>
+      <text x="16" y="64" fill="#8EA69B" font-size="11">Mono · Balance L/R</text>
+    </g>
+
+    <g transform="translate(808, 66)">
+      <rect width="164" height="72" rx="12" fill="url(#node-accent)" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">05 · SAFETY</text>
+      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Limiter &amp; Fade</text>
+      <text x="16" y="64" fill="#8EA69B" font-size="11">Equal-Power · Gapless</text>
+    </g>
+
+    <g transform="translate(1002, 66)">
+      <rect width="166" height="72" rx="12" fill="url(#node-accent)" stroke="#2EE6A6" stroke-opacity="0.35" />
+      <text x="16" y="28" fill="#2EE6A6" font-family="ui-monospace, monospace" font-size="10" font-weight="600">06 · OUTPUT</text>
+      <text x="16" y="49" fill="#FFFFFF" font-size="14" font-weight="700">Device &amp; FFT</text>
+      <text x="16" y="64" fill="#8EA69B" font-size="11">setSinkId · Analyser</text>
+    </g>
+  </g>
+</svg>

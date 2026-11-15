@@ -1,143 +1,175 @@
 <div align="center">
 
-<img src="public/icon.svg" alt="SoundClear Logo" width="88" height="88" />
+<br />
 
-# SoundClear
+<img src="public/assets/aistudio/75DD2556-E7B1-4261-84AE-EE04912ABEF1_8c38c95c.png" alt="SoundClear Logo" width="84" height="84" />
 
-**Modern High-Fidelity Web Music Player, Web Audio DSP Engine & Synced Karaoke Experience**
+<br /><br />
 
-[![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=0A0A0A)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-7.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-8.3-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Python_3.10+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![PWA](https://img.shields.io/badge/PWA-Offline_Ready-2EE6A6?style=for-the-badge&logo=pwa&logoColor=06130E)](https://web.dev/progressive-web-apps/)
-[![Copyright](https://img.shields.io/badge/%C2%A9_2026-zhafx.corp-06130E?style=for-the-badge&labelColor=2EE6A6)](https://github.com/Gojab/SoundClearr)
+<img src="docs/hero-banner.svg" alt="SoundClear — Studio-Grade Web Audio Music Player" width="100%" />
 
-*Dibangun untuk kejernihan suara maksimal, antarmuka kaca gelap yang adaptif, pemrosesan DSP real-time di browser, serta dukungan offline & Windows Dynamic Notch.*
+<br />
 
-[Fitur Utama](#-fitur-utama) · [Arsitektur](#-arsitektur-sistem) · [Mulai Cepat](#-mulai-cepat) · [Variabel Lingkungan](#-variabel-lingkungan) · [API Backend](#-ringkasan-api-backend) · [Lisensi & Hak Cipta](#-hak-cipta--proteksi)
+[![React](https://img.shields.io/badge/React-19.0-111827?style=flat-square&logo=react&logoColor=2EE6A6)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7.0-111827?style=flat-square&logo=typescript&logoColor=2EE6A6)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-8.3-111827?style=flat-square&logo=vite&logoColor=2EE6A6)](https://vite.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.3-111827?style=flat-square&logo=tailwindcss&logoColor=2EE6A6)](https://tailwindcss.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Python_3.10+-111827?style=flat-square&logo=fastapi&logoColor=2EE6A6)](https://fastapi.tiangolo.com/)
+[![PWA](https://img.shields.io/badge/PWA-Offline_Ready-111827?style=flat-square&logo=pwa&logoColor=2EE6A6)](https://web.dev/progressive-web-apps/)
+[![Windows Notch](https://img.shields.io/badge/Windows-Dynamic_Notch-111827?style=flat-square&logo=electron&logoColor=2EE6A6)](desktop-windows/README.md)
+
+<p>
+  <a href="#kapabilitas-inti">Kapabilitas</a> &nbsp;·&nbsp;
+  <a href="#arsitektur-sistem">Arsitektur</a> &nbsp;·&nbsp;
+  <a href="#mulai-cepat">Mulai Cepat</a> &nbsp;·&nbsp;
+  <a href="#referensi-teknis">Referensi Teknis</a> &nbsp;·&nbsp;
+  <a href="#windows-dynamic-notch">Desktop Notch</a>
+</p>
 
 </div>
 
----
+<img src="docs/wave-divider.svg" alt="" width="100%" />
 
-## ✨ Fitur Utama
+## Kapabilitas Inti
 
-### 🎚️ Mesin Audio Web DSP Fidelitas Tinggi
-- **Equalizer 10-Band Real-Time**: Kurva respon frekuensi SVG interaktif berbasis `BiquadFilterNode`, lengkap dengan preset bawaan dan preset kustom tersimpan.
-- **Bass Boost & Stereo Widener**: Penguatan frekuensi rendah dan perluasan panggung suara stereo dengan kontrol intensitas 0–100%.
-- **Normalisasi Kenyaringan & Dinamika**: Target LUFS (`Quiet`, `Normal`, `Loud`), dukungan `ReplayGain`, `Limiter` anti-kliping, kontrol keseimbangan L/R, dan mode *Mono Audio*.
-- **Transisi Halus & Output Fleksibel**: *Equal-power crossfade* (`0–12` detik), *Gapless Playback*, *Direct Mode*, pemilihan perangkat output audio, *Spectrum Analyzer* real-time, serta generator *Test Tone* diagnostik.
+**SoundClear** dirancang dengan pendekatan pemrosesan audio tingkat studio langsung di browser—menggabungkan mesin Web Audio API DSP real-time, katalog streaming adaptif, pustaka offline berbasis IndexedDB, lirik karaoke tersinkronisasi, dan antarmuka kaca gelap yang mengikuti palet warna sampul album.
 
-### 🎵 Katalog Musik, Streaming & Pustaka Offline
-- **Integrasi Katalog Lengkap**: Beranda rekomendasi, Tangga Lagu Indonesia, Rak Mood & Genre, Pencarian + Saran Otomatis, Profil Artis, Album, Playlist, dan Podcast lengkap dengan pelacakan progres episode.
-- **Streaming Adaptif & Fallback Pintar**: Endpoint streaming byte-range (`/api/stream/{video_id}`) dengan dukungan penyesuaian kualitas otomatis (*Data Saver* & kondisi jaringan) serta fallback mulus ke *YouTube IFrame Player*.
-- **Impor Musik Lokal & Unduhan Offline**: Impor file pribadi (`MP3`, `FLAC`, `WAV`, `OGG`) lengkap dengan pembacaan metadata & sampul album (`music-metadata-browser`), tersimpan aman di **IndexedDB (`Dexie`)** dan **Cache Storage**.
-- **Manajemen Koleksi & Rekap**: Playlist lokal & folder, lagu disukai, artis diikuti, histori pemutaran, serta halaman **Rekap** analitik pendengar (`4 minggu`, `6 bulan`, `sepanjang waktu`).
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Web Audio DSP Engine</h3>
+      <p>Rantai pemrosesan sinyal real-time tanpa latensi berlebih langsung di browser.</p>
+      <ul>
+        <li><strong>Equalizer 10-Band</strong> berbasis <code>BiquadFilterNode</code> dengan kurva respon SVG live serta preset bawaan &amp; kustom.</li>
+        <li><strong>Bass Boost &amp; Stereo Widener</strong> dengan kontrol intensitas presisi <code>0–100%</code>.</li>
+        <li><strong>Normalisasi LUFS &amp; ReplayGain</strong> (<code>Quiet</code>, <code>Normal</code>, <code>Loud</code>) plus <em>Dynamics Limiter</em> anti-kliping.</li>
+        <li><strong>Transisi Equal-Power Crossfade</strong> (<code>0–12 detik</code>), <em>Gapless Playback</em>, <em>Direct Mode</em>, <em>Spectrum Analyzer</em> FFT, dan pemilihan perangkat output audio.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Katalog, Streaming &amp; Offline</h3>
+      <p>Akses musik online dan koleksi pribadi dalam satu antarmuka terpadu.</p>
+      <ul>
+        <li><strong>Katalog Lengkap</strong>: Beranda rekomendasi, Tangga Lagu Indonesia, Mood &amp; Genre, Pencarian multi-filter, Artis, Album, Playlist, serta Podcast.</li>
+        <li><strong>Streaming Byte-Range</strong> lewat <code>/api/stream/{video_id}</code> dengan penyesuaian kualitas otomatis &amp; fallback ke pemutar YouTube.</li>
+        <li><strong>Impor Audio Lokal</strong> (<code>MP3</code>, <code>FLAC</code>, <code>WAV</code>, <code>OGG</code>) dengan ekstraksi tag &amp; sampul via <code>music-metadata-browser</code>.</li>
+        <li><strong>Penyimpanan Offline</strong> persisten di <strong>IndexedDB (Dexie)</strong> &amp; <strong>Cache Storage</strong> beserta halaman analitik <strong>Rekap</strong>.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Visual Adaptif &amp; Lirik Karaoke</h3>
+      <p>Permukaan gelap bertingkat yang bereaksi terhadap musik yang sedang diputar.</p>
+      <ul>
+        <li><strong>Dynamic Ambient Theme</strong> mengekstrak warna dominan sampul album melalui <code>/api/artwork-color</code>.</li>
+        <li><strong>Kustomisasi Latar</strong> mendukung mode <em>Ambient</em>, <em>Preset</em>, <em>Warna Solid</em>, <em>Gradien</em>, hingga unggah gambar kustom dengan kontrol blur &amp; <em>panel glass</em>.</li>
+        <li><strong>Lirik Tersinkronisasi</strong> per baris di panel kanan maupun mode layar penuh (<em>Karaoke View</em>).</li>
+        <li><strong>Shell Mobile &amp; PWA</strong> siap dipasang sebagai aplikasi mandiri di desktop maupun seluler.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Windows Dynamic Notch</h3>
+      <p>Pemutar mini melayang di atas layar dengan lirik berjalan secara real-time.</p>
+      <ul>
+        <li><strong>In-Web &amp; External PiP</strong> untuk kontrol cepat dan tampilan lirik live tanpa meninggalkan aplikasi lain.</li>
+        <li><strong>Pembungkus Electron Khusus Windows</strong> pada direktori <code>desktop-windows/</code>.</li>
+        <li><strong>Frameless &amp; Click-Through</strong> dengan penempatan otomatis di tengah atas monitor utama, monitor aktif, atau layar eksternal pilihan.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
 
-### 🪩 Pengalaman Visual, Lirik & Desktop Notch
-- **Antarmuka Kaca Gelap Adaptif**: Ekstraksi warna ambient dari sampul lagu secara otomatis (`/api/artwork-color`) + kustomisasi latar (*Ambient*, *Preset*, *Warna Solid*, *Gradien*, atau *Gambar Kustom* dengan kontrol blur & *panel glass*).
-- **Lirik Tersinkron & Mode Karaoke**: Tampilan lirik tersinkronisasi per baris secara real-time di panel kanan maupun layar penuh (`FullscreenKaraokeModal`).
-- **Windows Dynamic Notch Mini Player**: Pil mini player di bagian atas layar dengan lirik live; tersedia pula pembungkus desktop **khusus Windows** (`desktop-windows/`) berbasis Electron (*frameless*, transparan, *click-through*, dan pemilihan monitor).
-- **PWA & Responsif**: Mendukung instalasi *Progressive Web App* (`vite-plugin-pwa`) dengan shell khusus perangkat seluler (`MobileShell`).
+<br />
 
-### 🛡️ Backend Copyright Guard (`zhafx.corp`)
-- Aturan kepemilikan dan atribusi `© 2026 zhafx.corp` dikunci di backend (`backend/copyright_guard.py`) dengan verifikasi integritas ganda pada **FastAPI** dan **Node.js (`server.ts`)**.
-- Dilengkapi verifikasi kata sandi berbasis **PBKDF2-HMAC-SHA256** tersalt (*constant-time comparison*), *rate limiting* anti *brute-force*, dan penguncian API otomatis (`HTTP 451`) apabila atribusi hak cipta dihapus atau dimodifikasi tanpa otorisasi.
+<img src="docs/dsp-pipeline.svg" alt="SoundClear Web Audio DSP Signal Processing Chain" width="100%" />
 
----
+<img src="docs/wave-divider.svg" alt="" width="100%" />
 
-## 🏗️ Arsitektur Sistem
+## Arsitektur Sistem
 
 ```mermaid
 flowchart LR
-    Browser["Browser / PWA\nReact 19 + Zustand + TanStack Query\nWeb Audio DSP + IndexedDB (Dexie)"]
-    NodeProxy["Node.js Gateway (Port 3000)\nserver.ts (Express + Vite Middleware)\nDual-Layer Copyright Guard"]
-    FastAPI["Python Backend (127.0.0.1:8001)\nFastAPI + Uvicorn\nMusicProvider & CopyrightGuard"]
-    Upstream["Upstream & Cache\nytmusicapi · yt-dlp · Stream Cache\nAudio Settings & Integrity State"]
-    Electron["Windows Desktop Notch (Opsional)\ndesktop-windows/ (Electron Overlay)"]
+    Client["Browser / PWA\nReact 19 · Zustand · TanStack Query\nWeb Audio DSP · Dexie (IndexedDB)"]
+    Gateway["Node.js Gateway (:3000)\nserver.ts (Express + Vite Middleware)"]
+    Backend["Python API (:8001)\nFastAPI · Uvicorn\nMusicProvider & Stream Engine"]
+    Sources["Katalog & Media\nytmusicapi · yt-dlp · Byte-Range Cache"]
+    Desktop["Windows Dynamic Notch\ndesktop-windows/ (Electron Overlay)"]
 
-    Browser <-->|"HTTP / Byte-Range Stream / JSON"| NodeProxy
-    NodeProxy <-->|"Proxy /api/*"| FastAPI
-    FastAPI <--> Upstream
-    Electron -.->|"Memuat URL Web + IPC Notch"| Browser
+    Client <-->|"HTTP · Byte-Range Audio · JSON"| Gateway
+    Gateway <-->|"Proxy /api/*"| Backend
+    Backend <--> Sources
+    Desktop -.->|"Memuat Web App + Bridge Notch"| Client
 ```
 
----
+<details>
+<summary><strong>Struktur Direktori Proyek</strong></summary>
 
-## 📁 Struktur Proyek
+<br />
 
 ```text
 SoundClearr/
-├── server.ts                  # Server terpadu Express + Vite middleware + auto-bootstrap Python venv
+├── server.ts                  # Gateway Express + Vite middleware + auto-bootstrap venv Python
 ├── package.json               # Skrip & dependensi Node.js / Frontend
-├── vite.config.ts             # Konfigurasi Vite + Tailwind CSS v4 + VitePWA
+├── vite.config.ts             # Konfigurasi Vite, Tailwind CSS v4, & VitePWA
 ├── tsconfig.json              # Konfigurasi TypeScript
+├── docs/                      # Aset grafis & diagram animasi SVG untuk dokumentasi
 ├── src/                       # Entry point Vite (/src/main.tsx)
-├── frontend/
-│   └── src/
-│       ├── api/               # Klien HTTP (/api/*) + unit test
-│       ├── audio/             # Mesin Web Audio API DSP (EQ, Bass, Widener, LUFS, Crossfade)
-│       ├── components/        # UI PlayerBar, Sidebar, RightPanel, Footer, Notch, Fullscreen
-│       ├── db/                # Skema IndexedDB (Dexie) untuk pustaka & file lokal
-│       ├── pages/             # Beranda, Pencarian, Moods, Detail, Pustaka, Rekap, Pengaturan
-│       ├── store/             # State management Zustand (player, library, settings, navigation)
-│       ├── types/             # Definisi tipe TypeScript
-│       └── utils/             # Logika murni (audioMath, playerLogic, recapLogic, notch) + test
+├── frontend/src/
+│   ├── api/                   # Klien HTTP (/api/*) + unit test
+│   ├── audio/                 # Mesin Web Audio API DSP (soundclearAudioEngine.ts)
+│   ├── components/            # PlayerBar, Sidebar, RightPanel, Footer, Notch, Fullscreen
+│   ├── db/                    # Skema IndexedDB (Dexie) untuk pustaka & audio lokal
+│   ├── pages/                 # Beranda, Cari, Moods, Detail, Koleksi, Rekap, Pengaturan
+│   ├── store/                 # State management Zustand (player, library, settings, navigation)
+│   ├── types/                 # Definisi tipe TypeScript
+│   └── utils/                 # Logika murni (audioMath, playerLogic, recapLogic, notch) + test
 ├── backend/
-│   ├── main.py                # Aplikasi FastAPI, middleware hak cipta, dan seluruh endpoint /api/*
-│   ├── music_provider.py      # Mesin katalog, lirik, ekstraksi warna sampul, & streaming audio
-│   ├── copyright_guard.py     # Aturan hak cipta zhafx.corp, verifikasi PBKDF2, & cek integritas
+│   ├── main.py                # Layanan FastAPI & seluruh endpoint /api/*
+│   ├── music_provider.py      # Mesin katalog, lirik, ekstraksi warna sampul, & streaming
 │   ├── requirements.txt       # Dependensi Python (FastAPI, Uvicorn, ytmusicapi, yt-dlp, Pillow)
-│   ├── test_music_provider.py # Unit test backend musik
-│   └── test_copyright_guard.py# Unit test proteksi hak cipta & middleware
-├── api/index.py               # Entry point serverless (Vercel)
+│   └── test_music_provider.py # Unit test backend Python
+├── api/index.py               # Entry point serverless
 └── desktop-windows/           # Aplikasi Electron Dynamic Notch khusus Windows 10/11
 ```
 
----
+</details>
 
-## 🚀 Mulai Cepat
+<img src="docs/wave-divider.svg" alt="" width="100%" />
+
+## Mulai Cepat
 
 ### Prasyarat
 - **Node.js 22+** & **npm**
-- **Python 3.10+** (otomatis dibuatkan `backend/.venv` saat `server.ts` berjalan)
-- **FFmpeg** (disarankan untuk pemrosesan/konversi aliran audio `yt-dlp`)
+- **Python 3.10+** *(lingkungan `backend/.venv` otomatis dibuat oleh `server.ts` saat dijalankan)*
+- **FFmpeg** *(disarankan untuk pemrosesan aliran audio)*
 
-### 1. Instalasi & Jalankan Mode Pengembangan
+### Instalasi & Menjalankan Aplikasi
 
 ```bash
 # 1. Pasang dependensi Node.js
 npm install
 
-# 2. (Opsional) Salin konfigurasi environment
+# 2. (Opsional) Salin template konfigurasi environment
 cp .env.example .env
 
-# 3. Jalankan server pengembangan (Port 3000)
-#    Otomatis menyiapkan backend/.venv, menjalankan FastAPI (8001), dan menyajikan Vite SPA
+# 3. Jalankan mode pengembangan pada http://localhost:3000
 npm run dev
 ```
 
-Buka aplikasi di browser pada **`http://localhost:3000`**.
-
-### 2. Build & Mode Produksi
+### Build Produksi & Pengujian
 
 ```bash
 # Build bundle produksi Vite ke dist/
 npm run build
 
-# Jalankan server produksi (Express menyajikan dist/ + proxy /api ke FastAPI)
+# Jalankan server produksi
 npm start
-```
 
-### 3. Menjalankan Pengujian (Unit Tests)
-
-```bash
 # Pemeriksaan tipe TypeScript
 npm run lint
 
-# Unit test logika frontend (54 test cases)
+# Unit test frontend
 npx tsx --test \
   frontend/src/api/client.test.ts \
   frontend/src/utils/audioMath.test.ts \
@@ -147,34 +179,25 @@ npx tsx --test \
   frontend/src/utils/recapLogic.test.ts \
   frontend/src/utils/streamPlaybackLogic.test.ts
 
-# Unit test backend Python (17 test cases)
+# Unit test backend Python
 backend/.venv/bin/python -m unittest discover -s backend -p "test_*.py"
 ```
 
-### 4. Windows Desktop Notch (Opsional, Khusus Windows 10/11)
+<img src="docs/wave-divider.svg" alt="" width="100%" />
 
-```bash
-cd desktop-windows
-npm install
-set SOUNDCLEAR_URL=http://localhost:3000
-npm start
+## Referensi Teknis
 
-# Atau build installer Windows (.exe)
-npm run build:win
-```
+<details>
+<summary><strong>Variabel Lingkungan (.env.example)</strong></summary>
 
----
-
-## ⚙️ Variabel Lingkungan
-
-Konfigurasi dapat disetel melalui berkas `.env` (lihat `.env.example`):
+<br />
 
 | Variabel | Deskripsi | Default |
 | :--- | :--- | :--- |
 | `APP_PORT` | Port server utama Express + Vite | `3000` |
-| `PYTHON_PORT` | Port internal proses FastAPI Python | `8001` |
+| `PYTHON_PORT` | Port internal layanan FastAPI Python | `8001` |
 | `CACHE_TTL_SECONDS` | Durasi cache metadata katalog musik | Default provider |
-| `DISABLE_HMR` | Nonaktifkan Vite HMR (`true` di lingkungan iframe/tertentu) | `false` |
+| `DISABLE_HMR` | Nonaktifkan Vite HMR (`true` untuk lingkungan tertentu) | `false` |
 | `SOUNDCLEAR_AUDIO_SETTINGS_FILE` | Lokasi berkas penyimpanan profil audio server | Lokal backend |
 | `SOUNDCLEAR_DISABLE_WARMUP` | Set `1` untuk menonaktifkan *warmup* katalog saat startup | `0` |
 | `SOUNDCLEAR_PURE_PYTHON_STREAM` | Gunakan mode streaming murni Python | `0` |
@@ -182,9 +205,12 @@ Konfigurasi dapat disetel melalui berkas `.env` (lihat `.env.example`):
 | `YTMUSIC_COOKIES` | String cookie sesi YouTube Music (opsional) | — |
 | `YTMUSIC_COOKIES_FILE` | Path ke berkas cookie YouTube Music (opsional) | — |
 
----
+</details>
 
-## ⌨️ Pintasan Keyboard
+<details>
+<summary><strong>Pintasan Keyboard</strong></summary>
+
+<br />
 
 | Tombol | Aksi |
 | :--- | :--- |
@@ -198,33 +224,54 @@ Konfigurasi dapat disetel melalui berkas `.env` (lihat `.env.example`):
 | `?` | Buka halaman daftar pintasan keyboard |
 | `Esc` | Tutup dialog, menu konteks, atau tampilan layar penuh |
 
----
+</details>
 
-## 🔌 Ringkasan API Backend
+<details>
+<summary><strong>Ringkasan Endpoint API Backend</strong></summary>
 
-Seluruh endpoint berada di bawah prefix `/api` dan otomatis diproksikan oleh `server.ts` ke FastAPI:
+<br />
+
+Seluruh endpoint tersedia di bawah prefix `/api` dan otomatis diproksikan oleh `server.ts`:
 
 | Kategori | Endpoint | Keterangan |
 | :--- | :--- | :--- |
-| **Kesehatan** | `GET /api/health` | Status server, provider, & integritas hak cipta |
+| **Status** | `GET /api/health` | Status kesehatan layanan & provider |
 | **Katalog** | `GET /api/home`, `/api/charts`, `/api/moods`, `/api/moods/{params}` | Beranda, tangga lagu, mood & genre |
 | **Pencarian** | `GET /api/search`, `GET /api/suggest` | Pencarian multi-filter & saran kueri |
 | **Detail** | `GET /api/artist/{id}`, `/api/album/{id}`, `/api/playlist/{id}`, `/api/podcast/{id}`, `/api/episode/{id}` | Metadata lengkap & daftar trek/episode |
 | **Pemutaran** | `GET /api/watch/{video_id}`, `/api/play/resolve`, `/api/stream/{video_id}/meta`, `GET/HEAD /api/stream/{video_id}` | Antrean radio, resolusi ID, & streaming byte-range |
 | **Lirik & Visual** | `GET /api/lyrics`, `/api/song/{id}/credits`, `/api/song/{id}/related`, `/api/artwork-color` | Lirik tersinkron, kredit lagu, & warna dominan sampul |
 | **Pengaturan** | `GET/PUT /api/account/audio-settings`, `POST /api/account/audio-settings/reset` | Sinkronisasi profil DSP |
-| **Hak Cipta** | `GET /api/copyright`, `POST /api/copyright/verify`, `PUT /api/copyright`, `DELETE /api/copyright` | Aturan hak cipta & otorisasi pengelola `zhafx.corp` |
 
----
+</details>
 
-## ©️ Hak Cipta & Proteksi
+<img src="docs/wave-divider.svg" alt="" width="100%" />
 
-> **© 2026 zhafx.corp — Seluruh Hak Cipta Dilindungi.**
+## Windows Dynamic Notch
 
-Aplikasi **SoundClear** beserta arsitektur antarmuka, konfigurasi DSP, dan kode sumbernya dikelola oleh **zhafx.corp**. Proyek ini dilengkapi **Copyright Guard** pada sisi backend yang memvalidasi integritas atribusi dan melindungi aturan hak cipta dengan otorisasi kata sandi pengelola. Penghapusan atau pengubahan atribusi resmi `zhafx.corp` tanpa otorisasi tidak diperkenankan dan akan memicu penguncian proteksi API secara otomatis.
+Untuk menjalankan pemutar mini notch melayang di luar jendela browser pada **Windows 10 / 11**:
+
+```bash
+cd desktop-windows
+npm install
+set SOUNDCLEAR_URL=http://localhost:3000
+npm start
+```
+
+Untuk mengemas installer Windows (`.exe`):
+
+```bash
+npm run build:win
+```
+
+<br />
 
 <div align="center">
 
-Dibangun dengan penuh presisi oleh **zhafx.corp** · **SoundClear**
+<img src="docs/wave-divider.svg" alt="" width="100%" />
+
+<br />
+
+**© 2026 zhafx.corp** — SoundClear
 
 </div>

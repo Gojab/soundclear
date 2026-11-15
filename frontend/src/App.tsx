@@ -247,9 +247,11 @@ export default function App() {
             aria-label="SoundClear Beranda"
             className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-full hover:bg-white/[0.06] transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-[#2EE6A6] text-[#06130E] flex items-center justify-center shrink-0">
-              <Disc3 className="w-4.5 h-4.5" strokeWidth={2.2} />
-            </div>
+            <img
+              src="/assets/aistudio/75DD2556-E7B1-4261-84AE-EE04912ABEF1_8c38c95c.png"
+              alt="SoundClear"
+              className="w-8 h-8 rounded-lg object-cover shrink-0 shadow-sm"
+            />
             <span className="text-sm font-bold tracking-tight text-white hidden xl:inline whitespace-nowrap">
               SoundClear
             </span>
