@@ -15,6 +15,7 @@ from backend.music_provider import (
     MusicProvider,
     MusicProviderError,
     TTLCache,
+    normalize_yt_item,
     pick_largest_thumbnail,
 )
 
@@ -281,6 +282,19 @@ class MusicProviderTests(unittest.TestCase):
         ]
         best = pick_largest_thumbnail(thumbs)
         self.assertEqual(best, "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj")
+
+    def test_track_thumbnail_falls_back_to_youtube_image(self) -> None:
+        track = normalize_yt_item({
+            "videoId": "5F28ye50-Kc",
+            "title": "Tulus",
+            "artists": [{"name": "Tulus"}],
+            "thumbnails": [],
+        })
+        self.assertIsNotNone(track)
+        self.assertEqual(
+            track["thumbnail"],
+            "https://i.ytimg.com/vi/5F28ye50-Kc/hqdefault.jpg",
+        )
 
     def test_search_normalization_cache_and_ytmusic_errors(self) -> None:
         gw = FakeYTMusicGateway()

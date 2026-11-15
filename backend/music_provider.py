@@ -886,6 +886,8 @@ def normalize_yt_item(
         raw.get("thumbnails") or raw.get("thumbnail"),
         fallback=fallback_thumbnail,
     )
+    if not thumbnail and video_id and item_type in ("song", "video", "episode"):
+        thumbnail = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     year = _extract_year(raw.get("year")) or fallback_year
 
     views_raw = raw.get("views") or raw.get("subscribers") or raw.get("monthlyListeners")
