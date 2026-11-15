@@ -49,8 +49,8 @@ export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps)
               Pasang Aplikasi (PWA) &amp; Putar Latar Belakang
             </h3>
             <p className="text-xs text-[#B3F7D1]/70 mt-1 leading-relaxed">
-              Instal SoundClear ke layar utama agar musik tetap berjalan mulus saat layar terkunci
-              atau saat Chrome / Safari / Google ditutup dari jendela utama.
+              Instal SoundClear ke layar utama untuk membantu pemutaran berlanjut saat berpindah aplikasi
+              atau layar terkunci. Browser yang ditutup paksa dapat menghentikan pemutaran.
             </p>
           </div>
         </div>
@@ -85,8 +85,8 @@ export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps)
         <div className="rounded-xl bg-white/[0.045] backdrop-blur-md border border-white/[0.09] p-3">
           <div className="font-semibold text-[#E8FFF3] mb-1">Chrome / Android / Desktop</div>
           <p className="text-[#B3F7D1]/70 leading-relaxed">
-            Gunakan tombol Pasang atau ikon instal di bilah alamat agar audio tetap aktif saat
-            aplikasi browser ditutup/diminimalkan.
+            Gunakan tombol Pasang atau ikon instal di bilah alamat untuk pemutaran saat aplikasi
+            berpindah ke latar belakang atau layar terkunci. Jangan tutup paksa aplikasinya.
           </p>
         </div>
         <div className="rounded-xl bg-white/[0.045] backdrop-blur-md border border-white/[0.09] p-3">
@@ -119,7 +119,7 @@ function InstallGuideModal({ isIOS, onClose }: { isIOS: boolean; onClose: () => 
               {isIOS ? 'Pasang di iPhone / iPad (Safari)' : 'Pasang SoundClear sebagai Aplikasi'}
             </h3>
             <p className="text-xs text-[#B3F7D1]/70 mt-1">
-              Agar musik tetap berjalan mulus di latar belakang meski jendela browser ditutup.
+              Untuk pemutaran di latar belakang saat aplikasi diminimalkan atau layar terkunci. Menutup paksa browser/aplikasi dapat menghentikan audio.
             </p>
           </div>
           <button

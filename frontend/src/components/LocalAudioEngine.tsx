@@ -200,53 +200,42 @@ export function LocalAudioEngine() {
     }
   }, [playbackRate]);
 
-  // Background audio continuity: hand off from WebAudio DSP to un-captured directDeck if OS suspends AudioContext when backgrounded
+  // Hand off to a native media element before the page is backgrounded or hidden.
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    let checkTimer: number | null = null;
-    const onVisibility = () => {
+    const handoffForBackground = () => {
       const graph = ensureAudioGraph();
-      if (!graph) return;
-      const st = usePlayerStore.getState();
-      if (isYoutubeIframeActive(st.activeStreamMeta)) return;
+      const state = usePlayerStore.getState();
+      if (!graph || !state.isPlaying || isYoutubeIframeActive(state.activeStreamMeta)) return;
 
+      startSilentKeepaliveAudio();
+      const effectiveVolume = isLocalTrack(state.currentTrack)
+        ? state.volume
+        : clampYoutubeVolume(
+            state.volume,
+            useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+            state.isMuted,
+          );
+      void engageBackgroundDirectDeck(effectiveVolume, state.isMuted);
+    };
+
+    const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        if (!st.isPlaying) return;
-        startSilentKeepaliveAudio();
-        if (checkTimer !== null) window.clearTimeout(checkTimer);
-        checkTimer = window.setTimeout(() => {
-          checkTimer = null;
-          const latest = usePlayerStore.getState();
-          if (
-            document.visibilityState === 'hidden' &&
-            latest.isPlaying &&
-            !isYoutubeIframeActive(latest.activeStreamMeta) &&
-            graph.ctx.state !== 'running'
-          ) {
-            const effVol = isLocalTrack(latest.currentTrack)
-              ? latest.volume
-              : clampYoutubeVolume(
-                  latest.volume,
-                  useSettingsStore.getState().youtubeSound.maxVolumeLimit,
-                  latest.isMuted,
-                );
-            void engageBackgroundDirectDeck(effVol, latest.isMuted);
-          }
-        }, 180);
-      } else {
-        if (checkTimer !== null) {
-          window.clearTimeout(checkTimer);
-          checkTimer = null;
-        }
-        if (graph.backgroundDirectActive) {
-          void restoreDspDeckFromBackground();
-        }
+        handoffForBackground();
+        return;
+      }
+
+      const graph = ensureAudioGraph();
+      if (graph?.backgroundDirectActive) {
+        void restoreDspDeckFromBackground();
       }
     };
+
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', handoffForBackground);
     return () => {
-      if (checkTimer !== null) window.clearTimeout(checkTimer);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', handoffForBackground);
     };
   }, []);
 
