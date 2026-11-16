@@ -87,3 +87,25 @@ export function clampSeekTarget(
   }
   return targetSeconds;
 }
+
+export function shouldSyncExternalPause(params: {
+  isActiveElement: boolean;
+  storeIsPlaying: boolean;
+  elementEnded: boolean;
+  isPriming: boolean;
+  isProgrammaticPause: boolean;
+  isYoutubeIframe: boolean;
+  isLoadingAudio: boolean;
+  isTransitioning: boolean;
+}): boolean {
+  if (!params.isActiveElement) return false;
+  if (!params.storeIsPlaying) return false;
+  if (params.elementEnded) return false;
+  if (params.isPriming) return false;
+  if (params.isProgrammaticPause) return false;
+  if (params.isYoutubeIframe) return false;
+  if (params.isLoadingAudio) return false;
+  if (params.isTransitioning) return false;
+  return true;
+}
+

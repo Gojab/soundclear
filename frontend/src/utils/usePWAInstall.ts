@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { detectPwaPlatform } from './mediaSessionLogic';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -9,19 +10,26 @@ export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
   const [isSafari, setIsSafari] = useState(false);
+  const [isFirefox, setIsFirefox] = useState(false);
 
   useEffect(() => {
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
-    setIsInstalled(isStandalone);
+    const syncPlatform = () => {
+      const info = detectPwaPlatform();
+      setIsInstalled(info.isStandalone);
+      setIsIOS(info.isIOS);
+      setIsAndroid(info.isAndroid);
+      setIsSafari(info.isSafari);
+      setIsFirefox(info.isFirefox);
+    };
+    syncPlatform();
 
-    const ua = window.navigator.userAgent.toLowerCase();
-    const iosDevice = /iphone|ipad|ipod/.test(ua);
-    const safariBrowser = /safari/.test(ua) && !/chrome|crios|fxios|edg|android/.test(ua);
-    setIsIOS(iosDevice);
-    setIsSafari(safariBrowser);
+    const mql = window.matchMedia?.('(display-mode: standalone)');
+    const handleDisplayModeChange = () => {
+      syncPlatform();
+    };
+    mql?.addEventListener?.('change', handleDisplayModeChange);
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -37,6 +45,7 @@ export function usePWAInstall() {
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
+      mql?.removeEventListener?.('change', handleDisplayModeChange);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
@@ -58,7 +67,9 @@ export function usePWAInstall() {
     isInstallable: Boolean(deferredPrompt),
     isInstalled,
     isIOS,
+    isAndroid,
     isSafari,
+    isFirefox,
     install,
   };
 }

@@ -7,12 +7,13 @@ interface PWAInstallButtonProps {
 }
 
 export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps) {
-  const { isInstallable, isInstalled, isIOS, isSafari, install } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, isAndroid, isSafari, isFirefox, install } =
+    usePWAInstall();
   const [showGuide, setShowGuide] = useState(false);
 
   if (variant === 'compact') {
     if (isInstalled) return null;
-    if (!isInstallable && !isIOS && !isSafari) return null;
+    if (!isInstallable && !isIOS && !isSafari && !(isAndroid && isFirefox)) return null;
 
     return (
       <>
@@ -32,7 +33,14 @@ export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps)
           <span className="hidden sm:inline">Pasang App</span>
         </button>
 
-        {showGuide && <InstallGuideModal isIOS={isIOS} onClose={() => setShowGuide(false)} />}
+        {showGuide && (
+          <InstallGuideModal
+            isIOS={isIOS}
+            isFirefox={isFirefox}
+            isAndroid={isAndroid}
+            onClose={() => setShowGuide(false)}
+          />
+        )}
       </>
     );
   }
@@ -50,7 +58,7 @@ export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps)
             </h3>
             <p className="text-xs text-[#B3F7D1]/70 mt-1 leading-relaxed">
               Instal SoundClear ke layar utama untuk membantu pemutaran berlanjut saat berpindah aplikasi
-              atau layar terkunci. Browser yang ditutup paksa dapat menghentikan pemutaran.
+              atau layar terkunci. Browser atau aplikasi yang ditutup paksa dapat menghentikan pemutaran.
             </p>
           </div>
         </div>
@@ -83,10 +91,10 @@ export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps)
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-[#B3F7D1]/80">
         <div className="rounded-xl bg-white/[0.045] backdrop-blur-md border border-white/[0.09] p-3">
-          <div className="font-semibold text-[#E8FFF3] mb-1">Chrome / Android / Desktop</div>
+          <div className="font-semibold text-[#E8FFF3] mb-1">Chrome / Edge / Firefox</div>
           <p className="text-[#B3F7D1]/70 leading-relaxed">
-            Gunakan tombol Pasang atau ikon instal di bilah alamat untuk pemutaran saat aplikasi
-            berpindah ke latar belakang atau layar terkunci. Jangan tutup paksa aplikasinya.
+            Gunakan tombol Pasang di Chrome/Edge (Android, Windows, macOS, Linux) atau menu
+            Instal di Firefox Android. Hindari menutup paksa aplikasi saat mendengarkan.
           </p>
         </div>
         <div className="rounded-xl bg-white/[0.045] backdrop-blur-md border border-white/[0.09] p-3">
@@ -94,17 +102,34 @@ export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps)
           <p className="text-[#B3F7D1]/70 leading-relaxed">
             Ketuk Bagikan (<span className="text-[#19EE8A]">Share</span>) lalu pilih{' '}
             <span className="text-[#E8FFF3] font-medium">Tambah ke Layar Utama / Dock</span> untuk
-            kontrol layar kunci &amp; latar belakang penuh.
+            kontrol layar kunci &amp; pemutaran latar belakang sesuai dukungan iOS/macOS.
           </p>
         </div>
       </div>
 
-      {showGuide && <InstallGuideModal isIOS={isIOS} onClose={() => setShowGuide(false)} />}
+      {showGuide && (
+        <InstallGuideModal
+          isIOS={isIOS}
+          isFirefox={isFirefox}
+          isAndroid={isAndroid}
+          onClose={() => setShowGuide(false)}
+        />
+      )}
     </div>
   );
 }
 
-function InstallGuideModal({ isIOS, onClose }: { isIOS: boolean; onClose: () => void }) {
+function InstallGuideModal({
+  isIOS,
+  isFirefox,
+  isAndroid,
+  onClose,
+}: {
+  isIOS: boolean;
+  isFirefox: boolean;
+  isAndroid: boolean;
+  onClose: () => void;
+}) {
   return (
     <div
       className="fixed inset-0 z-[130] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
@@ -158,7 +183,10 @@ function InstallGuideModal({ isIOS, onClose }: { isIOS: boolean; onClose: () => 
               </li>
               <li className="rounded-xl bg-white/[0.055] p-3 border border-white/[0.1]">
                 2. Di <strong className="text-[#E8FFF3]">Safari Mac</strong>: klik{' '}
-                <strong className="text-[#19EE8A]">File → Add to Dock</strong>.
+                <strong className="text-[#19EE8A]">File → Add to Dock</strong>.{' '}
+                {isFirefox && isAndroid
+                  ? 'Di Firefox Android: buka menu (⋮) lalu pilih Instal.'
+                  : 'Di Firefox Desktop: instalasi PWA bawaan tidak tersedia, gunakan tab browser atau Chrome/Edge.'}
               </li>
               <li className="rounded-xl bg-white/[0.055] p-3 border border-white/[0.1]">
                 3. Saat dibuka kembali setelah browser ditutup, ketuk{' '}

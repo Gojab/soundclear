@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { resolvePlayableYoutube } from '../api/client';
 import {
+  registerMediaSessionHandlers,
+  syncMediaSessionMetadata,
+  syncMediaSessionPlaybackState,
+  syncMediaSessionPosition,
+} from '../audio/mediaSessionService';
+import {
   ensurePlaybackAudioSession,
   startSilentKeepaliveAudio,
   stopSilentKeepaliveAudio,
@@ -184,88 +190,57 @@ export function YouTubePlayerBridge() {
 
   // Register Media Session transport action handlers once on mount
   useEffect(() => {
-    if (!('mediaSession' in navigator)) return;
-
-    const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
-      ['play', () => usePlayerStore.getState().setIsPlaying(true)],
-      ['pause', () => usePlayerStore.getState().setIsPlaying(false)],
-      ['stop', () => usePlayerStore.getState().stopPlayback()],
-      ['previoustrack', () => usePlayerStore.getState().prevTrack()],
-      ['nexttrack', () => usePlayerStore.getState().nextTrack()],
-      [
-        'seekto',
-        (details) => {
-          if (typeof details.seekTime === 'number') {
-            usePlayerStore.getState().requestSeek(details.seekTime);
-          }
-        },
-      ],
-      [
-        'seekbackward',
-        (details) => {
-          const st = usePlayerStore.getState();
-          const step = typeof details.seekOffset === 'number' ? details.seekOffset : 10;
-          st.requestSeek(Math.max(0, st.currentTime - step));
-        },
-      ],
-      [
-        'seekforward',
-        (details) => {
-          const st = usePlayerStore.getState();
-          const step = typeof details.seekOffset === 'number' ? details.seekOffset : 10;
-          const max = st.duration > 0 ? st.duration : st.currentTime + step;
-          st.requestSeek(Math.min(max, st.currentTime + step));
-        },
-      ],
-    ];
-
-    for (const [action, handler] of handlers) {
-      try {
-        navigator.mediaSession.setActionHandler(action, handler);
-      } catch {
-        // Unsupported action
-      }
-    }
+    const unregisterHandlers = registerMediaSessionHandlers({
+      onPlay: () => usePlayerStore.getState().setIsPlaying(true),
+      onPause: () => usePlayerStore.getState().setIsPlaying(false),
+      onStop: () => usePlayerStore.getState().stopPlayback(),
+      onPreviousTrack: () => usePlayerStore.getState().prevTrack(),
+      onNextTrack: () => usePlayerStore.getState().nextTrack(),
+      onSeekTo: (seekTime) => usePlayerStore.getState().requestSeek(seekTime),
+      onSeekBackward: (seekOffset) => {
+        const st = usePlayerStore.getState();
+        const step = typeof seekOffset === 'number' ? seekOffset : 10;
+        st.requestSeek(Math.max(0, st.currentTime - step));
+      },
+      onSeekForward: (seekOffset) => {
+        const st = usePlayerStore.getState();
+        const step = typeof seekOffset === 'number' ? seekOffset : 10;
+        const max = st.duration > 0 ? st.duration : st.currentTime + step;
+        st.requestSeek(Math.min(max, st.currentTime + step));
+      },
+    });
 
     const syncVisibilityPosition = () => {
       const st = usePlayerStore.getState();
-      if ('setPositionState' in navigator.mediaSession && st.duration > 0 && Number.isFinite(st.currentTime)) {
-        try {
-          navigator.mediaSession.setPositionState({
-            duration: st.duration,
-            playbackRate: st.playbackRate || 1,
-            position: Math.min(st.currentTime, st.duration),
-          });
-        } catch {
-          // Ignore
-        }
-      }
+      syncMediaSessionPosition({
+        duration: st.duration,
+        currentTime: st.currentTime,
+        playbackRate: st.playbackRate || 1,
+      });
     };
     document.addEventListener('visibilitychange', syncVisibilityPosition);
     return () => {
+      unregisterHandlers();
       document.removeEventListener('visibilitychange', syncVisibilityPosition);
     };
   }, []);
 
   // Update Media Session artwork metadata & playbackState when active track or playing changes
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !currentTrack) return;
-
-    ensurePlaybackAudioSession();
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title,
-        artist: formatArtists(currentTrack.artists),
-        album: currentTrack.album?.name || 'SoundClear',
-        artwork: currentTrack.thumbnail
-          ? [{ src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' }]
-          : [],
-      });
-    } catch {
-      // Ignore
+    if (!currentTrack) {
+      syncMediaSessionMetadata(null);
+      return;
     }
 
-    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    ensurePlaybackAudioSession();
+    syncMediaSessionMetadata(currentTrack);
+    syncMediaSessionPlaybackState(isPlaying ? 'playing' : 'paused');
+    const st = usePlayerStore.getState();
+    syncMediaSessionPosition({
+      duration: st.duration,
+      currentTime: st.currentTime,
+      playbackRate: st.playbackRate || 1,
+    });
   }, [currentTrack, isPlaying]);
 
   // Pre-warm YouTube IFrame API & standby hidden player immediately on mount for 0ms fallback startup
@@ -419,20 +394,9 @@ export function YouTubePlayerBridge() {
       ) {
         ensurePlaybackAudioSession();
         startSilentKeepaliveAudio();
-        if ('mediaSession' in navigator && st.currentTrack) {
-          try {
-            navigator.mediaSession.metadata = new MediaMetadata({
-              title: st.currentTrack.title,
-              artist: formatArtists(st.currentTrack.artists),
-              album: st.currentTrack.album?.name || 'SoundClear',
-              artwork: st.currentTrack.thumbnail
-                ? [{ src: st.currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' }]
-                : [],
-            });
-            navigator.mediaSession.playbackState = 'playing';
-          } catch {
-            // Ignore
-          }
+        if (st.currentTrack) {
+          syncMediaSessionMetadata(st.currentTrack);
+          syncMediaSessionPlaybackState('playing');
         }
         try {
           const pState = playerRef.current.getPlayerState?.();
@@ -832,6 +796,12 @@ export function YouTubePlayerBridge() {
     if (!iframeActive || !playerRef.current || !playerReadyRef.current) return;
     try {
       playerRef.current.setPlaybackRate(playbackRate || 1);
+      const st = usePlayerStore.getState();
+      syncMediaSessionPosition({
+        duration: st.duration,
+        currentTime: st.currentTime,
+        playbackRate: playbackRate || 1,
+      });
     } catch {
       // Ignore
     }
@@ -843,8 +813,15 @@ export function YouTubePlayerBridge() {
       return;
     }
     try {
-      playerRef.current.seekTo(Math.max(0, pendingSeekSeconds), true);
-      usePlayerStore.getState().clearPendingSeek();
+      const target = Math.max(0, pendingSeekSeconds);
+      playerRef.current.seekTo(target, true);
+      const st = usePlayerStore.getState();
+      st.clearPendingSeek();
+      syncMediaSessionPosition({
+        duration: st.duration,
+        currentTime: target,
+        playbackRate: st.playbackRate || 1,
+      });
     } catch {
       // Ignore
     }
@@ -868,22 +845,11 @@ export function YouTubePlayerBridge() {
         if (Number.isFinite(cur) && cur >= 0) {
           store.setProgress(cur, dur > 0 ? dur : undefined);
         }
-        if (
-          'mediaSession' in navigator &&
-          'setPositionState' in navigator.mediaSession &&
-          dur > 0 &&
-          Number.isFinite(cur)
-        ) {
-          try {
-            navigator.mediaSession.setPositionState({
-              duration: dur,
-              playbackRate: store.playbackRate || 1,
-              position: Math.min(cur, dur),
-            });
-          } catch {
-            // Ignore
-          }
-        }
+        syncMediaSessionPosition({
+          duration: dur,
+          currentTime: cur,
+          playbackRate: store.playbackRate || 1,
+        });
       } catch {
         // Ignore polling errors
       }

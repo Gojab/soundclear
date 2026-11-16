@@ -6,6 +6,7 @@ import {
   shouldEngageDirectDeckOnHide,
   shouldLoadTrackDirectlyOnDirectDeck,
   shouldRunSilentKeepalive,
+  shouldSyncExternalPause,
 } from './backgroundAudioLogic.ts';
 
 test('isMobileAudioEnvironment detects iOS, iPadOS desktop UA, Android, and ignores desktop', () => {
@@ -182,3 +183,62 @@ test('clampSeekTarget bounds seek safely within duration', () => {
   assert.equal(clampSeekTarget(195, 180), 179.9);
   assert.equal(clampSeekTarget(30, null), 30);
 });
+
+test('shouldSyncExternalPause catches OS/headphone pauses without false positives during transitions', () => {
+  assert.equal(
+    shouldSyncExternalPause({
+      isActiveElement: true,
+      storeIsPlaying: true,
+      elementEnded: false,
+      isPriming: false,
+      isProgrammaticPause: false,
+      isYoutubeIframe: false,
+      isLoadingAudio: false,
+      isTransitioning: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldSyncExternalPause({
+      isActiveElement: true,
+      storeIsPlaying: true,
+      elementEnded: false,
+      isPriming: false,
+      isProgrammaticPause: true,
+      isYoutubeIframe: false,
+      isLoadingAudio: false,
+      isTransitioning: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldSyncExternalPause({
+      isActiveElement: true,
+      storeIsPlaying: true,
+      elementEnded: true,
+      isPriming: false,
+      isProgrammaticPause: false,
+      isYoutubeIframe: false,
+      isLoadingAudio: false,
+      isTransitioning: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldSyncExternalPause({
+      isActiveElement: false,
+      storeIsPlaying: true,
+      elementEnded: false,
+      isPriming: false,
+      isProgrammaticPause: false,
+      isYoutubeIframe: false,
+      isLoadingAudio: false,
+      isTransitioning: false,
+    }),
+    false,
+  );
+});
+

@@ -94,8 +94,42 @@ let lastAppliedProfile: LocalAudioProfile | null = null;
 let gestureHooked = false;
 
 const unlockedAudioElements = new WeakSet<HTMLAudioElement>();
+const programmaticPauseUntil = new WeakMap<HTMLAudioElement, number>();
+let standaloneDirectDeck: HTMLAudioElement | null = null;
 const contextInterruptedListeners = new Set<() => void>();
 const listeners = new Set<() => void>();
+
+export function markProgrammaticPause(el: HTMLAudioElement, windowMs = 300): void {
+  programmaticPauseUntil.set(el, Date.now() + windowMs);
+}
+
+export function isProgrammaticPause(el: HTMLAudioElement): boolean {
+  const until = programmaticPauseUntil.get(el);
+  if (!until) return false;
+  if (Date.now() <= until) {
+    programmaticPauseUntil.delete(el);
+    return true;
+  }
+  programmaticPauseUntil.delete(el);
+  return false;
+}
+
+export function pauseAudioElementProgrammatically(el: HTMLAudioElement): void {
+  markProgrammaticPause(el);
+  if (!el.paused) {
+    el.pause();
+  }
+}
+
+export function ensureStandaloneDirectDeck(): HTMLAudioElement | null {
+  if (sharedGraph) return sharedGraph.directDeck;
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
+  if (!standaloneDirectDeck) {
+    standaloneDirectDeck = new Audio();
+    configureAudioElement(standaloneDirectDeck, false);
+  }
+  return standaloneDirectDeck;
+}
 
 export function ensurePlaybackAudioSession(): void {
   if (typeof navigator === 'undefined') return;
@@ -235,7 +269,7 @@ function primeAudioElementOnGesture(el: HTMLAudioElement): void {
         .then(() => {
           unlockedAudioElements.add(el);
           if (el.dataset.scPriming === '1') {
-            el.pause();
+            pauseAudioElementProgrammatically(el);
             el.muted = false;
             el.removeAttribute('src');
             el.load();
@@ -326,17 +360,33 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioCtx) return null;
 
-  const ctx = new AudioCtx();
+  let ctx: AudioContext;
+  try {
+    ctx = new AudioCtx();
+  } catch {
+    return null;
+  }
   const decks: [HTMLAudioElement, HTMLAudioElement] = [new Audio(), new Audio()];
   decks.forEach((audio) => configureAudioElement(audio, true));
 
-  const directDeck = new Audio();
+  const directDeck = standaloneDirectDeck ?? new Audio();
+  standaloneDirectDeck = null;
   configureAudioElement(directDeck, false);
 
-  const deckSources: [MediaElementAudioSourceNode, MediaElementAudioSourceNode] = [
-    ctx.createMediaElementSource(decks[0]),
-    ctx.createMediaElementSource(decks[1]),
-  ];
+  let deckSources: [MediaElementAudioSourceNode, MediaElementAudioSourceNode];
+  try {
+    deckSources = [
+      ctx.createMediaElementSource(decks[0]),
+      ctx.createMediaElementSource(decks[1]),
+    ];
+  } catch {
+    try {
+      void ctx.close();
+    } catch {
+      // Ignore
+    }
+    return null;
+  }
 
   const createDeckDjStage = (): DeckDjStage => {
     const lowEq = ctx.createBiquadFilter();
@@ -583,13 +633,18 @@ export function revokeDirectDeckUrl(graph: SharedAudioGraph): void {
 
 export function resetDirectDeck(): void {
   const graph = sharedGraph;
-  if (!graph) return;
+  if (!graph) {
+    if (standaloneDirectDeck) {
+      clearElementPrimingFlag(standaloneDirectDeck);
+      pauseAudioElementProgrammatically(standaloneDirectDeck);
+      standaloneDirectDeck.removeAttribute('src');
+    }
+    return;
+  }
   graph.backgroundDirectActive = false;
   graph.directDeckTrackId = null;
   clearElementPrimingFlag(graph.directDeck);
-  if (!graph.directDeck.paused) {
-    graph.directDeck.pause();
-  }
+  pauseAudioElementProgrammatically(graph.directDeck);
   graph.directDeck.removeAttribute('src');
   revokeDirectDeckUrl(graph);
 }
@@ -639,6 +694,8 @@ export async function engageBackgroundDirectDeck(
   };
 
   try {
+    const otherDeck = graph.decks[graph.activeDeck === 0 ? 1 : 0];
+    pauseAudioElementProgrammatically(otherDeck);
     graph.directDeck.crossOrigin = targetSrc.startsWith('blob:') ? null : 'anonymous';
     graph.directDeck.volume = directVol;
     graph.directDeck.playbackRate = targetRate;
@@ -655,17 +712,18 @@ export async function engageBackgroundDirectDeck(
     // Call .play() synchronously inside the visibility/hide tick before awaiting
     const playPromise = graph.directDeck.play();
     await playPromise;
+    graph.deckGains[graph.activeDeck].gain.setValueAtTime(0, graph.ctx.currentTime);
+    pauseAudioElementProgrammatically(activeDeck);
     applyResumeSeek();
     unlockedAudioElements.add(graph.directDeck);
     graph.backgroundDirectActive = true;
-    activeDeck.pause();
     stopSilentKeepaliveAudio();
     notifyDiagnosticsListeners();
     return true;
   } catch {
     graph.backgroundDirectActive = false;
     graph.directDeckTrackId = null;
-    graph.directDeck.pause();
+    pauseAudioElementProgrammatically(graph.directDeck);
     graph.directDeck.removeAttribute('src');
     return false;
   } finally {
@@ -754,7 +812,7 @@ export async function restoreDspDeckFromBackground(): Promise<void> {
 
     graph.backgroundDirectActive = false;
     graph.directDeckTrackId = null;
-    graph.directDeck.pause();
+    pauseAudioElementProgrammatically(graph.directDeck);
     graph.directDeck.removeAttribute('src');
     revokeDirectDeckUrl(graph);
     notifyDiagnosticsListeners();

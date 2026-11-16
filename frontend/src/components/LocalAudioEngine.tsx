@@ -5,6 +5,10 @@ import {
   resolvePlayableYoutube,
 } from '../api/client';
 import {
+  syncMediaSessionPlaybackState,
+  syncMediaSessionPosition,
+} from '../audio/mediaSessionService';
+import {
   analyzeAudioBlobBpm,
   applyAudioProfileToGraph,
   applyDeckDjMixFrame,
@@ -14,10 +18,14 @@ import {
   engageBackgroundDirectDeck,
   ensureAudioGraph,
   ensurePlaybackAudioSession,
+  ensureStandaloneDirectDeck,
   getActivePlaybackElement,
   getCachedTrackBpm,
   incrementSkipSilenceCount,
+  isProgrammaticPause,
+  markProgrammaticPause,
   measureAndEstimateLufs,
+  pauseAudioElementProgrammatically,
   resetDeckDjStage,
   resetDirectDeck,
   restoreDspDeckFromBackground,
@@ -78,6 +86,7 @@ import {
   isMobileAudioEnvironment,
   shouldEngageDirectDeckOnHide,
   shouldLoadTrackDirectlyOnDirectDeck,
+  shouldSyncExternalPause,
 } from '../utils/backgroundAudioLogic';
 
 interface ActiveTransitionState {
@@ -203,7 +212,22 @@ export function LocalAudioEngine() {
   const dynamicLufsDoneRef = useRef(false);
   const fallbackAttemptedRef = useRef(false);
   const isLoadingAudioRef = useRef(false);
+  const preloadGenerationRef = useRef(0);
+  const standaloneObjectUrlRef = useRef<string | null>(null);
   const manualMixRequestVersion = usePlayerStore((s) => s.manualMixRequestVersion);
+
+  useEffect(() => {
+    return () => {
+      if (pauseTimerRef.current !== null) {
+        window.clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = null;
+      }
+      if (standaloneObjectUrlRef.current) {
+        URL.revokeObjectURL(standaloneObjectUrlRef.current);
+        standaloneObjectUrlRef.current = null;
+      }
+    };
+  }, []);
 
   // Sync output device (setSinkId) when configured
   useEffect(() => {
@@ -236,10 +260,12 @@ export function LocalAudioEngine() {
     });
 
     const graph = ensureAudioGraph();
+    const directVol = isMuted ? 0 : Math.max(0, Math.min(1, effectiveVolume / 100));
     if (graph) {
-      graph.directDeck.volume = isMuted
-        ? 0
-        : Math.max(0, Math.min(1, effectiveVolume / 100));
+      graph.directDeck.volume = directVol;
+    } else {
+      const standalone = ensureStandaloneDirectDeck();
+      if (standalone) standalone.volume = directVol;
     }
 
     const currentMeta = usePlayerStore.getState().activeStreamMeta;
@@ -274,6 +300,9 @@ export function LocalAudioEngine() {
       [...graph.decks, graph.directDeck].forEach((deck) => {
         setElementRatePreservingPitch(deck, playbackRate);
       });
+    } else {
+      const standalone = ensureStandaloneDirectDeck();
+      if (standalone) setElementRatePreservingPitch(standalone, playbackRate);
     }
   }, [playbackRate]);
 
@@ -403,12 +432,17 @@ export function LocalAudioEngine() {
 
   useEffect(() => {
     const graph = ensureAudioGraph();
-    if (!graph) return;
+    const standalone = !graph ? ensureStandaloneDirectDeck() : null;
+    if (!graph && !standalone) return;
 
     const triggerEndOnce = () => {
       const st = usePlayerStore.getState();
       if (!st.currentTrack || !st.isPlaying) return;
       if (isYoutubeIframeActive(st.activeStreamMeta)) return;
+      if (!graph) {
+        st.handleTrackEnded();
+        return;
+      }
 
       const sig = `${getTrackUniqueId(st.currentTrack) || st.currentTrack.id}::${graph.activeDeck}`;
       const now = Date.now();
@@ -441,7 +475,7 @@ export function LocalAudioEngine() {
         nextKey &&
         graph.trackIds[standbyIdx] === nextKey
       ) {
-        activeAudio.pause();
+        pauseAudioElementProgrammatically(activeAudio);
         resetDeckDjStage(graph, activeIdx, true);
         resetDeckDjStage(graph, standbyIdx, false);
         graph.deckGains[activeIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
@@ -481,7 +515,7 @@ export function LocalAudioEngine() {
         void standby
           .play()
           .then(() => {
-            activeAudio.pause();
+            pauseAudioElementProgrammatically(activeAudio);
             resetDeckDjStage(graph, activeIdx, true);
             graph.deckGains[activeIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
             graph.deckGains[standbyIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
@@ -512,17 +546,81 @@ export function LocalAudioEngine() {
       triggerEndOnce();
     };
 
-    const d0Handler = onDeckEnded(graph.decks[0]);
-    const d1Handler = onDeckEnded(graph.decks[1]);
-    const directHandler = onDeckEnded(graph.directDeck);
+    const d0Handler = graph ? onDeckEnded(graph.decks[0]) : () => {};
+    const d1Handler = graph ? onDeckEnded(graph.decks[1]) : () => {};
+    const directHandler = graph
+      ? onDeckEnded(graph.directDeck)
+      : () => {
+          const st = usePlayerStore.getState();
+          if (!st.currentTrack || !st.isPlaying || isYoutubeIframeActive(st.activeStreamMeta)) return;
+          st.handleTrackEnded();
+        };
 
-    graph.decks[0].addEventListener('ended', d0Handler);
-    graph.decks[1].addEventListener('ended', d1Handler);
-    graph.directDeck.addEventListener('ended', directHandler);
+    // Sync OS-level audio interruptions (phone call, headphone unplug, audio focus loss)
+    const onDeckExternalPause = (el: HTMLAudioElement) => () => {
+      const g = ensureAudioGraph();
+      const activeEl = g ? getActivePlaybackElement(g) : ensureStandaloneDirectDeck();
+      const st = usePlayerStore.getState();
+      const shouldSync = shouldSyncExternalPause({
+        isActiveElement: activeEl === el,
+        storeIsPlaying: st.isPlaying,
+        elementEnded: el.ended,
+        isPriming: el.dataset.scPriming === '1',
+        isProgrammaticPause: isProgrammaticPause(el),
+        isYoutubeIframe: isYoutubeIframeActive(st.activeStreamMeta),
+        isLoadingAudio: isLoadingAudioRef.current,
+        isTransitioning: transitionInProgressRef.current,
+      });
+      if (shouldSync) {
+        st.setIsPlaying(false);
+        syncMediaSessionPlaybackState('paused');
+        syncMediaSessionPosition({
+          duration: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : st.duration,
+          currentTime: Number.isFinite(el.currentTime) ? el.currentTime : st.currentTime,
+          playbackRate: st.playbackRate,
+        });
+      }
+    };
+
+    const onDeckSeeked = (el: HTMLAudioElement) => () => {
+      const g = ensureAudioGraph();
+      const activeEl = g ? getActivePlaybackElement(g) : ensureStandaloneDirectDeck();
+      if (activeEl !== el) return;
+      const st = usePlayerStore.getState();
+      if (!el.paused && el.readyState >= 3) {
+        st.setIsBuffering(false);
+      }
+      if (Number.isFinite(el.currentTime)) {
+        const dur = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : st.duration;
+        st.setProgress(el.currentTime, dur > 0 ? dur : undefined);
+        syncMediaSessionPosition({
+          duration: dur,
+          currentTime: el.currentTime,
+          playbackRate: st.playbackRate,
+        });
+      }
+    };
+
+    const targetDecks = graph
+      ? [graph.decks[0], graph.decks[1], graph.directDeck]
+      : standalone
+        ? [standalone]
+        : [];
+    const endHandlers = graph ? [d0Handler, d1Handler, directHandler] : [directHandler];
+    const pauseHandlers = targetDecks.map((el) => onDeckExternalPause(el));
+    const seekedHandlers = targetDecks.map((el) => onDeckSeeked(el));
+
+    targetDecks.forEach((el, idx) => {
+      el.addEventListener('ended', endHandlers[idx]);
+      el.addEventListener('pause', pauseHandlers[idx]);
+      el.addEventListener('seeked', seekedHandlers[idx]);
+    });
     return () => {
-      graph.decks[0].removeEventListener('ended', d0Handler);
-      graph.decks[1].removeEventListener('ended', d1Handler);
-      graph.directDeck.removeEventListener('ended', directHandler);
+      targetDecks.forEach((el, idx) => {
+        el.removeEventListener('ended', endHandlers[idx]);
+        el.removeEventListener('pause', pauseHandlers[idx]);
+        el.removeEventListener('seeked', seekedHandlers[idx]);
+      });
     };
   }, []);
 
@@ -548,33 +646,42 @@ export function LocalAudioEngine() {
   // Pause HTML5 audio decks cleanly whenever youtube-iframe mode takes over
   useEffect(() => {
     if (activeStreamSourceMode !== 'youtube-iframe') return;
-    const graph = ensureAudioGraph();
-    if (!graph) return;
     resetDirectDeck();
-    graph.decks.forEach((d) => d.pause());
+    const graph = ensureAudioGraph();
+    if (graph) {
+      graph.decks.forEach((d) => pauseAudioElementProgrammatically(d));
+    }
   }, [activeStreamSourceMode]);
 
   // Load local, offline, or audio-only stream source when active track or stream quality changes
   useEffect(() => {
     if (!hydrated) return;
     const graph = ensureAudioGraph();
-    if (!graph) return;
+    const standalone = !graph ? ensureStandaloneDirectDeck() : null;
+    if (!graph && !standalone) return;
 
     if (!htmlAudioTrackKey) {
       loadedKeyRef.current = null;
       resetDirectDeck();
-      graph.decks.forEach((d) => d.pause());
+      if (standaloneObjectUrlRef.current) {
+        URL.revokeObjectURL(standaloneObjectUrlRef.current);
+        standaloneObjectUrlRef.current = null;
+      }
+      if (graph) {
+        graph.decks.forEach((d) => pauseAudioElementProgrammatically(d));
+      }
       return;
     }
 
-    // Fast-path 0ms: if online YouTube stream is globally blocked and we already have an 11-char ID, bypass network probe immediately
     if (!localActive && !useOfflineBlob && rawVideoId && shouldFastRouteToIframe(rawVideoId)) {
       loadedKeyRef.current = htmlAudioTrackKey;
       resetDirectDeck();
-      graph.decks.forEach((d) => {
-        d.pause();
-        d.removeAttribute('src');
-      });
+      if (graph) {
+        graph.decks.forEach((d) => {
+          pauseAudioElementProgrammatically(d);
+          d.removeAttribute('src');
+        });
+      }
       usePlayerStore
         .getState()
         .setActiveStreamMeta(
@@ -585,7 +692,7 @@ export function LocalAudioEngine() {
 
     // Handle pre-started crossfade / DJ / gapless standby deck
     const expectedStandbyId = localActive ? trackUniqueId : rawVideoId;
-    if (expectedStandbyId && graph.crossfadeTargetId === expectedStandbyId) {
+    if (graph && expectedStandbyId && graph.crossfadeTargetId === expectedStandbyId) {
       graph.crossfadeTargetId = null;
       loadedKeyRef.current = htmlAudioTrackKey;
       transitionInProgressRef.current = false;
@@ -650,13 +757,15 @@ export function LocalAudioEngine() {
       isLoadingAudioRef.current = true;
       ensurePlaybackAudioSession();
 
-      const useDirectTarget = shouldLoadTrackDirectlyOnDirectDeck({
-        visibilityState:
-          typeof document !== 'undefined' ? document.visibilityState : 'visible',
-        backgroundDirectActive: graph.backgroundDirectActive,
-        isMobile: isMobileAudioEnvironment(),
-        contextState: graph.ctx.state,
-      });
+      const useDirectTarget =
+        !graph ||
+        shouldLoadTrackDirectlyOnDirectDeck({
+          visibilityState:
+            typeof document !== 'undefined' ? document.visibilityState : 'visible',
+          backgroundDirectActive: graph.backgroundDirectActive,
+          isMobile: isMobileAudioEnvironment(),
+          contextState: graph.ctx.state,
+        });
 
       const storeAtStart = usePlayerStore.getState();
       if (
@@ -668,25 +777,34 @@ export function LocalAudioEngine() {
         startSilentKeepaliveAudio();
       }
 
-      const nextDeckIdx: 0 | 1 = graph.activeDeck;
+      preloadGenerationRef.current += 1;
+      const nextDeckIdx: 0 | 1 = graph ? graph.activeDeck : 0;
       const otherDeckIdx: 0 | 1 = nextDeckIdx === 0 ? 1 : 0;
 
-      if (useDirectTarget) {
-        graph.backgroundDirectActive = true;
-        graph.decks[0].pause();
-        graph.decks[1].pause();
-        clearElementPrimingFlag(graph.directDeck);
-      } else {
-        resetDirectDeck();
-        graph.decks[otherDeckIdx].pause();
-        clearElementPrimingFlag(graph.decks[nextDeckIdx]);
-        resetDeckDjStage(graph, nextDeckIdx, true);
-        resetDeckDjStage(graph, otherDeckIdx, true);
-        graph.deckGains[otherDeckIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
-        graph.deckGains[nextDeckIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
+      if (graph) {
+        if (useDirectTarget) {
+          graph.backgroundDirectActive = true;
+          pauseAudioElementProgrammatically(graph.decks[0]);
+          pauseAudioElementProgrammatically(graph.decks[1]);
+          clearElementPrimingFlag(graph.directDeck);
+        } else {
+          resetDirectDeck();
+          pauseAudioElementProgrammatically(graph.decks[otherDeckIdx]);
+          clearElementPrimingFlag(graph.decks[nextDeckIdx]);
+          resetDeckDjStage(graph, nextDeckIdx, true);
+          resetDeckDjStage(graph, otherDeckIdx, true);
+          graph.deckGains[otherDeckIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
+          graph.deckGains[nextDeckIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
+        }
+      } else if (standalone) {
+        clearElementPrimingFlag(standalone);
       }
 
-      const audio = useDirectTarget ? graph.directDeck : graph.decks[nextDeckIdx];
+      const audio = graph
+        ? useDirectTarget
+          ? graph.directDeck
+          : graph.decks[nextDeckIdx]
+        : standalone!;
       let urlToLoad: string | null = null;
       let isObjectUrl = false;
       let resolvedTrackKey: string | null = null;
@@ -715,7 +833,12 @@ export function LocalAudioEngine() {
           usePlayerStore.getState().setIsPlaying(false);
           return;
         }
-        if (useDirectTarget) {
+        if (!graph) {
+          if (standaloneObjectUrlRef.current) {
+            URL.revokeObjectURL(standaloneObjectUrlRef.current);
+            standaloneObjectUrlRef.current = null;
+          }
+        } else if (useDirectTarget) {
           revokeDirectDeckUrl(graph);
         } else {
           revokeDeckUrl(graph.objectUrls, nextDeckIdx);
@@ -757,7 +880,12 @@ export function LocalAudioEngine() {
           replayGainDb: record.replayGainDb ?? null,
         };
       } else if (useOfflineBlob && offlineRec) {
-        if (useDirectTarget) {
+        if (!graph) {
+          if (standaloneObjectUrlRef.current) {
+            URL.revokeObjectURL(standaloneObjectUrlRef.current);
+            standaloneObjectUrlRef.current = null;
+          }
+        } else if (useDirectTarget) {
           revokeDirectDeckUrl(graph);
         } else {
           revokeDeckUrl(graph.objectUrls, nextDeckIdx);
@@ -793,7 +921,7 @@ export function LocalAudioEngine() {
           lossless: badge.lossless,
           hiRes: badge.hiRes,
           badgeLabel: `${badge.badgeLabel} (Offline)`,
-          sourceMode: localProfile.directMode ? 'direct' : 'webaudio',
+          sourceMode: !graph ? 'fallback-no-fx' : localProfile.directMode ? 'direct' : 'webaudio',
           proxiedViaBackend: false,
           audiodownloadAllowed: true,
           replayGainDb: offlineRec.replayGainDb ?? null,
@@ -801,7 +929,12 @@ export function LocalAudioEngine() {
       } else if (rawVideoId && currentTrack) {
         const est = cacheFallbackTrackBpm(trackUniqueId || rawVideoId, currentTrack);
         usePlayerStore.getState().setTrackBpm(trackUniqueId || rawVideoId, est);
-        if (useDirectTarget) {
+        if (!graph) {
+          if (standaloneObjectUrlRef.current) {
+            URL.revokeObjectURL(standaloneObjectUrlRef.current);
+            standaloneObjectUrlRef.current = null;
+          }
+        } else if (useDirectTarget) {
           revokeDirectDeckUrl(graph);
         } else {
           revokeDeckUrl(graph.objectUrls, nextDeckIdx);
@@ -810,7 +943,7 @@ export function LocalAudioEngine() {
         const artistName = formatArtists(currentTrack.artists);
 
         if (!isYouTubeVideoId(rawVideoId)) {
-          audio.pause();
+          pauseAudioElementProgrammatically(audio);
           audio.removeAttribute('src');
           try {
             const resolved = await resolvePlayableYoutube(rawVideoId, {
@@ -845,7 +978,7 @@ export function LocalAudioEngine() {
           if (cancelled) return;
           if (decideOnlineStreamAction(probeMeta) === 'use-youtube-iframe') {
             isLoadingAudioRef.current = false;
-            audio.pause();
+            pauseAudioElementProgrammatically(audio);
             audio.removeAttribute('src');
             usePlayerStore
               .getState()
@@ -875,7 +1008,7 @@ export function LocalAudioEngine() {
         } catch {
           if (cancelled) return;
           isLoadingAudioRef.current = false;
-          audio.pause();
+          pauseAudioElementProgrammatically(audio);
           audio.removeAttribute('src');
           usePlayerStore
             .getState()
@@ -896,7 +1029,26 @@ export function LocalAudioEngine() {
         return;
       }
 
-      if (useDirectTarget) {
+      if (!graph) {
+        standaloneObjectUrlRef.current = isObjectUrl ? urlToLoad : null;
+        const stVol = usePlayerStore.getState();
+        const directEffVol = localActive
+          ? stVol.volume
+          : clampYoutubeVolume(
+              stVol.volume,
+              useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+              stVol.isMuted,
+            );
+        audio.volume = stVol.isMuted
+          ? 0
+          : Math.max(0, Math.min(1, directEffVol / 100));
+        if (metaToReport) {
+          metaToReport = {
+            ...metaToReport,
+            sourceMode: 'fallback-no-fx',
+          };
+        }
+      } else if (useDirectTarget) {
         graph.directDeckObjectUrl = isObjectUrl ? urlToLoad : null;
         graph.directDeckTrackId = resolvedTrackKey;
         const stVol = usePlayerStore.getState();
@@ -915,9 +1067,9 @@ export function LocalAudioEngine() {
         graph.trackIds[nextDeckIdx] = resolvedTrackKey;
       }
 
-      audio.crossOrigin = urlToLoad.startsWith('blob:') ? null : 'anonymous';
+      audio.crossOrigin = !graph || urlToLoad.startsWith('blob:') ? null : 'anonymous';
       audio.src = urlToLoad;
-      audio.playbackRate = usePlayerStore.getState().playbackRate;
+      setElementRatePreservingPitch(audio, usePlayerStore.getState().playbackRate);
 
       const storeState = usePlayerStore.getState();
       const targetSeek = storeState.pendingSeekSeconds ?? storeState.currentTime ?? 0;
@@ -1043,13 +1195,12 @@ export function LocalAudioEngine() {
         const st = usePlayerStore.getState();
         st.setIsBuffering(false);
         st.setPlayerError(null);
-        if ('mediaSession' in navigator) {
-          try {
-            navigator.mediaSession.playbackState = st.isPlaying ? 'playing' : 'paused';
-          } catch {
-            // Ignore
-          }
-        }
+        syncMediaSessionPlaybackState(st.isPlaying ? 'playing' : 'paused');
+        syncMediaSessionPosition({
+          duration: Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : st.duration,
+          currentTime: Number.isFinite(audio.currentTime) ? audio.currentTime : st.currentTime,
+          playbackRate: st.playbackRate,
+        });
       };
 
       const handleWaiting = () => {
@@ -1092,7 +1243,7 @@ export function LocalAudioEngine() {
               const altMeta = await fetchStreamAudioMeta(altId, altQueryMeta).catch(() => null);
               if (cancelled) return;
               if (decideOnlineStreamAction(altMeta) === 'use-youtube-iframe') {
-                audio.pause();
+                pauseAudioElementProgrammatically(audio);
                 audio.removeAttribute('src');
                 usePlayerStore
                   .getState()
@@ -1108,7 +1259,7 @@ export function LocalAudioEngine() {
             })
             .catch(() => {
               if (cancelled) return;
-              audio.pause();
+              pauseAudioElementProgrammatically(audio);
               audio.removeAttribute('src');
               usePlayerStore
                 .getState()
@@ -1130,11 +1281,25 @@ export function LocalAudioEngine() {
           );
       };
 
+      const onOnlineRecover = () => {
+        if (cancelled || localActive || useOfflineBlob) return;
+        const st = usePlayerStore.getState();
+        if (st.isPlaying && (audio.error || audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE)) {
+          const resumeTime = st.currentTime;
+          if (resumeTime > 0) {
+            st.requestSeek(resumeTime);
+          }
+          audio.load();
+          void audio.play().catch(() => {});
+        }
+      };
+
       audio.addEventListener('loadedmetadata', handleLoadedMeta, { once: true });
       audio.addEventListener('playing', handlePlaying);
       audio.addEventListener('canplay', handlePlaying);
       audio.addEventListener('waiting', handleWaiting);
       audio.addEventListener('error', handleMediaError);
+      window.addEventListener('online', onOnlineRecover);
 
       detachListeners = () => {
         audio.removeEventListener('loadedmetadata', handleLoadedMeta);
@@ -1142,6 +1307,7 @@ export function LocalAudioEngine() {
         audio.removeEventListener('canplay', handlePlaying);
         audio.removeEventListener('waiting', handleWaiting);
         audio.removeEventListener('error', handleMediaError);
+        window.removeEventListener('online', onOnlineRecover);
       };
 
       audio.load();
@@ -1171,7 +1337,8 @@ export function LocalAudioEngine() {
   // Sync Play / Pause with smooth fade in/out when fadeOnPlayPause is enabled
   useEffect(() => {
     const graph = ensureAudioGraph();
-    if (!graph || !htmlAudioTrackKey) return;
+    const standalone = !graph ? ensureStandaloneDirectDeck() : null;
+    if ((!graph && !standalone) || !htmlAudioTrackKey) return;
     if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) return;
 
     if (pauseTimerRef.current !== null) {
@@ -1179,26 +1346,31 @@ export function LocalAudioEngine() {
       pauseTimerRef.current = null;
     }
 
-    const activeAudio = getActivePlaybackElement(graph);
-    const activeGain = graph.deckGains[graph.activeDeck].gain;
+    const activeAudio = graph ? getActivePlaybackElement(graph) : standalone!;
+    const activeGain = graph ? graph.deckGains[graph.activeDeck].gain : null;
     const profile = useSettingsStore.getState().localProfile;
     const ytFade = useSettingsStore.getState().youtubeSound.fadeOnPauseResume;
     const useFade =
-      (profile.fadeOnPlayPause || ytFade) && !profile.directMode && !graph.backgroundDirectActive;
-    const now = graph.ctx.currentTime;
+      Boolean(graph && activeGain) &&
+      (profile.fadeOnPlayPause || ytFade) &&
+      !profile.directMode &&
+      !graph!.backgroundDirectActive;
+    const now = graph ? graph.ctx.currentTime : 0;
 
     if (isPlaying) {
       ensurePlaybackAudioSession();
-      if (!graph.backgroundDirectActive) {
+      if (graph && !graph.backgroundDirectActive) {
         void resumeAudioContext();
       }
       if (activeAudio.src && activeAudio.dataset.scPriming !== '1') {
-        activeGain.cancelScheduledValues(now);
-        if (useFade) {
-          activeGain.setValueAtTime(0.02, now);
-          activeGain.linearRampToValueAtTime(1, now + 0.18);
-        } else {
-          activeGain.setValueAtTime(1, now);
+        if (activeGain) {
+          activeGain.cancelScheduledValues(now);
+          if (useFade) {
+            activeGain.setValueAtTime(0.02, now);
+            activeGain.linearRampToValueAtTime(1, now + 0.18);
+          } else {
+            activeGain.setValueAtTime(1, now);
+          }
         }
         if (activeAudio.paused) {
           void activeAudio.play().then(() => {
@@ -1217,19 +1389,32 @@ export function LocalAudioEngine() {
       }
     } else if (!activeAudio.paused) {
       stopSilentKeepaliveAudio();
-      if (useFade) {
+      if (useFade && activeGain && graph) {
         activeGain.cancelScheduledValues(now);
         activeGain.setValueAtTime(activeGain.value, now);
         activeGain.linearRampToValueAtTime(0.01, now + 0.14);
+        markProgrammaticPause(activeAudio, 350);
         pauseTimerRef.current = window.setTimeout(() => {
           pauseTimerRef.current = null;
           if (!usePlayerStore.getState().isPlaying) {
-            activeAudio.pause();
+            pauseAudioElementProgrammatically(activeAudio);
             activeGain.setValueAtTime(1, graph.ctx.currentTime);
+            const st = usePlayerStore.getState();
+            syncMediaSessionPosition({
+              duration: Number.isFinite(activeAudio.duration) && activeAudio.duration > 0 ? activeAudio.duration : st.duration,
+              currentTime: Number.isFinite(activeAudio.currentTime) ? activeAudio.currentTime : st.currentTime,
+              playbackRate: st.playbackRate,
+            });
           }
         }, 150);
       } else {
-        activeAudio.pause();
+        pauseAudioElementProgrammatically(activeAudio);
+        const st = usePlayerStore.getState();
+        syncMediaSessionPosition({
+          duration: Number.isFinite(activeAudio.duration) && activeAudio.duration > 0 ? activeAudio.duration : st.duration,
+          currentTime: Number.isFinite(activeAudio.currentTime) ? activeAudio.currentTime : st.currentTime,
+          playbackRate: st.playbackRate,
+        });
       }
     } else {
       stopSilentKeepaliveAudio();
@@ -1239,17 +1424,18 @@ export function LocalAudioEngine() {
   // Explicit Seek (cancels any active transition cleanly)
   useEffect(() => {
     const graph = ensureAudioGraph();
-    if (!htmlAudioTrackKey || pendingSeekSeconds === null || !graph) return;
+    const standalone = !graph ? ensureStandaloneDirectDeck() : null;
+    if (!htmlAudioTrackKey || pendingSeekSeconds === null || (!graph && !standalone)) return;
     if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) return;
 
-    const activeAudio = getActivePlaybackElement(graph);
+    const activeAudio = graph ? getActivePlaybackElement(graph) : standalone!;
     if (Number.isFinite(activeAudio.duration) && activeAudio.duration > 0) {
-      if (transitionInProgressRef.current) {
+      if (graph && transitionInProgressRef.current) {
         const activeIdx = graph.activeDeck;
         const standbyIdx: 0 | 1 = activeIdx === 0 ? 1 : 0;
         transitionInProgressRef.current = false;
         transitionStateRef.current = null;
-        graph.decks[standbyIdx].pause();
+        pauseAudioElementProgrammatically(graph.decks[standbyIdx]);
         resetDeckDjStage(graph, activeIdx, true);
         resetDeckDjStage(graph, standbyIdx, true);
         graph.deckGains[standbyIdx].gain.setTargetAtTime(0, graph.ctx.currentTime, 0.025);
@@ -1264,9 +1450,16 @@ export function LocalAudioEngine() {
           tempoRatio: 1,
         });
       }
-      activeAudio.currentTime = Math.max(0, Math.min(pendingSeekSeconds, activeAudio.duration));
-      usePlayerStore.getState().clearPendingSeek();
-      if (usePlayerStore.getState().isPlaying && activeAudio.paused) {
+      const clampedSeek = Math.max(0, Math.min(pendingSeekSeconds, activeAudio.duration));
+      activeAudio.currentTime = clampedSeek;
+      const st = usePlayerStore.getState();
+      st.clearPendingSeek();
+      syncMediaSessionPosition({
+        duration: activeAudio.duration,
+        currentTime: clampedSeek,
+        playbackRate: st.playbackRate,
+      });
+      if (st.isPlaying && activeAudio.paused) {
         void activeAudio.play().catch(() => {});
       }
     }
@@ -1459,6 +1652,34 @@ export function LocalAudioEngine() {
   useEffect(() => {
     if (!htmlAudioTrackKey || !isPlaying || activeStreamSourceMode === 'youtube-iframe') return;
     const graph = ensureAudioGraph();
+    const standalone = !graph ? ensureStandaloneDirectDeck() : null;
+    if (!graph && !standalone) return;
+
+    if (!graph && standalone) {
+      const syncStandaloneTick = () => {
+        if (!standalone.src || standalone.dataset.scPriming === '1') return;
+        const cur = standalone.currentTime;
+        const dur = Number.isFinite(standalone.duration) ? standalone.duration : 0;
+        const store = usePlayerStore.getState();
+        if (Number.isFinite(cur)) {
+          store.setProgress(cur, dur > 0 ? dur : undefined);
+        }
+        syncMediaSessionPosition({
+          duration: dur,
+          currentTime: cur,
+          playbackRate: store.playbackRate || 1,
+        });
+        if (dur > 0 && (standalone.ended || dur - cur <= 0.06)) {
+          store.handleTrackEnded();
+        }
+      };
+      const interval = window.setInterval(syncStandaloneTick, 150);
+      standalone.addEventListener('timeupdate', syncStandaloneTick);
+      return () => {
+        window.clearInterval(interval);
+        standalone.removeEventListener('timeupdate', syncStandaloneTick);
+      };
+    }
     if (!graph) return;
 
     const resolveStandbyInfo = (upcoming: MediaItem | null): {
@@ -1480,6 +1701,7 @@ export function LocalAudioEngine() {
       isLocal: boolean;
       track: MediaItem;
     }) => {
+      const gen = preloadGenerationRef.current;
       const standbyIdx: 0 | 1 = graph.activeDeck === 0 ? 1 : 0;
       if (graph.trackIds[standbyIdx] === nextInfo.key) return;
 
@@ -1487,7 +1709,9 @@ export function LocalAudioEngine() {
         const record =
           useLibraryStore.getState().localFiles.find((f) => f.id === nextInfo.key) ||
           (await db.localFiles.get(nextInfo.key));
-        if (!record) return;
+        if (!record || gen !== preloadGenerationRef.current) return;
+        const curStandbyIdx: 0 | 1 = graph.activeDeck === 0 ? 1 : 0;
+        if (curStandbyIdx !== standbyIdx) return;
         revokeDeckUrl(graph.objectUrls, standbyIdx);
         const url = URL.createObjectURL(record.blob);
         graph.objectUrls[standbyIdx] = url;
@@ -1541,6 +1765,9 @@ export function LocalAudioEngine() {
           quality: targetStreamTier,
         };
         const probe = await fetchStreamAudioMeta(nextInfo.key, streamQueryMeta).catch(() => null);
+        if (gen !== preloadGenerationRef.current) return;
+        const curStandbyIdx: 0 | 1 = graph.activeDeck === 0 ? 1 : 0;
+        if (curStandbyIdx !== standbyIdx) return;
         if (decideOnlineStreamAction(probe) === 'use-youtube-iframe') {
           graph.trackIds[standbyIdx] = nextInfo.key;
           return;
@@ -1579,22 +1806,11 @@ export function LocalAudioEngine() {
         store.setProgress(cur, dur > 0 ? dur : undefined);
       }
 
-      if (
-        'mediaSession' in navigator &&
-        'setPositionState' in navigator.mediaSession &&
-        dur > 0 &&
-        Number.isFinite(cur)
-      ) {
-        try {
-          navigator.mediaSession.setPositionState({
-            duration: dur,
-            playbackRate: store.playbackRate || 1,
-            position: Math.min(cur, dur),
-          });
-        } catch {
-          // Ignore
-        }
-      }
+      syncMediaSessionPosition({
+        duration: dur,
+        currentTime: cur,
+        playbackRate: store.playbackRate || 1,
+      });
 
       if (
         !graph.backgroundDirectActive &&
@@ -1680,7 +1896,7 @@ export function LocalAudioEngine() {
       if (transitionInProgressRef.current && effectiveCrossfade <= 0 && !transitionStateRef.current?.manual) {
         transitionInProgressRef.current = false;
         transitionStateRef.current = null;
-        graph.decks[standbyIdx].pause();
+        pauseAudioElementProgrammatically(graph.decks[standbyIdx]);
         resetDeckDjStage(graph, activeIdx, false);
         resetDeckDjStage(graph, standbyIdx, true);
         graph.deckGains[standbyIdx].gain.setTargetAtTime(0, graph.ctx.currentTime, 0.03);
