@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   ArrowDown,
@@ -27,7 +27,13 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
-import { fetchAccountLibrary, fetchAccountStatus } from '../api/client';
+import {
+  fetchAccountLibrary,
+  fetchAccountStatus,
+  getApiBaseUrl,
+  setApiBaseUrl,
+} from '../api/client';
+import { isCapacitorAndroidPlatform } from '../audio/capacitorAudioBridge';
 import { AudioSettingsTab } from '../components/AudioSettingsTab';
 import { BackgroundSettingsSection } from '../components/BackgroundSettingsSection';
 import { CrossfadeControl } from '../components/CrossfadeControl';
@@ -114,9 +120,12 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
   const [searchQuery, setSearchQuery] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [firestoreSyncing, setFirestoreSyncing] = useState(false);
+  const [apiUrlInput, setApiUrlInput] = useState(() => getApiBaseUrl());
   const [monitorOptions, setMonitorOptions] = useState<NotchMonitorOption[]>(
     DEFAULT_NOTCH_MONITOR_OPTIONS,
   );
+  const queryClient = useQueryClient();
+  const isAndroidApk = isCapacitorAndroidPlatform();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const eqSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1061,6 +1070,66 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   {syncing ? 'Menyinkronkan...' : 'Sinkronkan Koleksi Akun'}
                 </button>
               )}
+            </section>
+
+            {/* Server Backend (APK / Mobile) */}
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-3">
+              <div>
+                <h2 className="text-base font-semibold text-[#E8FFF3]">
+                  URL Server Backend {isAndroidApk ? '(Wajib untuk APK)' : '(Opsional)'}
+                </h2>
+                <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+                  Atur alamat server SoundClear (misalnya URL publik https://...) agar aplikasi Android
+                  dapat mengambil katalog lagu, lirik, dan aliran audio.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  value={apiUrlInput}
+                  onChange={(e) => setApiUrlInput(e.target.value)}
+                  placeholder="https://soundclear-anda.run.app"
+                  aria-label="URL Server Backend SoundClear"
+                  className="flex-1 h-10 px-3 rounded-xl bg-white/[0.06] border border-white/[0.12] text-xs text-[#E8FFF3] placeholder-[#B3F7D1]/40 focus:outline-none focus:ring-2 focus:ring-[#19EE8A]"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = apiUrlInput.trim();
+                      if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+                        showToast('URL harus diawali http:// atau https://');
+                        return;
+                      }
+                      setApiBaseUrl(trimmed);
+                      setApiUrlInput(getApiBaseUrl());
+                      void queryClient.invalidateQueries();
+                      showToast(
+                        trimmed
+                          ? 'URL server backend disimpan & diterapkan'
+                          : 'URL server dikembalikan ke bawaan',
+                      );
+                    }}
+                    className="px-4 h-10 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 whitespace-nowrap"
+                  >
+                    Simpan URL
+                  </button>
+                  {apiUrlInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setApiBaseUrl('');
+                        setApiUrlInput('');
+                        void queryClient.invalidateQueries();
+                        showToast('URL server direset ke bawaan');
+                      }}
+                      className="px-3 h-10 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
             </section>
 
             {/* Ekspor / Impor & Hapus Riwayat */}

@@ -83,13 +83,17 @@ public final class LocalAudioStreamProxy {
 
     private static final class ClientProfile {
         final String name;
+        final String clientId;
         final String version;
         final String userAgent;
+        final String origin;
 
-        ClientProfile(String name, String version, String userAgent) {
+        ClientProfile(String name, String clientId, String version, String userAgent, String origin) {
             this.name = name;
+            this.clientId = clientId;
             this.version = version;
             this.userAgent = userAgent;
+            this.origin = origin;
         }
     }
 
@@ -100,18 +104,24 @@ public final class LocalAudioStreamProxy {
     private static final ClientProfile[] CLIENTS = new ClientProfile[] {
         new ClientProfile(
             "ANDROID_VR",
+            "28",
             "1.60.19",
-            "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
+            "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+            "https://www.youtube.com"
         ),
         new ClientProfile(
             "ANDROID_MUSIC",
+            "21",
             "7.29.52",
-            "com.google.android.apps.youtube.music/7.29.52 (Linux; U; Android 14) gzip"
+            "com.google.android.apps.youtube.music/7.29.52 (Linux; U; Android 14) gzip",
+            "https://music.youtube.com"
         ),
         new ClientProfile(
             "IOS",
+            "5",
             "19.45.4",
-            "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)"
+            "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)",
+            "https://www.youtube.com"
         )
     };
 
@@ -200,6 +210,11 @@ public final class LocalAudioStreamProxy {
                 clientJson.put("gl", "ID");
                 if (client.name.startsWith("ANDROID")) {
                     clientJson.put("androidSdkVersion", 34);
+                } else if ("IOS".equals(client.name)) {
+                    clientJson.put("deviceMake", "Apple");
+                    clientJson.put("deviceModel", "iPhone16,2");
+                    clientJson.put("osName", "iPhone");
+                    clientJson.put("osVersion", "18.1.0.22B83");
                 }
 
                 JSONObject contextJson = new JSONObject();
@@ -212,10 +227,13 @@ public final class LocalAudioStreamProxy {
                 payload.put("racyCheckOk", true);
 
                 Request req = new Request.Builder()
-                    .url("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+                    .url(client.origin + "/youtubei/v1/player?prettyPrint=false")
                     .post(RequestBody.create(payload.toString(), JSON_MEDIA_TYPE))
                     .header("Content-Type", "application/json")
+                    .header("Origin", client.origin)
                     .header("User-Agent", client.userAgent)
+                    .header("X-YouTube-Client-Name", client.clientId)
+                    .header("X-YouTube-Client-Version", client.version)
                     .build();
 
                 try (Response res = httpClient.newCall(req).execute()) {
@@ -224,6 +242,10 @@ public final class LocalAudioStreamProxy {
                     if (body == null) continue;
                     String raw = body.string();
                     JSONObject json = new JSONObject(raw);
+                    JSONObject playability = json.optJSONObject("playabilityStatus");
+                    if (playability != null && !"OK".equals(playability.optString("status", ""))) {
+                        continue;
+                    }
                     JSONObject streamingData = json.optJSONObject("streamingData");
                     if (streamingData == null) continue;
 
@@ -362,6 +384,7 @@ public final class LocalAudioStreamProxy {
 
             Request.Builder reqBuilder = new Request.Builder()
                 .url(stream.upstreamUrl)
+                .header("Accept-Encoding", "identity")
                 .header("User-Agent", stream.userAgent);
             if (rangeHeader != null && !rangeHeader.isEmpty()) {
                 reqBuilder.header("Range", rangeHeader);
@@ -382,6 +405,7 @@ public final class LocalAudioStreamProxy {
                 cache.put(videoId, stream);
                 Request.Builder retryBuilder = new Request.Builder()
                     .url(stream.upstreamUrl)
+                    .header("Accept-Encoding", "identity")
                     .header("User-Agent", stream.userAgent);
                 if (rangeHeader != null && !rangeHeader.isEmpty()) {
                     retryBuilder.header("Range", rangeHeader);

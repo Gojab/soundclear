@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  AlertCircle,
   Ban,
   BarChart3,
   Check,
@@ -69,6 +70,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
   const sleepTimerMode = usePlayerStore((s) => s.sleepTimerMode);
   const ambientColor = usePlayerStore((s) => s.ambientColor);
   const mobileExpanded = usePlayerStore((s) => s.mobileExpanded);
+  const playerError = usePlayerStore((s) => s.playerError);
 
   const togglePlayPause = usePlayerStore((s) => s.togglePlayPause);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
@@ -77,6 +79,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const setMobileExpanded = usePlayerStore((s) => s.setMobileExpanded);
   const setKaraokeOpen = usePlayerStore((s) => s.setKaraokeOpen);
+  const setPlayerError = usePlayerStore((s) => s.setPlayerError);
 
   const trackKey = getTrackUniqueId(currentTrack);
   const liked = useLibraryStore((s) => s.isLiked(trackKey));
@@ -150,6 +153,22 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
             glassPanels ? 'bg-black/60 backdrop-blur-2xl' : 'bg-[#0B0F0D]/85 backdrop-blur-2xl'
           }`}
         >
+          {playerError && (
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-red-500/20 border-b border-red-400/25 text-[11px] text-red-100">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <AlertCircle className="w-3.5 h-3.5 text-red-300 shrink-0" />
+                <span className="truncate">{playerError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPlayerError(null)}
+                aria-label="Tutup pesan kesalahan"
+                className="p-0.5 text-red-200/80 hover:text-white shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-3 px-3 py-2">
             <button
               type="button"
@@ -324,6 +343,23 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                   </button>
                 </div>
               </div>
+
+              {playerError && (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-red-500/20 border border-red-400/30 text-xs text-red-100">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className="w-4 h-4 text-red-300 shrink-0" />
+                    <span className="leading-snug">{playerError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPlayerError(null)}
+                    aria-label="Tutup pesan kesalahan"
+                    className="p-1 text-red-200/80 hover:text-white shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
 
               {/* Scrubber with elapsed and -remaining */}
               <div className="space-y-1.5">

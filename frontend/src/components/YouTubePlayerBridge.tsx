@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { resolvePlayableYoutube } from '../api/client';
+import { syncCapacitorPlaybackNotification } from '../audio/capacitorAudioBridge';
 import {
   registerMediaSessionHandlers,
   syncMediaSessionMetadata,
@@ -459,6 +460,14 @@ export function YouTubePlayerBridge() {
             currentTime: Number.isFinite(cur) ? cur : st.currentTime,
             playbackRate: st.playbackRate || 1,
           });
+          syncCapacitorPlaybackNotification({
+            track: st.currentTrack,
+            isPlaying: true,
+            duration: dur > 0 ? dur : st.duration,
+            currentTime: Number.isFinite(cur) ? cur : st.currentTime,
+            playbackRate: st.playbackRate || 1,
+            force: true,
+          });
           if (
             shouldRunSilentKeepalive({
               isPlaying: true,
@@ -484,6 +493,14 @@ export function YouTubePlayerBridge() {
         st.setIsBuffering(false);
         stopSilentKeepaliveAudio();
         syncMediaSessionPlaybackState('paused');
+        syncCapacitorPlaybackNotification({
+          track: st.currentTrack,
+          isPlaying: false,
+          duration: st.duration,
+          currentTime: st.currentTime,
+          playbackRate: st.playbackRate || 1,
+          force: true,
+        });
 
         if (st.isPlaying) {
           if (document.visibilityState === 'hidden') {
@@ -1007,6 +1024,14 @@ export function YouTubePlayerBridge() {
                   }
                 } else {
                   syncMediaSessionPlaybackState('playing');
+                  syncCapacitorPlaybackNotification({
+                    track: st.currentTrack,
+                    isPlaying: true,
+                    duration: dur > 0 ? dur : st.duration,
+                    currentTime: Number.isFinite(cur) ? cur : st.currentTime,
+                    playbackRate: st.playbackRate || 1,
+                    force: true,
+                  });
                 }
               } else if (stateCode === 3) {
                 ytActuallyPlayingRef.current = false;

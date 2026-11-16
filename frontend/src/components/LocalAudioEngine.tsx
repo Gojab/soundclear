@@ -1074,11 +1074,11 @@ export function LocalAudioEngine() {
               setElementBusyForLoad(audio, false);
               pauseAudioElementProgrammatically(audio);
               audio.removeAttribute('src');
-              usePlayerStore.getState().setIsBuffering(false);
-              usePlayerStore.getState().setIsPlaying(false);
               usePlayerStore
                 .getState()
-                .setPlayerError('Aliran audio langsung tidak tersedia di perangkat ini.');
+                .setActiveStreamMeta(
+                  buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
+                );
               return;
             }
             resolvedNativeUrl = nativeStream.url;
@@ -1152,11 +1152,11 @@ export function LocalAudioEngine() {
               setElementBusyForLoad(audio, false);
               pauseAudioElementProgrammatically(audio);
               audio.removeAttribute('src');
-              usePlayerStore.getState().setIsBuffering(false);
-              usePlayerStore.getState().setIsPlaying(false);
               usePlayerStore
                 .getState()
-                .setPlayerError('Gagal memuat aliran audio. Periksa koneksi internet Anda.');
+                .setActiveStreamMeta(
+                  buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
+                );
               return;
             }
           } else {
@@ -1526,17 +1526,16 @@ export function LocalAudioEngine() {
                     audio.load();
                     return;
                   }
-                } else {
-                  pauseAudioElementProgrammatically(audio);
-                  audio.removeAttribute('src');
-                  syncMediaSessionPlaybackState('paused');
-                  usePlayerStore
-                    .getState()
-                    .setActiveStreamMeta(
-                      buildYoutubeIframeStreamMeta(rawVideoId, altId, targetStreamTier),
-                    );
-                  return;
                 }
+                pauseAudioElementProgrammatically(audio);
+                audio.removeAttribute('src');
+                syncMediaSessionPlaybackState('paused');
+                usePlayerStore
+                  .getState()
+                  .setActiveStreamMeta(
+                    buildYoutubeIframeStreamMeta(rawVideoId, altId, targetStreamTier),
+                  );
+                return;
               }
               const altUrl = buildStreamAudioUrl(altId, altQueryMeta);
               audio.crossOrigin = !graph || useDirectTarget ? null : 'anonymous';
@@ -1554,13 +1553,6 @@ export function LocalAudioEngine() {
                   audio.load();
                   return;
                 }
-                pauseAudioElementProgrammatically(audio);
-                audio.removeAttribute('src');
-                syncMediaSessionPlaybackState('paused');
-                usePlayerStore.getState().setIsBuffering(false);
-                usePlayerStore.getState().setIsPlaying(false);
-                usePlayerStore.getState().setPlayerError('Aliran audio gagal dimuat.');
-                return;
               }
               pauseAudioElementProgrammatically(audio);
               audio.removeAttribute('src');
