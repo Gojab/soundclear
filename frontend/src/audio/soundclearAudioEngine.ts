@@ -114,6 +114,10 @@ export function isProgrammaticPause(el: HTMLAudioElement): boolean {
   return false;
 }
 
+export function isBackgroundHandoffActive(): boolean {
+  return backgroundHandoffInProgress || foregroundRestoreInProgress;
+}
+
 export function pauseAudioElementProgrammatically(el: HTMLAudioElement): void {
   markProgrammaticPause(el);
   if (!el.paused) {
@@ -272,7 +276,6 @@ function primeAudioElementOnGesture(el: HTMLAudioElement): void {
             pauseAudioElementProgrammatically(el);
             el.muted = false;
             el.removeAttribute('src');
-            el.load();
             delete el.dataset.scPriming;
           }
         })
@@ -606,9 +609,14 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
         g.backgroundDirectActive ||
         testToneMode !== null;
       if (hasDeckActivity) {
-        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        if (
+          typeof document !== 'undefined' &&
+          document.visibilityState === 'hidden' &&
+          !g.backgroundDirectActive &&
+          !backgroundHandoffInProgress
+        ) {
           notifyContextInterruptedListeners();
-        } else {
+        } else if (typeof document === 'undefined' || document.visibilityState === 'visible') {
           void g.ctx.resume().catch(() => {});
         }
       }
@@ -696,8 +704,11 @@ export async function engageBackgroundDirectDeck(
   try {
     const otherDeck = graph.decks[graph.activeDeck === 0 ? 1 : 0];
     pauseAudioElementProgrammatically(otherDeck);
-    graph.directDeck.crossOrigin = targetSrc.startsWith('blob:') ? null : 'anonymous';
+    // Protect activeDeck from emitting an unguarded external pause if OS suspends AudioContext during handoff
+    markProgrammaticPause(activeDeck, 3000);
+    graph.directDeck.crossOrigin = null;
     graph.directDeck.volume = directVol;
+    graph.directDeck.muted = false;
     graph.directDeck.playbackRate = targetRate;
     graph.directDeck.src = targetSrc;
     graph.directDeck.addEventListener('loadedmetadata', onMetaReady, { once: true });
@@ -712,11 +723,11 @@ export async function engageBackgroundDirectDeck(
     // Call .play() synchronously inside the visibility/hide tick before awaiting
     const playPromise = graph.directDeck.play();
     await playPromise;
+    graph.backgroundDirectActive = true;
     graph.deckGains[graph.activeDeck].gain.setValueAtTime(0, graph.ctx.currentTime);
     pauseAudioElementProgrammatically(activeDeck);
     applyResumeSeek();
     unlockedAudioElements.add(graph.directDeck);
-    graph.backgroundDirectActive = true;
     stopSilentKeepaliveAudio();
     notifyDiagnosticsListeners();
     return true;
@@ -806,6 +817,8 @@ export async function restoreDspDeckFromBackground(): Promise<void> {
     graph.deckGains[activeDeckIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
 
     if (wasPlaying && activeDeck.src) {
+      // Mute directDeck right before starting activeDeck to prevent dual-audio echo overlap
+      graph.directDeck.muted = true;
       await activeDeck.play();
       unlockedAudioElements.add(activeDeck);
     }
@@ -813,11 +826,13 @@ export async function restoreDspDeckFromBackground(): Promise<void> {
     graph.backgroundDirectActive = false;
     graph.directDeckTrackId = null;
     pauseAudioElementProgrammatically(graph.directDeck);
+    graph.directDeck.muted = false;
     graph.directDeck.removeAttribute('src');
     revokeDirectDeckUrl(graph);
     notifyDiagnosticsListeners();
   } catch {
     // Keep directDeck playing seamlessly if foreground DSP restore fails
+    graph.directDeck.muted = false;
   } finally {
     foregroundRestoreInProgress = false;
   }
@@ -866,7 +881,7 @@ function installFirstGestureResume(): void {
     ) {
       if (document.visibilityState === 'visible') {
         void graph.ctx.resume().then(notifyDiagnosticsListeners).catch(() => {});
-      } else {
+      } else if (!graph.backgroundDirectActive && !backgroundHandoffInProgress) {
         notifyContextInterruptedListeners();
       }
     }

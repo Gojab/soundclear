@@ -22,6 +22,7 @@ import {
   getActivePlaybackElement,
   getCachedTrackBpm,
   incrementSkipSilenceCount,
+  isBackgroundHandoffActive,
   isProgrammaticPause,
   markProgrammaticPause,
   measureAndEstimateLufs,
@@ -86,6 +87,7 @@ import {
   isMobileAudioEnvironment,
   shouldEngageDirectDeckOnHide,
   shouldLoadTrackDirectlyOnDirectDeck,
+  shouldRestoreDspOnForeground,
   shouldSyncExternalPause,
 } from '../utils/backgroundAudioLogic';
 
@@ -273,7 +275,10 @@ export function LocalAudioEngine() {
       currentMeta &&
       (currentMeta.sourceMode === 'webaudio' || currentMeta.sourceMode === 'direct')
     ) {
-      const nextMode = localProfile.directMode ? 'direct' : 'webaudio';
+      const nextMode =
+        localProfile.directMode || isMobileAudioEnvironment() || graph?.backgroundDirectActive
+          ? 'direct'
+          : 'webaudio';
       if (currentMeta.sourceMode !== nextMode) {
         usePlayerStore.getState().setActiveStreamMeta({
           ...currentMeta,
@@ -396,13 +401,35 @@ export function LocalAudioEngine() {
       clearFallbackTimer();
       const graph = ensureAudioGraph();
       const state = usePlayerStore.getState();
-      if (graph?.backgroundDirectActive) {
+      const directMode = useSettingsStore.getState().localProfile.directMode;
+      if (
+        graph &&
+        shouldRestoreDspOnForeground({
+          backgroundDirectActive: graph.backgroundDirectActive,
+          isMobile,
+          directMode,
+          visibilityState: document.visibilityState,
+        })
+      ) {
         void restoreDspDeckFromBackground();
       } else if (graph && state.isPlaying && !isYoutubeIframeActive(state.activeStreamMeta)) {
-        void resumeAudioContext();
+        if (!graph.backgroundDirectActive) {
+          void resumeAudioContext();
+        }
         const activeEl = getActivePlaybackElement(graph);
         if (activeEl.src && activeEl.paused && !activeEl.ended && activeEl.dataset.scPriming !== '1') {
           void activeEl.play().catch(() => {});
+        }
+      } else if (!graph && state.isPlaying && !isYoutubeIframeActive(state.activeStreamMeta)) {
+        const standalone = ensureStandaloneDirectDeck();
+        if (
+          standalone &&
+          standalone.src &&
+          standalone.paused &&
+          !standalone.ended &&
+          standalone.dataset.scPriming !== '1'
+        ) {
+          void standalone.play().catch(() => {});
         }
       }
     };
@@ -570,6 +597,7 @@ export function LocalAudioEngine() {
         isYoutubeIframe: isYoutubeIframeActive(st.activeStreamMeta),
         isLoadingAudio: isLoadingAudioRef.current,
         isTransitioning: transitionInProgressRef.current,
+        isBackgroundHandoff: isBackgroundHandoffActive(),
       });
       if (shouldSync) {
         st.setIsPlaying(false);
@@ -765,6 +793,7 @@ export function LocalAudioEngine() {
           backgroundDirectActive: graph.backgroundDirectActive,
           isMobile: isMobileAudioEnvironment(),
           contextState: graph.ctx.state,
+          directMode: localProfile.directMode,
         });
 
       const storeAtStart = usePlayerStore.getState();
@@ -874,7 +903,7 @@ export function LocalAudioEngine() {
           lossless: badge.lossless,
           hiRes: badge.hiRes,
           badgeLabel: badge.badgeLabel,
-          sourceMode: localProfile.directMode ? 'direct' : 'webaudio',
+          sourceMode: !graph ? 'fallback-no-fx' : useDirectTarget || localProfile.directMode ? 'direct' : 'webaudio',
           proxiedViaBackend: false,
           audiodownloadAllowed: true,
           replayGainDb: record.replayGainDb ?? null,
@@ -921,7 +950,7 @@ export function LocalAudioEngine() {
           lossless: badge.lossless,
           hiRes: badge.hiRes,
           badgeLabel: `${badge.badgeLabel} (Offline)`,
-          sourceMode: !graph ? 'fallback-no-fx' : localProfile.directMode ? 'direct' : 'webaudio',
+          sourceMode: !graph ? 'fallback-no-fx' : useDirectTarget || localProfile.directMode ? 'direct' : 'webaudio',
           proxiedViaBackend: false,
           audiodownloadAllowed: true,
           replayGainDb: offlineRec.replayGainDb ?? null,
@@ -1000,7 +1029,7 @@ export function LocalAudioEngine() {
             lossless: false,
             hiRes: false,
             badgeLabel: `${probeMeta.codec || 'AAC'} ${kbps} kbps`,
-            sourceMode: localProfile.directMode ? 'direct' : 'webaudio',
+            sourceMode: !graph ? 'fallback-no-fx' : useDirectTarget || localProfile.directMode ? 'direct' : 'webaudio',
             proxiedViaBackend: true,
             audiodownloadAllowed: true,
             replayGainDb: null,
@@ -1067,7 +1096,8 @@ export function LocalAudioEngine() {
         graph.trackIds[nextDeckIdx] = resolvedTrackKey;
       }
 
-      audio.crossOrigin = !graph || urlToLoad.startsWith('blob:') ? null : 'anonymous';
+      audio.crossOrigin =
+        !graph || useDirectTarget || urlToLoad.startsWith('blob:') ? null : 'anonymous';
       audio.src = urlToLoad;
       setElementRatePreservingPitch(audio, usePlayerStore.getState().playbackRate);
 
@@ -1115,7 +1145,11 @@ export function LocalAudioEngine() {
                 lossless: false,
                 hiRes: false,
                 badgeLabel: `${realMeta.codec || 'AAC'} ${kbps} kbps`,
-                sourceMode: latestDirect ? 'direct' : 'webaudio',
+                sourceMode: !graph
+                  ? 'fallback-no-fx'
+                  : useDirectTarget || latestDirect
+                    ? 'direct'
+                    : 'webaudio',
                 proxiedViaBackend: true,
                 audiodownloadAllowed: true,
                 replayGainDb: null,
@@ -1253,7 +1287,7 @@ export function LocalAudioEngine() {
                 return;
               }
               const altUrl = buildStreamAudioUrl(altId, altQueryMeta);
-              audio.crossOrigin = 'anonymous';
+              audio.crossOrigin = !graph || useDirectTarget ? null : 'anonymous';
               audio.src = altUrl;
               audio.load();
             })
@@ -1294,9 +1328,18 @@ export function LocalAudioEngine() {
         }
       };
 
+      const handleCanPlay = () => {
+        if (cancelled) return;
+        if (!audio.paused) {
+          handlePlaying();
+        } else {
+          usePlayerStore.getState().setIsBuffering(false);
+        }
+      };
+
       audio.addEventListener('loadedmetadata', handleLoadedMeta, { once: true });
       audio.addEventListener('playing', handlePlaying);
-      audio.addEventListener('canplay', handlePlaying);
+      audio.addEventListener('canplay', handleCanPlay);
       audio.addEventListener('waiting', handleWaiting);
       audio.addEventListener('error', handleMediaError);
       window.addEventListener('online', onOnlineRecover);
@@ -1304,7 +1347,7 @@ export function LocalAudioEngine() {
       detachListeners = () => {
         audio.removeEventListener('loadedmetadata', handleLoadedMeta);
         audio.removeEventListener('playing', handlePlaying);
-        audio.removeEventListener('canplay', handlePlaying);
+        audio.removeEventListener('canplay', handleCanPlay);
         audio.removeEventListener('waiting', handleWaiting);
         audio.removeEventListener('error', handleMediaError);
         window.removeEventListener('online', onOnlineRecover);

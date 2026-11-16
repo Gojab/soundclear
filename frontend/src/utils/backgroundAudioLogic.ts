@@ -51,11 +51,25 @@ export function shouldLoadTrackDirectlyOnDirectDeck(params: {
   backgroundDirectActive: boolean;
   isMobile: boolean;
   contextState: AudioContextState | 'interrupted' | 'unavailable';
+  directMode?: boolean;
 }): boolean {
+  if (params.directMode) return true;
+  if (params.isMobile) return true;
   if (params.visibilityState === 'hidden') return true;
   if (params.backgroundDirectActive) return true;
-  if (params.isMobile && params.contextState !== 'running') return true;
+  if (params.contextState === 'interrupted') return true;
   return false;
+}
+
+export function shouldRestoreDspOnForeground(params: {
+  backgroundDirectActive: boolean;
+  isMobile: boolean;
+  directMode: boolean;
+  visibilityState: string;
+}): boolean {
+  if (!params.backgroundDirectActive) return false;
+  if (params.isMobile || params.directMode) return false;
+  return params.visibilityState === 'visible';
 }
 
 export function shouldRunSilentKeepalive(params: {
@@ -97,6 +111,7 @@ export function shouldSyncExternalPause(params: {
   isYoutubeIframe: boolean;
   isLoadingAudio: boolean;
   isTransitioning: boolean;
+  isBackgroundHandoff?: boolean;
 }): boolean {
   if (!params.isActiveElement) return false;
   if (!params.storeIsPlaying) return false;
@@ -106,6 +121,7 @@ export function shouldSyncExternalPause(params: {
   if (params.isYoutubeIframe) return false;
   if (params.isLoadingAudio) return false;
   if (params.isTransitioning) return false;
+  if (params.isBackgroundHandoff) return false;
   return true;
 }
 

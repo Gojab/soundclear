@@ -357,6 +357,11 @@ export function YouTubePlayerBridge() {
     } else if (iframeActive && !isPlaying) {
       stopSilentKeepaliveAudio();
     }
+    return () => {
+      if (iframeActive) {
+        stopSilentKeepaliveAudio();
+      }
+    };
   }, [iframeActive, isPlaying]);
 
   useEffect(() => {

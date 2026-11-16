@@ -5,6 +5,7 @@ import {
   isMobileAudioEnvironment,
   shouldEngageDirectDeckOnHide,
   shouldLoadTrackDirectlyOnDirectDeck,
+  shouldRestoreDspOnForeground,
   shouldRunSilentKeepalive,
   shouldSyncExternalPause,
 } from './backgroundAudioLogic.ts';
@@ -95,7 +96,7 @@ test('shouldEngageDirectDeckOnHide triggers immediately on mobile or suspended c
   );
 });
 
-test('shouldLoadTrackDirectlyOnDirectDeck keeps background auto-next on directDeck instead of suspended AudioContext', () => {
+test('shouldLoadTrackDirectlyOnDirectDeck routes mobile, directMode, and hidden tabs directly onto HTML5 Audio', () => {
   assert.equal(
     shouldLoadTrackDirectlyOnDirectDeck({
       visibilityState: 'hidden',
@@ -119,7 +120,7 @@ test('shouldLoadTrackDirectlyOnDirectDeck keeps background auto-next on directDe
       visibilityState: 'visible',
       backgroundDirectActive: false,
       isMobile: true,
-      contextState: 'interrupted',
+      contextState: 'running',
     }),
     true,
   );
@@ -129,6 +130,64 @@ test('shouldLoadTrackDirectlyOnDirectDeck keeps background auto-next on directDe
       backgroundDirectActive: false,
       isMobile: false,
       contextState: 'running',
+      directMode: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldLoadTrackDirectlyOnDirectDeck({
+      visibilityState: 'visible',
+      backgroundDirectActive: false,
+      isMobile: false,
+      contextState: 'running',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldLoadTrackDirectlyOnDirectDeck({
+      visibilityState: 'visible',
+      backgroundDirectActive: false,
+      isMobile: false,
+      contextState: 'suspended',
+    }),
+    false,
+  );
+});
+
+test('shouldRestoreDspOnForeground restores DSP only on visible desktop when directMode is off', () => {
+  assert.equal(
+    shouldRestoreDspOnForeground({
+      backgroundDirectActive: true,
+      isMobile: false,
+      directMode: false,
+      visibilityState: 'visible',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRestoreDspOnForeground({
+      backgroundDirectActive: true,
+      isMobile: true,
+      directMode: false,
+      visibilityState: 'visible',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRestoreDspOnForeground({
+      backgroundDirectActive: true,
+      isMobile: false,
+      directMode: true,
+      visibilityState: 'visible',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRestoreDspOnForeground({
+      backgroundDirectActive: true,
+      isMobile: false,
+      directMode: false,
+      visibilityState: 'hidden',
     }),
     false,
   );
@@ -184,7 +243,7 @@ test('clampSeekTarget bounds seek safely within duration', () => {
   assert.equal(clampSeekTarget(30, null), 30);
 });
 
-test('shouldSyncExternalPause catches OS/headphone pauses without false positives during transitions', () => {
+test('shouldSyncExternalPause catches OS/headphone pauses without false positives during transitions or handoffs', () => {
   assert.equal(
     shouldSyncExternalPause({
       isActiveElement: true,
@@ -195,8 +254,24 @@ test('shouldSyncExternalPause catches OS/headphone pauses without false positive
       isYoutubeIframe: false,
       isLoadingAudio: false,
       isTransitioning: false,
+      isBackgroundHandoff: false,
     }),
     true,
+  );
+
+  assert.equal(
+    shouldSyncExternalPause({
+      isActiveElement: true,
+      storeIsPlaying: true,
+      elementEnded: false,
+      isPriming: false,
+      isProgrammaticPause: false,
+      isYoutubeIframe: false,
+      isLoadingAudio: false,
+      isTransitioning: false,
+      isBackgroundHandoff: true,
+    }),
+    false,
   );
 
   assert.equal(
