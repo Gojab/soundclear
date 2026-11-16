@@ -75,14 +75,48 @@ export function shouldRestoreDspOnForeground(params: {
 export function shouldRunSilentKeepalive(params: {
   isPlaying: boolean;
   isYoutubeIframe: boolean;
+  youtubeActuallyPlaying?: boolean;
   isAudioLoading: boolean;
   contextSuspended: boolean;
   hasPlayingHtmlAudio: boolean;
 }): boolean {
   if (!params.isPlaying) return false;
-  if (params.isYoutubeIframe) return true;
+  if (params.isYoutubeIframe) {
+    return params.youtubeActuallyPlaying !== false;
+  }
   if (params.isAudioLoading && !params.hasPlayingHtmlAudio) return true;
   if (params.contextSuspended && !params.hasPlayingHtmlAudio) return true;
+  return false;
+}
+
+export function shouldFallbackSuspendedDspToDirect(params: {
+  isPlaying: boolean;
+  isYoutubeIframe: boolean;
+  backgroundDirectActive: boolean;
+  contextState: AudioContextState | 'interrupted' | 'unavailable';
+}): boolean {
+  if (!params.isPlaying || params.isYoutubeIframe || params.backgroundDirectActive) {
+    return false;
+  }
+  return params.contextState !== 'running';
+}
+
+export function shouldTreatYoutubeAsAutoplayBlocked(params: {
+  isPlaying: boolean;
+  isYoutubeIframe: boolean;
+  visibilityState: string;
+  playerState: number;
+  elapsedSincePlayRequestMs: number;
+  wasEverPlayingForTrack: boolean;
+}): boolean {
+  if (!params.isPlaying || !params.isYoutubeIframe) return false;
+  if (params.visibilityState !== 'visible') return false;
+  if (params.playerState === 2 && !params.wasEverPlayingForTrack && params.elapsedSincePlayRequestMs < 4000) {
+    return true;
+  }
+  if ((params.playerState === -1 || params.playerState === 5) && params.elapsedSincePlayRequestMs >= 3500) {
+    return true;
+  }
   return false;
 }
 

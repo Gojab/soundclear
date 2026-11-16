@@ -126,7 +126,11 @@ async def enforce_copyright_guard_middleware(request: Request, call_next):
 
 @app.exception_handler(MusicProviderError)
 async def music_provider_error_handler(_request: Request, exc: MusicProviderError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.message},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 @app.exception_handler(CopyrightGuardError)
@@ -514,6 +518,19 @@ def _parse_http_range_header(range_header: str, file_size: int) -> Tuple[int, in
         )
     end = min(end, file_size - 1)
     return start, end
+
+
+@app.options("/api/stream/{video_id}")
+def stream_audio_options(video_id: str) -> Response:
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
+            "Access-Control-Max-Age": "86400",
+        },
+    )
 
 
 @app.api_route("/api/stream/{video_id}", methods=["GET", "HEAD"])

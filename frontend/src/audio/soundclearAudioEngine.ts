@@ -125,6 +125,10 @@ export function pauseAudioElementProgrammatically(el: HTMLAudioElement): void {
   }
 }
 
+export function getStandaloneDirectDeck(): HTMLAudioElement | null {
+  return standaloneDirectDeck;
+}
+
 export function ensureStandaloneDirectDeck(): HTMLAudioElement | null {
   if (sharedGraph) return sharedGraph.directDeck;
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
@@ -133,6 +137,10 @@ export function ensureStandaloneDirectDeck(): HTMLAudioElement | null {
     configureAudioElement(standaloneDirectDeck, false);
   }
   return standaloneDirectDeck;
+}
+
+export function getSharedAudioGraphIfExists(): SharedAudioGraph | null {
+  return sharedGraph;
 }
 
 export function ensurePlaybackAudioSession(): void {
@@ -250,15 +258,33 @@ function ensureKeepaliveAudioElement(): HTMLAudioElement | null {
   return el;
 }
 
-export function clearElementPrimingFlag(el: HTMLAudioElement): void {
+export function setElementBusyForLoad(el: HTMLAudioElement, busy: boolean): void {
+  if (busy) {
+    el.dataset.scBusy = '1';
+  } else {
+    delete el.dataset.scBusy;
+  }
+}
+
+export function clearElementPrimingFlag(
+  el: HTMLAudioElement,
+  targetMuted = false,
+): void {
   delete el.dataset.scPriming;
-  el.muted = false;
+  el.muted = targetMuted;
 }
 
 function primeAudioElementOnGesture(el: HTMLAudioElement): void {
   if (unlockedAudioElements.has(el)) return;
-  if (!el.paused || el.getAttribute('src') || el.dataset.scPriming === '1') {
-    if (!el.paused) unlockedAudioElements.add(el);
+  if (
+    !el.paused ||
+    el.getAttribute('src') ||
+    el.dataset.scPriming === '1' ||
+    el.dataset.scBusy === '1'
+  ) {
+    if (!el.paused && el.dataset.scPriming !== '1') {
+      unlockedAudioElements.add(el);
+    }
     return;
   }
 
@@ -272,17 +298,21 @@ function primeAudioElementOnGesture(el: HTMLAudioElement): void {
       playPromise
         .then(() => {
           unlockedAudioElements.add(el);
-          if (el.dataset.scPriming === '1') {
+          if (el.dataset.scPriming === '1' && el.src === silentUrl) {
             pauseAudioElementProgrammatically(el);
             el.muted = false;
             el.removeAttribute('src');
             delete el.dataset.scPriming;
+          } else if (el.dataset.scPriming === '1') {
+            delete el.dataset.scPriming;
           }
         })
         .catch(() => {
-          if (el.dataset.scPriming === '1') {
+          if (el.dataset.scPriming === '1' && el.src === silentUrl) {
             el.muted = false;
             el.removeAttribute('src');
+            delete el.dataset.scPriming;
+          } else if (el.dataset.scPriming === '1') {
             delete el.dataset.scPriming;
           }
         });
@@ -290,9 +320,11 @@ function primeAudioElementOnGesture(el: HTMLAudioElement): void {
       unlockedAudioElements.add(el);
     }
   } catch {
-    if (el.dataset.scPriming === '1') {
+    if (el.dataset.scPriming === '1' && el.src === silentUrl) {
       el.muted = false;
       el.removeAttribute('src');
+      delete el.dataset.scPriming;
+    } else if (el.dataset.scPriming === '1') {
       delete el.dataset.scPriming;
     }
   }
@@ -320,20 +352,16 @@ export function unlockPlaybackOnUserGesture(): void {
   const graph = ensureAudioGraph();
   if (graph) {
     if (graph.ctx.state !== 'running') {
-      void graph.ctx.resume().catch(() => {});
+      void graph.ctx.resume().then(notifyDiagnosticsListeners).catch(() => {});
     }
     primeAudioElementOnGesture(graph.decks[0]);
     primeAudioElementOnGesture(graph.decks[1]);
     primeAudioElementOnGesture(graph.directDeck);
-    const hasPlayingHtmlAudio =
-      (!graph.decks[0].paused && Boolean(graph.decks[0].src) && graph.decks[0].dataset.scPriming !== '1') ||
-      (!graph.decks[1].paused && Boolean(graph.decks[1].src) && graph.decks[1].dataset.scPriming !== '1') ||
-      (!graph.directDeck.paused && Boolean(graph.directDeck.src) && graph.directDeck.dataset.scPriming !== '1');
-    if (!hasPlayingHtmlAudio) {
-      startSilentKeepaliveAudio();
-    }
   } else {
-    startSilentKeepaliveAudio();
+    const standalone = ensureStandaloneDirectDeck();
+    if (standalone) {
+      primeAudioElementOnGesture(standalone);
+    }
   }
 }
 
@@ -617,7 +645,22 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
         ) {
           notifyContextInterruptedListeners();
         } else if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-          void g.ctx.resume().catch(() => {});
+          void g.ctx
+            .resume()
+            .then(() => {
+              notifyDiagnosticsListeners();
+              if (
+                sharedGraph &&
+                sharedGraph.ctx.state !== 'running' &&
+                !sharedGraph.backgroundDirectActive &&
+                !backgroundHandoffInProgress
+              ) {
+                notifyContextInterruptedListeners();
+              }
+            })
+            .catch(() => {
+              notifyContextInterruptedListeners();
+            });
         }
       }
     }
@@ -677,7 +720,7 @@ export async function engageBackgroundDirectDeck(
   const targetRate = activeDeck.playbackRate || 1;
   const directVol = isMuted ? 0 : Math.max(0, Math.min(1, volume0to100 / 100));
 
-  clearElementPrimingFlag(graph.directDeck);
+  clearElementPrimingFlag(graph.directDeck, isMuted);
   revokeDirectDeckUrl(graph);
   graph.directDeckTrackId = graph.trackIds[graph.activeDeck];
 
@@ -696,8 +739,10 @@ export async function engageBackgroundDirectDeck(
     }
   };
 
-  let detachMetaSeek: (() => void) | null = null;
+  let seekDone = false;
   const onMetaReady = () => {
+    if (seekDone) return;
+    seekDone = true;
     applyResumeSeek();
   };
 
@@ -708,16 +753,13 @@ export async function engageBackgroundDirectDeck(
     markProgrammaticPause(activeDeck, 3000);
     graph.directDeck.crossOrigin = null;
     graph.directDeck.volume = directVol;
-    graph.directDeck.muted = false;
+    graph.directDeck.muted = isMuted;
     graph.directDeck.playbackRate = targetRate;
     graph.directDeck.src = targetSrc;
     graph.directDeck.addEventListener('loadedmetadata', onMetaReady, { once: true });
-    detachMetaSeek = () => {
-      graph.directDeck.removeEventListener('loadedmetadata', onMetaReady);
-    };
     graph.directDeck.load();
     if (graph.directDeck.readyState >= 1) {
-      applyResumeSeek();
+      onMetaReady();
     }
 
     // Call .play() synchronously inside the visibility/hide tick before awaiting
@@ -732,13 +774,13 @@ export async function engageBackgroundDirectDeck(
     notifyDiagnosticsListeners();
     return true;
   } catch {
+    graph.directDeck.removeEventListener('loadedmetadata', onMetaReady);
     graph.backgroundDirectActive = false;
     graph.directDeckTrackId = null;
     pauseAudioElementProgrammatically(graph.directDeck);
     graph.directDeck.removeAttribute('src');
     return false;
   } finally {
-    detachMetaSeek?.();
     backgroundHandoffInProgress = false;
   }
 }
@@ -756,16 +798,22 @@ export async function restoreDspDeckFromBackground(): Promise<void> {
     : activeDeck.currentTime;
   const targetRate = graph.directDeck.playbackRate || activeDeck.playbackRate || 1;
   const wasPlaying = !graph.directDeck.paused;
+  const prevMuted = graph.directDeck.muted;
 
   try {
     ensurePlaybackAudioSession();
     if (graph.ctx.state !== 'running') {
       await graph.ctx.resume().catch(() => {});
     }
+    // CRITICAL: Never switch away from directDeck back to Web Audio if AudioContext is NOT running!
+    // Otherwise playback continues silently while MediaSession and progress advance.
+    if (graph.ctx.state !== 'running') {
+      return;
+    }
 
     const srcDiffers = Boolean(directSrc && activeDeck.src !== directSrc);
     if (srcDiffers) {
-      clearElementPrimingFlag(activeDeck);
+      clearElementPrimingFlag(activeDeck, false);
       if (graph.objectUrls[activeDeckIdx] && graph.objectUrls[activeDeckIdx] !== directSrc) {
         URL.revokeObjectURL(graph.objectUrls[activeDeckIdx]!);
       }
@@ -774,6 +822,8 @@ export async function restoreDspDeckFromBackground(): Promise<void> {
       graph.trackIds[activeDeckIdx] = graph.directDeckTrackId;
 
       activeDeck.crossOrigin = directSrc.startsWith('blob:') ? null : 'anonymous';
+      activeDeck.muted = false;
+      activeDeck.volume = 1;
       activeDeck.playbackRate = targetRate;
       activeDeck.src = directSrc;
 
@@ -798,6 +848,10 @@ export async function restoreDspDeckFromBackground(): Promise<void> {
       });
     }
 
+    if (activeDeck.error || graph.ctx.state !== 'running') {
+      return;
+    }
+
     const liveResumeAt = Number.isFinite(graph.directDeck.currentTime)
       ? graph.directDeck.currentTime
       : resumeAt;
@@ -815,6 +869,8 @@ export async function restoreDspDeckFromBackground(): Promise<void> {
 
     resetDeckDjStage(graph, activeDeckIdx, true);
     graph.deckGains[activeDeckIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
+    activeDeck.muted = false;
+    activeDeck.volume = 1;
 
     if (wasPlaying && activeDeck.src) {
       // Mute directDeck right before starting activeDeck to prevent dual-audio echo overlap
@@ -826,13 +882,13 @@ export async function restoreDspDeckFromBackground(): Promise<void> {
     graph.backgroundDirectActive = false;
     graph.directDeckTrackId = null;
     pauseAudioElementProgrammatically(graph.directDeck);
-    graph.directDeck.muted = false;
+    graph.directDeck.muted = prevMuted;
     graph.directDeck.removeAttribute('src');
     revokeDirectDeckUrl(graph);
     notifyDiagnosticsListeners();
   } catch {
     // Keep directDeck playing seamlessly if foreground DSP restore fails
-    graph.directDeck.muted = false;
+    graph.directDeck.muted = prevMuted;
   } finally {
     foregroundRestoreInProgress = false;
   }
@@ -1148,7 +1204,7 @@ export async function setAudioOutputDevice(deviceId: string): Promise<{
     if (typeof ctxWithSink.setSinkId === 'function') {
       await ctxWithSink.setSinkId(deviceId);
     } else {
-      for (const deck of graph.decks) {
+      for (const deck of [...graph.decks, graph.directDeck]) {
         const elWithSink = deck as unknown as { setSinkId?: (id: string) => Promise<void> };
         if (typeof elWithSink.setSinkId === 'function') {
           await elWithSink.setSinkId(deviceId);

@@ -4,6 +4,7 @@ import {
   buildMediaMetadataInit,
   buildMediaPositionState,
   detectPwaPlatform,
+  resolveEffectiveMediaSessionPlaybackState,
   resolveMediaArtwork,
 } from './mediaSessionLogic.ts';
 
@@ -91,4 +92,69 @@ test('detectPwaPlatform identifies iOS, iPadOS desktop UA, Android, macOS Safari
   assert.equal(linuxFirefox.isFirefox, true);
   assert.equal(linuxFirefox.isSafari, false);
   assert.equal(linuxFirefox.isIOS, false);
+});
+
+test('resolveEffectiveMediaSessionPlaybackState never reports playing without live audible playback', () => {
+  assert.equal(
+    resolveEffectiveMediaSessionPlaybackState({
+      hasTrack: false,
+      storeIsPlaying: true,
+      isYoutubeIframe: false,
+      htmlAudioPlaying: true,
+      audioContextRunningOrDirect: true,
+    }),
+    'none',
+  );
+  assert.equal(
+    resolveEffectiveMediaSessionPlaybackState({
+      hasTrack: true,
+      storeIsPlaying: false,
+      isYoutubeIframe: false,
+      htmlAudioPlaying: true,
+      audioContextRunningOrDirect: true,
+    }),
+    'paused',
+  );
+  assert.equal(
+    resolveEffectiveMediaSessionPlaybackState({
+      hasTrack: true,
+      storeIsPlaying: true,
+      isYoutubeIframe: false,
+      htmlAudioPlaying: true,
+      audioContextRunningOrDirect: false,
+    }),
+    'paused',
+  );
+  assert.equal(
+    resolveEffectiveMediaSessionPlaybackState({
+      hasTrack: true,
+      storeIsPlaying: true,
+      isYoutubeIframe: false,
+      htmlAudioPlaying: true,
+      audioContextRunningOrDirect: true,
+    }),
+    'playing',
+  );
+  assert.equal(
+    resolveEffectiveMediaSessionPlaybackState({
+      hasTrack: true,
+      storeIsPlaying: true,
+      isYoutubeIframe: true,
+      youtubePlayerState: 2,
+      htmlAudioPlaying: false,
+      audioContextRunningOrDirect: true,
+    }),
+    'paused',
+  );
+  assert.equal(
+    resolveEffectiveMediaSessionPlaybackState({
+      hasTrack: true,
+      storeIsPlaying: true,
+      isYoutubeIframe: true,
+      youtubePlayerState: 1,
+      htmlAudioPlaying: false,
+      audioContextRunningOrDirect: true,
+    }),
+    'playing',
+  );
 });

@@ -145,7 +145,8 @@ export async function probeStreamWithCache(
 
   const flight = fetcher(cleanId, meta)
     .then((result) => {
-      setCachedStreamProbe(cleanId, quality, result, PROBE_CACHE_TTL_MS, nowMs ?? Date.now());
+      const ttl = result.available === false ? 60_000 : PROBE_CACHE_TTL_MS;
+      setCachedStreamProbe(cleanId, quality, result, ttl, nowMs ?? Date.now());
       return result;
     })
     .finally(() => {

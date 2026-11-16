@@ -4,10 +4,12 @@ import {
   clampSeekTarget,
   isMobileAudioEnvironment,
   shouldEngageDirectDeckOnHide,
+  shouldFallbackSuspendedDspToDirect,
   shouldLoadTrackDirectlyOnDirectDeck,
   shouldRestoreDspOnForeground,
   shouldRunSilentKeepalive,
   shouldSyncExternalPause,
+  shouldTreatYoutubeAsAutoplayBlocked,
 } from './backgroundAudioLogic.ts';
 
 test('isMobileAudioEnvironment detects iOS, iPadOS desktop UA, Android, and ignores desktop', () => {
@@ -226,11 +228,117 @@ test('shouldRunSilentKeepalive bridges gaps and iframe without hijacking active 
   );
   assert.equal(
     shouldRunSilentKeepalive({
+      isPlaying: true,
+      isYoutubeIframe: true,
+      youtubeActuallyPlaying: false,
+      isAudioLoading: false,
+      contextSuspended: false,
+      hasPlayingHtmlAudio: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRunSilentKeepalive({
       isPlaying: false,
       isYoutubeIframe: true,
       isAudioLoading: true,
       contextSuspended: true,
       hasPlayingHtmlAudio: false,
+    }),
+    false,
+  );
+});
+
+test('shouldFallbackSuspendedDspToDirect detects non-running AudioContext during active HTML5 DSP playback', () => {
+  assert.equal(
+    shouldFallbackSuspendedDspToDirect({
+      isPlaying: true,
+      isYoutubeIframe: false,
+      backgroundDirectActive: false,
+      contextState: 'suspended',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldFallbackSuspendedDspToDirect({
+      isPlaying: true,
+      isYoutubeIframe: false,
+      backgroundDirectActive: false,
+      contextState: 'interrupted',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldFallbackSuspendedDspToDirect({
+      isPlaying: true,
+      isYoutubeIframe: false,
+      backgroundDirectActive: false,
+      contextState: 'running',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldFallbackSuspendedDspToDirect({
+      isPlaying: true,
+      isYoutubeIframe: false,
+      backgroundDirectActive: true,
+      contextState: 'suspended',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldFallbackSuspendedDspToDirect({
+      isPlaying: true,
+      isYoutubeIframe: true,
+      backgroundDirectActive: false,
+      contextState: 'suspended',
+    }),
+    false,
+  );
+});
+
+test('shouldTreatYoutubeAsAutoplayBlocked detects foreground autoplay rejection without false positives', () => {
+  assert.equal(
+    shouldTreatYoutubeAsAutoplayBlocked({
+      isPlaying: true,
+      isYoutubeIframe: true,
+      visibilityState: 'visible',
+      playerState: 2,
+      elapsedSincePlayRequestMs: 800,
+      wasEverPlayingForTrack: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldTreatYoutubeAsAutoplayBlocked({
+      isPlaying: true,
+      isYoutubeIframe: true,
+      visibilityState: 'visible',
+      playerState: -1,
+      elapsedSincePlayRequestMs: 4000,
+      wasEverPlayingForTrack: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldTreatYoutubeAsAutoplayBlocked({
+      isPlaying: true,
+      isYoutubeIframe: true,
+      visibilityState: 'hidden',
+      playerState: 2,
+      elapsedSincePlayRequestMs: 800,
+      wasEverPlayingForTrack: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldTreatYoutubeAsAutoplayBlocked({
+      isPlaying: true,
+      isYoutubeIframe: true,
+      visibilityState: 'visible',
+      playerState: 2,
+      elapsedSincePlayRequestMs: 800,
+      wasEverPlayingForTrack: true,
     }),
     false,
   );

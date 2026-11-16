@@ -158,3 +158,21 @@ export function detectPwaPlatform(env?: PlatformDetectionInput): PwaPlatformInfo
     isStandalone,
   };
 }
+
+export function resolveEffectiveMediaSessionPlaybackState(params: {
+  hasTrack: boolean;
+  storeIsPlaying: boolean;
+  isYoutubeIframe: boolean;
+  youtubePlayerState?: number | null;
+  htmlAudioPlaying: boolean;
+  audioContextRunningOrDirect: boolean;
+}): 'playing' | 'paused' | 'none' {
+  if (!params.hasTrack) return 'none';
+  if (!params.storeIsPlaying) return 'paused';
+  if (params.isYoutubeIframe) {
+    return params.youtubePlayerState === 1 ? 'playing' : 'paused';
+  }
+  return params.htmlAudioPlaying && params.audioContextRunningOrDirect
+    ? 'playing'
+    : 'paused';
+}

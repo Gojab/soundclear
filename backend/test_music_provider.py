@@ -1229,6 +1229,38 @@ class MusicProviderTests(unittest.TestCase):
         finally:
             main_app.provider = orig_provider
 
+    def test_pick_best_audio_format_prefers_m4a_over_webm_without_ffmpeg_and_options_cors(self) -> None:
+        provider = MusicProvider(gateway=FakeYTMusicGateway(), sleep_fn=lambda _d: None)  # type: ignore[arg-type]
+        formats = [
+            {
+                "format_id": "251",
+                "ext": "webm",
+                "acodec": "opus",
+                "vcodec": "none",
+                "protocol": "https",
+                "abr": 160,
+                "url": "https://example.com/audio.webm",
+            },
+            {
+                "format_id": "140",
+                "ext": "m4a",
+                "acodec": "mp4a.40.2",
+                "vcodec": "none",
+                "protocol": "https",
+                "abr": 128,
+                "url": "https://example.com/audio.m4a",
+            },
+        ]
+        chosen = provider._pick_audio_only_format(formats, "high", allow_ffmpeg_only=False)
+        self.assertIsNotNone(chosen)
+        assert chosen is not None
+        self.assertEqual(chosen["ext"], "m4a")
+
+        client = TestClient(main_app.app)
+        opt_resp = client.options("/api/stream/dQw4w9WgXcQ")
+        self.assertEqual(opt_resp.status_code, 204)
+        self.assertEqual(opt_resp.headers.get("access-control-allow-origin"), "*")
+
 
 if __name__ == "__main__":
     unittest.main()

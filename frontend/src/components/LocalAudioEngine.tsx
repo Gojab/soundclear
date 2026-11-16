@@ -34,6 +34,7 @@ import {
   revokeDirectDeckUrl,
   setAudioOutputDevice,
   setDynamicMeasuredLufs,
+  setElementBusyForLoad,
   startSilentKeepaliveAudio,
   stopSilentKeepaliveAudio,
   subscribeAudioContextInterrupted,
@@ -86,10 +87,12 @@ import {
   clampSeekTarget,
   isMobileAudioEnvironment,
   shouldEngageDirectDeckOnHide,
+  shouldFallbackSuspendedDspToDirect,
   shouldLoadTrackDirectlyOnDirectDeck,
   shouldRestoreDspOnForeground,
   shouldSyncExternalPause,
 } from '../utils/backgroundAudioLogic';
+import { resolveEffectiveMediaSessionPlaybackState } from '../utils/mediaSessionLogic';
 
 interface ActiveTransitionState {
   mode: 'dj' | 'crossfade';
@@ -203,12 +206,15 @@ export function LocalAudioEngine() {
         : null;
 
   const loadedKeyRef = useRef<string | null>(null);
+  const loadedDirectModeRef = useRef<boolean>(localProfile.directMode);
   const transitionInProgressRef = useRef(false);
   const transitionStateRef = useRef<ActiveTransitionState | null>(null);
   const lastHandledManualMixRef = useRef<number>(0);
   const pauseTimerRef = useRef<number | null>(null);
   const stallTimerRef = useRef<number | null>(null);
   const silenceAccumMsRef = useRef(0);
+  const suspendedCtxAccumMsRef = useRef(0);
+  const digitalZeroAccumMsRef = useRef(0);
   const lastSilentSeekAtRef = useRef(0);
   const lastProgressTickAtRef = useRef(0);
   const dynamicLufsDoneRef = useRef(false);
@@ -264,10 +270,20 @@ export function LocalAudioEngine() {
     const graph = ensureAudioGraph();
     const directVol = isMuted ? 0 : Math.max(0, Math.min(1, effectiveVolume / 100));
     if (graph) {
+      graph.directDeck.muted = isMuted;
       graph.directDeck.volume = directVol;
+      graph.decks.forEach((d) => {
+        if (d.dataset.scPriming !== '1') {
+          d.muted = false;
+          d.volume = 1;
+        }
+      });
     } else {
       const standalone = ensureStandaloneDirectDeck();
-      if (standalone) standalone.volume = directVol;
+      if (standalone) {
+        standalone.muted = isMuted;
+        standalone.volume = directVol;
+      }
     }
 
     const currentMeta = usePlayerStore.getState().activeStreamMeta;
@@ -435,8 +451,22 @@ export function LocalAudioEngine() {
     };
 
     const unsubscribeInterrupt = subscribeAudioContextInterrupted(() => {
+      const latest = usePlayerStore.getState();
+      const g = ensureAudioGraph();
+      if (!g) return;
       if (document.visibilityState === 'hidden') {
         tryEngageDirectDeck();
+        return;
+      }
+      if (
+        shouldFallbackSuspendedDspToDirect({
+          isPlaying: latest.isPlaying,
+          isYoutubeIframe: isYoutubeIframeActive(latest.activeStreamMeta),
+          backgroundDirectActive: g.backgroundDirectActive,
+          contextState: g.ctx.state,
+        })
+      ) {
+        void engageBackgroundDirectDeck(getEffectiveVol(latest), latest.isMuted);
       }
     });
 
@@ -755,6 +785,7 @@ export function LocalAudioEngine() {
     if (loadedKeyRef.current === htmlAudioTrackKey) return;
 
     loadedKeyRef.current = htmlAudioTrackKey;
+    loadedDirectModeRef.current = localProfile.directMode;
     dynamicLufsDoneRef.current = false;
     fallbackAttemptedRef.current = false;
     transitionInProgressRef.current = false;
@@ -770,6 +801,8 @@ export function LocalAudioEngine() {
     });
     setDynamicMeasuredLufs(null);
     silenceAccumMsRef.current = 0;
+    suspendedCtxAccumMsRef.current = 0;
+    digitalZeroAccumMsRef.current = 0;
 
     let cancelled = false;
     let detachListeners: (() => void) | null = null;
@@ -815,18 +848,14 @@ export function LocalAudioEngine() {
           graph.backgroundDirectActive = true;
           pauseAudioElementProgrammatically(graph.decks[0]);
           pauseAudioElementProgrammatically(graph.decks[1]);
-          clearElementPrimingFlag(graph.directDeck);
         } else {
           resetDirectDeck();
           pauseAudioElementProgrammatically(graph.decks[otherDeckIdx]);
-          clearElementPrimingFlag(graph.decks[nextDeckIdx]);
           resetDeckDjStage(graph, nextDeckIdx, true);
           resetDeckDjStage(graph, otherDeckIdx, true);
           graph.deckGains[otherDeckIdx].gain.setValueAtTime(0, graph.ctx.currentTime);
           graph.deckGains[nextDeckIdx].gain.setValueAtTime(1, graph.ctx.currentTime);
         }
-      } else if (standalone) {
-        clearElementPrimingFlag(standalone);
       }
 
       const audio = graph
@@ -834,6 +863,7 @@ export function LocalAudioEngine() {
           ? graph.directDeck
           : graph.decks[nextDeckIdx]
         : standalone!;
+      setElementBusyForLoad(audio, true);
       let urlToLoad: string | null = null;
       let isObjectUrl = false;
       let resolvedTrackKey: string | null = null;
@@ -1054,13 +1084,16 @@ export function LocalAudioEngine() {
       }
 
       if (!urlToLoad || cancelled) {
+        setElementBusyForLoad(audio, false);
         isLoadingAudioRef.current = false;
         return;
       }
 
+      const stVol = usePlayerStore.getState();
+      clearElementPrimingFlag(audio, !graph || useDirectTarget ? stVol.isMuted : false);
+
       if (!graph) {
         standaloneObjectUrlRef.current = isObjectUrl ? urlToLoad : null;
-        const stVol = usePlayerStore.getState();
         const directEffVol = localActive
           ? stVol.volume
           : clampYoutubeVolume(
@@ -1068,6 +1101,7 @@ export function LocalAudioEngine() {
               useSettingsStore.getState().youtubeSound.maxVolumeLimit,
               stVol.isMuted,
             );
+        audio.muted = stVol.isMuted;
         audio.volume = stVol.isMuted
           ? 0
           : Math.max(0, Math.min(1, directEffVol / 100));
@@ -1080,7 +1114,6 @@ export function LocalAudioEngine() {
       } else if (useDirectTarget) {
         graph.directDeckObjectUrl = isObjectUrl ? urlToLoad : null;
         graph.directDeckTrackId = resolvedTrackKey;
-        const stVol = usePlayerStore.getState();
         const directEffVol = localActive
           ? stVol.volume
           : clampYoutubeVolume(
@@ -1088,17 +1121,21 @@ export function LocalAudioEngine() {
               useSettingsStore.getState().youtubeSound.maxVolumeLimit,
               stVol.isMuted,
             );
+        audio.muted = stVol.isMuted;
         audio.volume = stVol.isMuted
           ? 0
           : Math.max(0, Math.min(1, directEffVol / 100));
       } else {
         graph.objectUrls[nextDeckIdx] = isObjectUrl ? urlToLoad : null;
         graph.trackIds[nextDeckIdx] = resolvedTrackKey;
+        audio.muted = false;
+        audio.volume = 1;
       }
 
       audio.crossOrigin =
         !graph || useDirectTarget || urlToLoad.startsWith('blob:') ? null : 'anonymous';
       audio.src = urlToLoad;
+      setElementBusyForLoad(audio, false);
       setElementRatePreservingPitch(audio, usePlayerStore.getState().playbackRate);
 
       const storeState = usePlayerStore.getState();
@@ -1176,28 +1213,56 @@ export function LocalAudioEngine() {
         }
         if (st.isPlaying) {
           ensurePlaybackAudioSession();
-          if (!useDirectTarget) {
-            void resumeAudioContext();
+          // Keep DSP deck unmuted at full gain and guarantee other decks don't double-play
+          if (graph) {
+            if (useDirectTarget) {
+              pauseAudioElementProgrammatically(graph.decks[0]);
+              pauseAudioElementProgrammatically(graph.decks[1]);
+              audio.muted = st.isMuted;
+            } else {
+              pauseAudioElementProgrammatically(graph.decks[otherDeckIdx]);
+              pauseAudioElementProgrammatically(graph.directDeck);
+              audio.muted = false;
+              audio.volume = 1;
+            }
+          } else {
+            audio.muted = st.isMuted;
           }
+
+          const resumePromise =
+            !useDirectTarget && graph
+              ? resumeAudioContext()
+              : Promise.resolve<'running'>('running');
+
           void audio
             .play()
-            .then(() => {
+            .then(async () => {
               if (cancelled) return;
               stopSilentKeepaliveAudio();
-              if (!useDirectTarget && document.visibilityState === 'hidden') {
-                const latest = usePlayerStore.getState();
-                const g = ensureAudioGraph();
-                if (
-                  g &&
-                  shouldEngageDirectDeckOnHide({
+              await resumePromise;
+              if (cancelled) return;
+
+              const latest = usePlayerStore.getState();
+              const g = ensureAudioGraph();
+              if (!useDirectTarget && g && !g.backgroundDirectActive) {
+                const needDirectFallback =
+                  shouldFallbackSuspendedDspToDirect({
                     isPlaying: latest.isPlaying,
                     isYoutubeIframe: false,
-                    hasActiveDeckSrc: Boolean(audio.src),
-                    isMobile: isMobileAudioEnvironment(),
-                    contextState: g.ctx.state,
                     backgroundDirectActive: g.backgroundDirectActive,
-                  })
-                ) {
+                    contextState: g.ctx.state,
+                  }) ||
+                  (document.visibilityState === 'hidden' &&
+                    shouldEngageDirectDeckOnHide({
+                      isPlaying: latest.isPlaying,
+                      isYoutubeIframe: false,
+                      hasActiveDeckSrc: Boolean(audio.src),
+                      isMobile: isMobileAudioEnvironment(),
+                      contextState: g.ctx.state,
+                      backgroundDirectActive: g.backgroundDirectActive,
+                    }));
+
+                if (needDirectFallback) {
                   const effectiveVol = isLocalTrack(latest.currentTrack)
                     ? latest.volume
                     : clampYoutubeVolume(
@@ -1205,18 +1270,37 @@ export function LocalAudioEngine() {
                         useSettingsStore.getState().youtubeSound.maxVolumeLimit,
                         latest.isMuted,
                       );
-                  void engageBackgroundDirectDeck(effectiveVol, latest.isMuted);
+                  const engaged = await engageBackgroundDirectDeck(effectiveVol, latest.isMuted);
+                  if (engaged) {
+                    const latestMeta = usePlayerStore.getState().activeStreamMeta;
+                    if (latestMeta && latestMeta.sourceMode === 'webaudio') {
+                      usePlayerStore.getState().setActiveStreamMeta({
+                        ...latestMeta,
+                        sourceMode: 'direct',
+                      });
+                    }
+                  } else if (g.ctx.state !== 'running') {
+                    pauseAudioElementProgrammatically(audio);
+                    latest.setIsPlaying(false);
+                    latest.setAutoplayBlockedPendingResume(true);
+                    syncMediaSessionPlaybackState('paused');
+                  }
                 }
               }
             })
             .catch((err: unknown) => {
-              if (!cancelled && err instanceof DOMException && err.name === 'NotAllowedError') {
+              if (cancelled) return;
+              if (err instanceof DOMException && err.name === 'AbortError') return;
+              if (err instanceof DOMException && err.name === 'NotAllowedError') {
                 const latest = usePlayerStore.getState();
                 latest.setIsPlaying(false);
                 latest.setAutoplayBlockedPendingResume(true);
                 latest.setIsBuffering(false);
                 stopSilentKeepaliveAudio();
+                syncMediaSessionPlaybackState('paused');
+                return;
               }
+              handleMediaError();
             });
         }
       };
@@ -1229,7 +1313,17 @@ export function LocalAudioEngine() {
         const st = usePlayerStore.getState();
         st.setIsBuffering(false);
         st.setPlayerError(null);
-        syncMediaSessionPlaybackState(st.isPlaying ? 'playing' : 'paused');
+        const g = ensureAudioGraph();
+        const playbackState = resolveEffectiveMediaSessionPlaybackState({
+          hasTrack: Boolean(st.currentTrack),
+          storeIsPlaying: st.isPlaying,
+          isYoutubeIframe: false,
+          htmlAudioPlaying: Boolean(audio.src && !audio.paused && !audio.ended),
+          audioContextRunningOrDirect: Boolean(
+            !g || g.backgroundDirectActive || g.ctx.state === 'running',
+          ),
+        });
+        syncMediaSessionPlaybackState(playbackState);
         syncMediaSessionPosition({
           duration: Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : st.duration,
           currentTime: Number.isFinite(audio.currentTime) ? audio.currentTime : st.currentTime,
@@ -1249,10 +1343,49 @@ export function LocalAudioEngine() {
         }, stallWaitMs);
       };
 
+      let corsDirectRetried = false;
+
       const handleMediaError = () => {
         if (cancelled) return;
         isLoadingAudioRef.current = false;
         clearStallTimer();
+
+        // If CORS or WebAudio deck error occurred on a remote stream, retry on directDeck (`crossOrigin=null`) first
+        if (
+          !useDirectTarget &&
+          graph &&
+          !localActive &&
+          !useOfflineBlob &&
+          !corsDirectRetried &&
+          audio.crossOrigin === 'anonymous' &&
+          urlToLoad
+        ) {
+          corsDirectRetried = true;
+          const st = usePlayerStore.getState();
+          if (st.isPlaying) {
+            const effectiveVol = clampYoutubeVolume(
+              st.volume,
+              useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+              st.isMuted,
+            );
+            void engageBackgroundDirectDeck(effectiveVol, st.isMuted).then((ok) => {
+              if (cancelled) return;
+              if (ok) {
+                const latestMeta = usePlayerStore.getState().activeStreamMeta;
+                if (latestMeta && latestMeta.sourceMode === 'webaudio') {
+                  usePlayerStore.getState().setActiveStreamMeta({
+                    ...latestMeta,
+                    sourceMode: 'direct',
+                  });
+                }
+              } else {
+                handleMediaError();
+              }
+            });
+            return;
+          }
+        }
+
         if (!localActive && !useOfflineBlob && rawVideoId && currentTrack && !fallbackAttemptedRef.current) {
           fallbackAttemptedRef.current = true;
           usePlayerStore.getState().setIsBuffering(true);
@@ -1279,6 +1412,7 @@ export function LocalAudioEngine() {
               if (decideOnlineStreamAction(altMeta) === 'use-youtube-iframe') {
                 pauseAudioElementProgrammatically(audio);
                 audio.removeAttribute('src');
+                syncMediaSessionPlaybackState('paused');
                 usePlayerStore
                   .getState()
                   .setActiveStreamMeta(
@@ -1295,6 +1429,7 @@ export function LocalAudioEngine() {
               if (cancelled) return;
               pauseAudioElementProgrammatically(audio);
               audio.removeAttribute('src');
+              syncMediaSessionPlaybackState('paused');
               usePlayerStore
                 .getState()
                 .setActiveStreamMeta(
@@ -1306,6 +1441,7 @@ export function LocalAudioEngine() {
         usePlayerStore.getState().setIsBuffering(false);
         usePlayerStore.getState().setIsPlaying(false);
         stopSilentKeepaliveAudio();
+        syncMediaSessionPlaybackState('paused');
         usePlayerStore
           .getState()
           .setPlayerError(
@@ -1345,6 +1481,7 @@ export function LocalAudioEngine() {
       window.addEventListener('online', onOnlineRecover);
 
       detachListeners = () => {
+        setElementBusyForLoad(audio, false);
         audio.removeEventListener('loadedmetadata', handleLoadedMeta);
         audio.removeEventListener('playing', handlePlaying);
         audio.removeEventListener('canplay', handleCanPlay);
@@ -1374,8 +1511,48 @@ export function LocalAudioEngine() {
     rawVideoId,
     currentTrack,
     targetStreamTier,
-    localProfile.directMode,
   ]);
+
+  // Switch cleanly between DSP deck and Direct deck when Mode Direct toggles mid-track
+  useEffect(() => {
+    if (!hydrated || !htmlAudioTrackKey) return;
+    if (loadedDirectModeRef.current === localProfile.directMode) return;
+    loadedDirectModeRef.current = localProfile.directMode;
+
+    const graph = ensureAudioGraph();
+    if (!graph) return;
+    const st = usePlayerStore.getState();
+    if (isYoutubeIframeActive(st.activeStreamMeta)) return;
+
+    const effVol = localActive
+      ? st.volume
+      : clampYoutubeVolume(
+          st.volume,
+          useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+          st.isMuted,
+        );
+
+    if (localProfile.directMode) {
+      if (!graph.backgroundDirectActive && graph.decks[graph.activeDeck].src) {
+        if (st.isPlaying) {
+          void engageBackgroundDirectDeck(effVol, st.isMuted);
+        } else {
+          // Force clean reload onto directDeck when resumed while paused
+          loadedKeyRef.current = null;
+        }
+      }
+    } else if (
+      shouldRestoreDspOnForeground({
+        backgroundDirectActive: graph.backgroundDirectActive,
+        isMobile: isMobileAudioEnvironment(),
+        directMode: false,
+        visibilityState:
+          typeof document !== 'undefined' ? document.visibilityState : 'visible',
+      })
+    ) {
+      void restoreDspDeckFromBackground();
+    }
+  }, [hydrated, htmlAudioTrackKey, localActive, localProfile.directMode]);
 
   // Sync Play / Pause with smooth fade in/out when fadeOnPlayPause is enabled
   useEffect(() => {
@@ -1383,6 +1560,7 @@ export function LocalAudioEngine() {
     const standalone = !graph ? ensureStandaloneDirectDeck() : null;
     if ((!graph && !standalone) || !htmlAudioTrackKey) return;
     if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) return;
+    if (graph && isBackgroundHandoffActive()) return;
 
     if (pauseTimerRef.current !== null) {
       window.clearTimeout(pauseTimerRef.current);
@@ -1402,9 +1580,27 @@ export function LocalAudioEngine() {
 
     if (isPlaying) {
       ensurePlaybackAudioSession();
-      if (graph && !graph.backgroundDirectActive) {
-        void resumeAudioContext();
+      const resumePromise =
+        graph && !graph.backgroundDirectActive
+          ? resumeAudioContext()
+          : Promise.resolve<'running'>('running');
+      if (graph) {
+        if (graph.backgroundDirectActive) {
+          pauseAudioElementProgrammatically(graph.decks[0]);
+          pauseAudioElementProgrammatically(graph.decks[1]);
+          activeAudio.muted = usePlayerStore.getState().isMuted;
+        } else {
+          pauseAudioElementProgrammatically(graph.directDeck);
+          if (!transitionInProgressRef.current) {
+            pauseAudioElementProgrammatically(graph.decks[graph.activeDeck === 0 ? 1 : 0]);
+          }
+          activeAudio.muted = false;
+          activeAudio.volume = 1;
+        }
+      } else {
+        activeAudio.muted = usePlayerStore.getState().isMuted;
       }
+
       if (activeAudio.src && activeAudio.dataset.scPriming !== '1') {
         if (activeGain) {
           activeGain.cancelScheduledValues(now);
@@ -1416,18 +1612,47 @@ export function LocalAudioEngine() {
           }
         }
         if (activeAudio.paused) {
-          void activeAudio.play().then(() => {
-            stopSilentKeepaliveAudio();
-          }).catch((err: unknown) => {
-            if (err instanceof DOMException && err.name === 'NotAllowedError') {
-              const st = usePlayerStore.getState();
-              st.setIsPlaying(false);
-              st.setAutoplayBlockedPendingResume(true);
+          void activeAudio
+            .play()
+            .then(async () => {
               stopSilentKeepaliveAudio();
-            }
-          });
+              await resumePromise;
+              const latest = usePlayerStore.getState();
+              const g = ensureAudioGraph();
+              if (
+                g &&
+                !g.backgroundDirectActive &&
+                shouldFallbackSuspendedDspToDirect({
+                  isPlaying: latest.isPlaying,
+                  isYoutubeIframe: false,
+                  backgroundDirectActive: g.backgroundDirectActive,
+                  contextState: g.ctx.state,
+                })
+              ) {
+                const effVol = isLocalTrack(latest.currentTrack)
+                  ? latest.volume
+                  : clampYoutubeVolume(
+                      latest.volume,
+                      useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+                      latest.isMuted,
+                    );
+                await engageBackgroundDirectDeck(effVol, latest.isMuted);
+              }
+            })
+            .catch((err: unknown) => {
+              if (err instanceof DOMException && err.name === 'AbortError') return;
+              const st = usePlayerStore.getState();
+              stopSilentKeepaliveAudio();
+              syncMediaSessionPlaybackState('paused');
+              st.setIsPlaying(false);
+              if (err instanceof DOMException && err.name === 'NotAllowedError') {
+                st.setAutoplayBlockedPendingResume(true);
+              } else {
+                st.setPlayerError('Gagal memutar audio di perangkat ini.');
+              }
+            });
         }
-      } else if (document.visibilityState === 'hidden') {
+      } else if (document.visibilityState === 'hidden' && isLoadingAudioRef.current) {
         startSilentKeepaliveAudio();
       }
     } else if (!activeAudio.paused) {
@@ -1701,9 +1926,22 @@ export function LocalAudioEngine() {
     if (!graph && standalone) {
       const syncStandaloneTick = () => {
         if (!standalone.src || standalone.dataset.scPriming === '1') return;
+        const store = usePlayerStore.getState();
         const cur = standalone.currentTime;
         const dur = Number.isFinite(standalone.duration) ? standalone.duration : 0;
-        const store = usePlayerStore.getState();
+        const playingNow = !standalone.paused && !standalone.ended && standalone.readyState >= 2;
+        syncMediaSessionPlaybackState(
+          resolveEffectiveMediaSessionPlaybackState({
+            hasTrack: Boolean(store.currentTrack),
+            storeIsPlaying: store.isPlaying,
+            isYoutubeIframe: false,
+            htmlAudioPlaying: playingNow,
+            audioContextRunningOrDirect: true,
+          }),
+        );
+        if (standalone.paused && !standalone.ended) {
+          return;
+        }
         if (Number.isFinite(cur)) {
           store.setProgress(cur, dur > 0 ? dur : undefined);
         }
@@ -1844,6 +2082,102 @@ export function LocalAudioEngine() {
       const settingsState = useSettingsStore.getState();
       const profile = settingsState.localProfile;
       const ytSound = settingsState.youtubeSound;
+
+      const htmlPlayingNow = !audio.paused && !audio.ended && audio.readyState >= 2;
+      const ctxRunningOrDirect = graph.backgroundDirectActive || graph.ctx.state === 'running';
+
+      // Auto-restore foreground DSP if directDeck was engaged during a transient AudioContext interruption
+      // and AudioContext has recovered to 'running' while visible (desktop, directMode off).
+      if (
+        graph.backgroundDirectActive &&
+        store.isPlaying &&
+        graph.ctx.state === 'running' &&
+        shouldRestoreDspOnForeground({
+          backgroundDirectActive: graph.backgroundDirectActive,
+          isMobile: isMobileAudioEnvironment(),
+          directMode: profile.directMode,
+          visibilityState:
+            typeof document !== 'undefined' ? document.visibilityState : 'visible',
+        })
+      ) {
+        suspendedCtxAccumMsRef.current = 0;
+        void restoreDspDeckFromBackground();
+      } else if (
+        !graph.backgroundDirectActive &&
+        store.isPlaying &&
+        !audio.paused &&
+        !audio.ended &&
+        shouldFallbackSuspendedDspToDirect({
+          isPlaying: store.isPlaying,
+          isYoutubeIframe: false,
+          backgroundDirectActive: graph.backgroundDirectActive,
+          contextState: graph.ctx.state,
+        })
+      ) {
+        if (document.visibilityState === 'visible') {
+          void resumeAudioContext();
+        }
+        suspendedCtxAccumMsRef.current += deltaMs > 0 ? deltaMs : 100;
+        if (suspendedCtxAccumMsRef.current >= 300) {
+          suspendedCtxAccumMsRef.current = 0;
+          const effVol = localActive
+            ? store.volume
+            : clampYoutubeVolume(store.volume, ytSound.maxVolumeLimit, store.isMuted);
+          void engageBackgroundDirectDeck(effVol, store.isMuted);
+        }
+      } else {
+        suspendedCtxAccumMsRef.current = 0;
+      }
+
+      // Detect Safari/CORS MediaElementAudioSourceNode digital-zero silence bug and recover via directDeck
+      if (
+        !graph.backgroundDirectActive &&
+        !localActive &&
+        !useOfflineBlob &&
+        graph.ctx.state === 'running' &&
+        htmlPlayingNow &&
+        !store.isMuted &&
+        store.volume >= 10 &&
+        cur >= 1.5 &&
+        !transitionInProgressRef.current
+      ) {
+        const liveRms = computeLiveAnalyserRms();
+        if (liveRms === 0) {
+          digitalZeroAccumMsRef.current += deltaMs > 0 ? deltaMs : 100;
+          if (digitalZeroAccumMsRef.current >= 2200) {
+            digitalZeroAccumMsRef.current = 0;
+            const effVol = clampYoutubeVolume(store.volume, ytSound.maxVolumeLimit, store.isMuted);
+            void engageBackgroundDirectDeck(effVol, store.isMuted).then((ok) => {
+              if (!ok) return;
+              const latestMeta = usePlayerStore.getState().activeStreamMeta;
+              if (latestMeta && latestMeta.sourceMode === 'webaudio') {
+                usePlayerStore.getState().setActiveStreamMeta({
+                  ...latestMeta,
+                  sourceMode: 'direct',
+                });
+              }
+            });
+          }
+        } else {
+          digitalZeroAccumMsRef.current = 0;
+        }
+      } else {
+        digitalZeroAccumMsRef.current = 0;
+      }
+
+      syncMediaSessionPlaybackState(
+        resolveEffectiveMediaSessionPlaybackState({
+          hasTrack: Boolean(store.currentTrack),
+          storeIsPlaying: store.isPlaying,
+          isYoutubeIframe: false,
+          htmlAudioPlaying: htmlPlayingNow,
+          audioContextRunningOrDirect: ctxRunningOrDirect,
+        }),
+      );
+
+      if (audio.paused && !audio.ended) {
+        return;
+      }
 
       if (Number.isFinite(cur)) {
         store.setProgress(cur, dur > 0 ? dur : undefined);

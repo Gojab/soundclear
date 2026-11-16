@@ -2971,8 +2971,8 @@ class MusicProvider:
                 else 1
             )
             is_progressive = 1 if (proto in ("http", "https") and "m3u8" not in str(fmt.get("url") or "").lower()) else 0
-            if not allow_ffmpeg_only and is_aac_mp3 == 1 and ext in ("opus", "ogg"):
-                # Prefer universally supported AAC/MP3 containers over raw opus/ogg when no ffmpeg
+            if not allow_ffmpeg_only and is_aac_mp3 == 1 and ext in ("webm", "opus", "ogg"):
+                # Prefer universally supported AAC/MP3 containers over webm/opus/ogg when no ffmpeg
                 is_aac_mp3 = 0
             if tier == "low":
                 cap_ok = 1 if abr <= 96 or abr == 0 else 0
