@@ -35,6 +35,8 @@ export const auth = createFirebaseAuth();
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+export const firebaseWebClientId = firebaseConfig.oAuthClientId || '';
+
 export const firebaseProjectInfo = {
   projectId: firebaseConfig.projectId,
   firestoreDatabaseId: firebaseConfig.firestoreDatabaseId,

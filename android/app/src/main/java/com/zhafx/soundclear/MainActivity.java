@@ -27,6 +27,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(BackgroundAudioPlugin.class);
+        registerPlugin(GoogleAuthPlugin.class);
         super.onCreate(savedInstanceState);
         configureWebViewForBackgroundAudio();
         requestFirstLaunchBackgroundSetup(false);

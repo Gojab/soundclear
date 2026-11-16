@@ -1,4 +1,4 @@
-import { t as WebPlugin } from "./index-BCxwTr3r.js";
+import { t as WebPlugin } from "./index-CVtUVCsH.js";
 // node_modules/@capacitor/app/dist/esm/web.js
 var AppWeb = class extends WebPlugin {
 	constructor() {

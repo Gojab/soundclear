@@ -19578,9 +19578,9 @@ var SystemBarsPluginWeb = class extends WebPlugin {
 };
 var SystemBars = registerPlugin("SystemBars", { web: () => new SystemBarsPluginWeb() });
 // node_modules/@capacitor/app/dist/esm/index.js
-var App$1 = registerPlugin("App", { web: () => __vitePreload(() => import("./web-BqIOWRz9.js").then((m) => new m.AppWeb()), []) });
+var App$1 = registerPlugin("App", { web: () => __vitePreload(() => import("./web-Brh_FG_D.js").then((m) => new m.AppWeb()), []) });
 // node_modules/@capacitor/splash-screen/dist/esm/index.js
-var SplashScreen = registerPlugin("SplashScreen", { web: () => __vitePreload(() => import("./web-DXnESgZl.js").then((m) => new m.SplashScreenWeb()), []) });
+var SplashScreen = registerPlugin("SplashScreen", { web: () => __vitePreload(() => import("./web-liB-zmk2.js").then((m) => new m.SplashScreenWeb()), []) });
 // node_modules/@capacitor/status-bar/dist/esm/definitions.js
 var Style;
 (function(Style) {
@@ -37034,6 +37034,23 @@ async function _signInWithCredential(auth, credential, bypassAuthState = false) 
 	const userCredential = await UserCredentialImpl._fromIdTokenResponse(auth, operationType, response);
 	if (!bypassAuthState) await auth._updateCurrentUser(userCredential.user);
 	return userCredential;
+}
+/**
+* Asynchronously signs in with the given credentials.
+*
+* @remarks
+* An {@link AuthProvider} can be used to generate the credential.
+*
+* This method is not supported by {@link Auth} instances created with a
+* {@link @firebase/app#FirebaseServerApp}.
+*
+* @param auth - The {@link Auth} instance.
+* @param credential - The auth credential.
+*
+* @public
+*/
+async function signInWithCredential(auth, credential) {
+	return _signInWithCredential(_castAuth(auth), credential);
 }
 /**
 * @license
@@ -67501,6 +67518,7 @@ var db = getFirestore(app, firebase_applet_config_default.firestoreDatabaseId);
 var auth = createFirebaseAuth();
 var googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
+var firebaseWebClientId = firebase_applet_config_default.oAuthClientId || "";
 var firebaseProjectInfo = {
 	projectId: firebase_applet_config_default.projectId,
 	firestoreDatabaseId: firebase_applet_config_default.firestoreDatabaseId
@@ -89753,6 +89771,7 @@ function CustomBackgroundLayer() {
 	});
 }
 // frontend/src/store/authStore.ts
+var SoundClearGoogleAuth = registerPlugin("SoundClearGoogleAuth");
 var useAuthStore = create((set) => ({
 	authReady: false,
 	user: null,
@@ -89774,6 +89793,16 @@ var useAuthStore = create((set) => ({
 			firestoreError: null
 		});
 		try {
+			if (Capacitor.isNativePlatform()) {
+				if (!firebaseWebClientId) throw new Error("Konfigurasi OAuth Web Client ID Firebase tidak ditemukan.");
+				const nativeRes = await SoundClearGoogleAuth.signIn({ webClientId: firebaseWebClientId });
+				const cred = await signInWithCredential(auth, GoogleAuthProvider.credential(nativeRes.idToken));
+				set({
+					user: cred.user,
+					signingIn: false
+				});
+				return cred.user;
+			}
 			const cred = await signInWithPopup(auth, googleProvider);
 			set({
 				user: cred.user,
@@ -89784,13 +89813,14 @@ var useAuthStore = create((set) => ({
 			const rawMsg = err instanceof Error ? err.message : String(err);
 			set({
 				signingIn: false,
-				firestoreError: formatFirestoreQuotaNotice(rawMsg) || (rawMsg.includes("popup-closed-by-user") ? "Login Google dibatalkan." : rawMsg.includes("popup-blocked") ? "Popup login diblokir browser. Izinkan popup untuk masuk dengan Google." : `Gagal masuk dengan Google: ${rawMsg}`)
+				firestoreError: formatFirestoreQuotaNotice(rawMsg) || (rawMsg.includes("popup-closed-by-user") || rawMsg.includes("SIGN_IN_CANCELLED") ? "Login Google dibatalkan." : rawMsg.includes("DEVELOPER_ERROR") || rawMsg.includes("developer-error") ? "SHA-1 aplikasi Android (com.zhafx.soundclear) belum terdaftar di Firebase Console." : rawMsg.includes("NETWORK_ERROR") || rawMsg.includes("network-error") ? "Tidak dapat terhubung ke Google. Periksa koneksi internet Anda." : rawMsg.includes("popup-blocked") ? "Popup login diblokir browser. Izinkan popup untuk masuk dengan Google." : `Gagal masuk dengan Google: ${rawMsg}`)
 			});
 			return null;
 		}
 	},
 	signOutUser: async () => {
 		try {
+			if (Capacitor.isNativePlatform()) await SoundClearGoogleAuth.signOut().catch(() => {});
 			await signOut(auth);
 			clearKnownFirestoreDocPaths();
 			set({
