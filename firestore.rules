@@ -137,7 +137,7 @@ service cloud.firestore {
         && bg.customImageDataUrl == null
         && isOptionalString(bg.customImageName, 160)
         && bg.blurPx is number && bg.blurPx >= 0 && bg.blurPx <= 40
-        && bg.dimOpacity is number && bg.dimOpacity >= 0 && bg.dimOpacity <= 1
+        && bg.dimOpacity is number && bg.dimOpacity >= 0 && bg.dimOpacity <= 100
         && bg.panelGlass is bool;
     }
 

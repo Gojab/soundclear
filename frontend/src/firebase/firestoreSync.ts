@@ -7,11 +7,11 @@ import {
   getDocs,
   limit,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -98,7 +98,7 @@ export function sanitizeTrackForFirestore(track: MediaItem): MediaItem {
     id: truncateStr(track.id || track.videoId || 'track', 256) || 'track',
     title: truncateStr(track.title || 'Tanpa Judul', 500),
     artists: safeArtists,
-    type: track.type || 'song',
+    type: (truncateStr(track.type || 'song', 32) || 'song') as MediaItem['type'],
   };
 
   if (track.album && typeof track.album === 'object') {
@@ -204,7 +204,7 @@ function sanitizePreferencesPayload(uid: string, s: UserSettings) {
       customImageDataUrl: null,
       customImageName: optionalStr(bg.customImageName, 160),
       blurPx: clampNumber(bg.blurPx, 0, 40),
-      dimOpacity: clampNumber(bg.dimOpacity, 0, 1),
+      dimOpacity: clampNumber(bg.dimOpacity, 0, 100),
       panelGlass: Boolean(bg.panelGlass),
     },
     notchDisplayMode: normalizeNotchDisplayMode(s.notchDisplayMode),
@@ -352,7 +352,7 @@ export async function saveLikedTrackToFirestore(
   track: MediaItem,
   addedAt: number,
 ): Promise<void> {
-  const id = truncateStr(track.videoId || track.id, 256);
+  const id = truncateStr(track.videoId || track.id || 'track', 256) || 'track';
   const docId = toSafeDocId(id);
   const path = `users/${uid}/likedTracks/${docId}`;
   const safeTrack = sanitizeTrackForFirestore({ ...track, id });
@@ -482,7 +482,7 @@ export async function saveAlbumToFirestore(uid: string, entry: SavedAlbumEntry):
     path,
     {
       uid,
-      id: truncateStr(entry.id, 256),
+      id: truncateStr(entry.id || 'album', 256) || 'album',
       pinned: Boolean(entry.pinned),
       savedAt: Math.max(0, entry.savedAt || Date.now()),
       lastPlayedAt,
@@ -517,7 +517,7 @@ export async function saveFollowedArtistToFirestore(
     path,
     {
       uid,
-      id: truncateStr(entry.id, 256),
+      id: truncateStr(entry.id || 'artist', 256) || 'artist',
       pinned: Boolean(entry.pinned),
       followedAt: Math.max(0, entry.followedAt || Date.now()),
       lastPlayedAt,
@@ -552,7 +552,7 @@ export async function savePodcastToFirestore(uid: string, entry: SavedPodcastEnt
     path,
     {
       uid,
-      id: truncateStr(entry.id, 256),
+      id: truncateStr(entry.id || 'podcast', 256) || 'podcast',
       pinned: Boolean(entry.pinned),
       savedAt: Math.max(0, entry.savedAt || Date.now()),
       lastPlayedAt,
@@ -587,7 +587,7 @@ export async function saveEpisodeProgressToFirestore(
     path,
     {
       uid,
-      episodeId: truncateStr(entry.episodeId, 256),
+      episodeId: truncateStr(entry.episodeId || 'episode', 256) || 'episode',
       podcastId,
       positionSeconds,
       durationSeconds,
@@ -610,7 +610,7 @@ export async function addPlayHistoryToFirestore(
     await setDoc(doc(db, path), {
       uid,
       entryId,
-      trackId: truncateStr(entry.trackId, 256),
+      trackId: truncateStr(entry.trackId || entry.track?.id || 'track', 256) || 'track',
       playedAt: Math.max(0, entry.playedAt),
       durationListenedSec: Math.max(0, entry.durationListenedSec || 0),
       sourceType: entry.sourceType === 'episode' ? 'episode' : 'song',
@@ -626,9 +626,14 @@ export async function addPlayHistoryToFirestore(
 
 export async function clearPlayHistoryInFirestore(uid: string): Promise<void> {
   const colPath = `users/${uid}/playHistory`;
+  let docs;
   try {
-    const snap = await getDocs(collection(db, colPath));
-    const docs = snap.docs;
+    const snap = await getDocs(query(collection(db, colPath), where('uid', '==', uid)));
+    docs = snap.docs;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, colPath);
+  }
+  try {
     for (let i = 0; i < docs.length; i += 400) {
       const batch = writeBatch(db);
       for (const d of docs.slice(i, i + 400)) {
@@ -646,14 +651,16 @@ export async function addRecentSearchToFirestore(
   uid: string,
   entry: RecentSearchEntry,
 ): Promise<void> {
-  const searchId = toSafeDocId(entry.query.toLowerCase());
+  const cleanQuery = truncateStr((entry.query || '').trim(), 300);
+  if (!cleanQuery) return;
+  const searchId = toSafeDocId(cleanQuery.toLowerCase());
   const path = `users/${uid}/recentSearches/${searchId}`;
   try {
     await deleteDoc(doc(db, path)).catch(() => {});
     await setDoc(doc(db, path), {
       uid,
       searchId,
-      query: truncateStr(entry.query, 300),
+      query: cleanQuery,
       searchedAt: Math.max(0, entry.searchedAt),
       createdAt: serverTimestamp(),
     });
@@ -676,27 +683,48 @@ export async function deleteRecentSearchFromFirestore(uid: string, queryText: st
 
 export async function clearRecentSearchesInFirestore(uid: string): Promise<void> {
   const colPath = `users/${uid}/recentSearches`;
+  let docs;
   try {
-    const snap = await getDocs(collection(db, colPath));
+    const snap = await getDocs(query(collection(db, colPath), where('uid', '==', uid)));
     if (snap.empty) return;
-    const batch = writeBatch(db);
-    for (const d of snap.docs) {
-      batch.delete(d.ref);
-      knownDocPaths.delete(`${colPath}/${d.id}`);
+    docs = snap.docs;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, colPath);
+  }
+  try {
+    for (let i = 0; i < docs.length; i += 400) {
+      const batch = writeBatch(db);
+      for (const d of docs.slice(i, i + 400)) {
+        batch.delete(d.ref);
+        knownDocPaths.delete(`${colPath}/${d.id}`);
+      }
+      await batch.commit();
     }
-    await batch.commit();
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, colPath);
   }
 }
 
 export async function saveHiddenTrackToFirestore(uid: string, trackId: string): Promise<void> {
-  const docId = toSafeDocId(trackId);
+  const cleanId = truncateStr((trackId || '').trim(), 256);
+  if (!cleanId) return;
+  const docId = toSafeDocId(cleanId);
   const path = `users/${uid}/hiddenTracks/${docId}`;
+  if (knownDocPaths.has(path)) return;
+  const ref = doc(db, path);
   try {
-    await setDoc(doc(db, path), {
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      knownDocPaths.add(path);
+      return;
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+  }
+  try {
+    await setDoc(ref, {
       uid,
-      id: truncateStr(trackId, 256),
+      id: cleanId,
       hiddenAt: Date.now(),
       createdAt: serverTimestamp(),
     });
@@ -717,12 +745,25 @@ export async function deleteHiddenTrackFromFirestore(uid: string, trackId: strin
 }
 
 export async function saveTasteExclusionToFirestore(uid: string, trackId: string): Promise<void> {
-  const docId = toSafeDocId(trackId);
+  const cleanId = truncateStr((trackId || '').trim(), 256);
+  if (!cleanId) return;
+  const docId = toSafeDocId(cleanId);
   const path = `users/${uid}/tasteExclusions/${docId}`;
+  if (knownDocPaths.has(path)) return;
+  const ref = doc(db, path);
   try {
-    await setDoc(doc(db, path), {
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      knownDocPaths.add(path);
+      return;
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+  }
+  try {
+    await setDoc(ref, {
       uid,
-      id: truncateStr(trackId, 256),
+      id: cleanId,
       excludedAt: Date.now(),
       createdAt: serverTimestamp(),
     });
@@ -813,7 +854,7 @@ export function subscribeUserFirestoreData(
   const audioProfilesCol = `users/${uid}/audioProfiles`;
   unsubs.push(
     onSnapshot(
-      collection(db, audioProfilesCol),
+      query(collection(db, audioProfilesCol), where('uid', '==', uid)),
       (snap) => {
         const preferred =
           snap.docs.find((d) => d.id === 'cloud') ?? snap.docs[0];
@@ -829,17 +870,19 @@ export function subscribeUserFirestoreData(
   const likedCol = `users/${uid}/likedTracks`;
   unsubs.push(
     onSnapshot(
-      query(collection(db, likedCol), orderBy('addedAt', 'desc')),
+      query(collection(db, likedCol), where('uid', '==', uid)),
       (snap) => {
-        const rows = snap.docs.map((d) => {
-          knownDocPaths.add(`${likedCol}/${d.id}`);
-          const data = d.data();
-          return {
-            id: String(data.id || d.id),
-            addedAt: Number(data.addedAt || 0),
-            track: data.track as MediaItem,
-          };
-        });
+        const rows = snap.docs
+          .map((d) => {
+            knownDocPaths.add(`${likedCol}/${d.id}`);
+            const data = d.data();
+            return {
+              id: String(data.id || d.id),
+              addedAt: Number(data.addedAt || 0),
+              track: data.track as MediaItem,
+            };
+          })
+          .sort((a, b) => b.addedAt - a.addedAt);
         cb.onLikedTracks(rows);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, likedCol),
@@ -849,25 +892,27 @@ export function subscribeUserFirestoreData(
   const playlistsCol = `users/${uid}/playlists`;
   unsubs.push(
     onSnapshot(
-      query(collection(db, playlistsCol), orderBy('createdAtMs', 'desc')),
+      query(collection(db, playlistsCol), where('uid', '==', uid)),
       (snap) => {
-        const rows: LocalPlaylist[] = snap.docs.map((d) => {
-          knownDocPaths.add(`${playlistsCol}/${d.id}`);
-          const data = d.data();
-          return {
-            id: String(data.id || d.id),
-            name: String(data.name || 'Playlist'),
-            description: String(data.description || ''),
-            coverUrl: (data.coverUrl as string | null) ?? null,
-            folderId: (data.folderId as string | null) ?? null,
-            pinned: Boolean(data.pinned),
-            createdAt: Number(data.createdAtMs || Date.now()),
-            updatedAt: Number(data.updatedAtMs || Date.now()),
-            lastPlayedAt: (data.lastPlayedAt as number | null) ?? null,
-            tracks: Array.isArray(data.tracks) ? (data.tracks as MediaItem[]) : [],
-            mixConfig: data.mixConfig ? normalizePlaylistMixSettings(data.mixConfig) : undefined,
-          };
-        });
+        const rows: LocalPlaylist[] = snap.docs
+          .map((d) => {
+            knownDocPaths.add(`${playlistsCol}/${d.id}`);
+            const data = d.data();
+            return {
+              id: String(data.id || d.id),
+              name: String(data.name || 'Playlist'),
+              description: String(data.description || ''),
+              coverUrl: (data.coverUrl as string | null) ?? null,
+              folderId: (data.folderId as string | null) ?? null,
+              pinned: Boolean(data.pinned),
+              createdAt: Number(data.createdAtMs || Date.now()),
+              updatedAt: Number(data.updatedAtMs || Date.now()),
+              lastPlayedAt: (data.lastPlayedAt as number | null) ?? null,
+              tracks: Array.isArray(data.tracks) ? (data.tracks as MediaItem[]) : [],
+              mixConfig: data.mixConfig ? normalizePlaylistMixSettings(data.mixConfig) : undefined,
+            };
+          })
+          .sort((a, b) => b.createdAt - a.createdAt);
         cb.onPlaylists(rows);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, playlistsCol),
@@ -877,17 +922,19 @@ export function subscribeUserFirestoreData(
   const foldersCol = `users/${uid}/folders`;
   unsubs.push(
     onSnapshot(
-      query(collection(db, foldersCol), orderBy('createdAtMs', 'desc')),
+      query(collection(db, foldersCol), where('uid', '==', uid)),
       (snap) => {
-        const rows: PlaylistFolder[] = snap.docs.map((d) => {
-          knownDocPaths.add(`${foldersCol}/${d.id}`);
-          const data = d.data();
-          return {
-            id: String(data.id || d.id),
-            name: String(data.name || 'Folder'),
-            createdAt: Number(data.createdAtMs || Date.now()),
-          };
-        });
+        const rows: PlaylistFolder[] = snap.docs
+          .map((d) => {
+            knownDocPaths.add(`${foldersCol}/${d.id}`);
+            const data = d.data();
+            return {
+              id: String(data.id || d.id),
+              name: String(data.name || 'Folder'),
+              createdAt: Number(data.createdAtMs || Date.now()),
+            };
+          })
+          .sort((a, b) => b.createdAt - a.createdAt);
         cb.onFolders(rows);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, foldersCol),
@@ -897,19 +944,21 @@ export function subscribeUserFirestoreData(
   const albumsCol = `users/${uid}/savedAlbums`;
   unsubs.push(
     onSnapshot(
-      query(collection(db, albumsCol), orderBy('savedAt', 'desc')),
+      query(collection(db, albumsCol), where('uid', '==', uid)),
       (snap) => {
-        const rows: SavedAlbumEntry[] = snap.docs.map((d) => {
-          knownDocPaths.add(`${albumsCol}/${d.id}`);
-          const data = d.data();
-          return {
-            id: String(data.id || d.id),
-            pinned: Boolean(data.pinned),
-            savedAt: Number(data.savedAt || Date.now()),
-            lastPlayedAt: (data.lastPlayedAt as number | null) ?? null,
-            item: data.item as MediaItem,
-          };
-        });
+        const rows: SavedAlbumEntry[] = snap.docs
+          .map((d) => {
+            knownDocPaths.add(`${albumsCol}/${d.id}`);
+            const data = d.data();
+            return {
+              id: String(data.id || d.id),
+              pinned: Boolean(data.pinned),
+              savedAt: Number(data.savedAt || Date.now()),
+              lastPlayedAt: (data.lastPlayedAt as number | null) ?? null,
+              item: data.item as MediaItem,
+            };
+          })
+          .sort((a, b) => b.savedAt - a.savedAt);
         cb.onSavedAlbums(rows);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, albumsCol),
@@ -919,19 +968,21 @@ export function subscribeUserFirestoreData(
   const artistsCol = `users/${uid}/followedArtists`;
   unsubs.push(
     onSnapshot(
-      query(collection(db, artistsCol), orderBy('followedAt', 'desc')),
+      query(collection(db, artistsCol), where('uid', '==', uid)),
       (snap) => {
-        const rows: FollowedArtistEntry[] = snap.docs.map((d) => {
-          knownDocPaths.add(`${artistsCol}/${d.id}`);
-          const data = d.data();
-          return {
-            id: String(data.id || d.id),
-            pinned: Boolean(data.pinned),
-            followedAt: Number(data.followedAt || Date.now()),
-            lastPlayedAt: (data.lastPlayedAt as number | null) ?? null,
-            item: data.item as MediaItem,
-          };
-        });
+        const rows: FollowedArtistEntry[] = snap.docs
+          .map((d) => {
+            knownDocPaths.add(`${artistsCol}/${d.id}`);
+            const data = d.data();
+            return {
+              id: String(data.id || d.id),
+              pinned: Boolean(data.pinned),
+              followedAt: Number(data.followedAt || Date.now()),
+              lastPlayedAt: (data.lastPlayedAt as number | null) ?? null,
+              item: data.item as MediaItem,
+            };
+          })
+          .sort((a, b) => b.followedAt - a.followedAt);
         cb.onFollowedArtists(rows);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, artistsCol),
@@ -941,19 +992,21 @@ export function subscribeUserFirestoreData(
   const podcastsCol = `users/${uid}/savedPodcasts`;
   unsubs.push(
     onSnapshot(
-      query(collection(db, podcastsCol), orderBy('savedAt', 'desc')),
+      query(collection(db, podcastsCol), where('uid', '==', uid)),
       (snap) => {
-        const rows: SavedPodcastEntry[] = snap.docs.map((d) => {
-          knownDocPaths.add(`${podcastsCol}/${d.id}`);
-          const data = d.data();
-          return {
-            id: String(data.id || d.id),
-            pinned: Boolean(data.pinned),
-            savedAt: Number(data.savedAt || Date.now()),
-            lastPlayedAt: (data.lastPlayedAt as number | null) ?? null,
-            item: data.item as MediaItem,
-          };
-        });
+        const rows: SavedPodcastEntry[] = snap.docs
+          .map((d) => {
+            knownDocPaths.add(`${podcastsCol}/${d.id}`);
+            const data = d.data();
+            return {
+              id: String(data.id || d.id),
+              pinned: Boolean(data.pinned),
+              savedAt: Number(data.savedAt || Date.now()),
+              lastPlayedAt: (data.lastPlayedAt as number | null) ?? null,
+              item: data.item as MediaItem,
+            };
+          })
+          .sort((a, b) => b.savedAt - a.savedAt);
         cb.onSavedPodcasts(rows);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, podcastsCol),
@@ -963,7 +1016,7 @@ export function subscribeUserFirestoreData(
   const epCol = `users/${uid}/episodeProgress`;
   unsubs.push(
     onSnapshot(
-      collection(db, epCol),
+      query(collection(db, epCol), where('uid', '==', uid)),
       (snap) => {
         const map: Record<string, EpisodeProgressEntry> = {};
         for (const d of snap.docs) {
@@ -988,20 +1041,23 @@ export function subscribeUserFirestoreData(
   const historyCol = `users/${uid}/playHistory`;
   unsubs.push(
     onSnapshot(
-      query(collection(db, historyCol), orderBy('playedAt', 'desc'), limit(250)),
+      query(collection(db, historyCol), where('uid', '==', uid)),
       (snap) => {
-        const rows: PlayHistoryEntry[] = snap.docs.map((d) => {
-          knownDocPaths.add(`${historyCol}/${d.id}`);
-          const data = d.data();
-          return {
-            trackId: String(data.trackId || ''),
-            playedAt: Number(data.playedAt || 0),
-            durationListenedSec: Number(data.durationListenedSec || 0),
-            sourceType: data.sourceType === 'episode' ? 'episode' : 'song',
-            genreHint: (data.genreHint as string | null) ?? null,
-            track: data.track as MediaItem,
-          };
-        });
+        const rows: PlayHistoryEntry[] = snap.docs
+          .map((d) => {
+            knownDocPaths.add(`${historyCol}/${d.id}`);
+            const data = d.data();
+            return {
+              trackId: String(data.trackId || ''),
+              playedAt: Number(data.playedAt || 0),
+              durationListenedSec: Number(data.durationListenedSec || 0),
+              sourceType: data.sourceType === 'episode' ? ('episode' as const) : ('song' as const),
+              genreHint: (data.genreHint as string | null) ?? null,
+              track: data.track as MediaItem,
+            };
+          })
+          .sort((a, b) => b.playedAt - a.playedAt)
+          .slice(0, 250);
         cb.onPlayHistory(rows);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, historyCol),
@@ -1011,17 +1067,24 @@ export function subscribeUserFirestoreData(
   const searchesCol = `users/${uid}/recentSearches`;
   unsubs.push(
     onSnapshot(
-      query(collection(db, searchesCol), orderBy('searchedAt', 'desc'), limit(20)),
+      query(collection(db, searchesCol), where('uid', '==', uid)),
       (snap) => {
-        const rows: RecentSearchEntry[] = snap.docs.map((d, idx) => {
-          knownDocPaths.add(`${searchesCol}/${d.id}`);
-          const data = d.data();
-          return {
+        const rows: RecentSearchEntry[] = snap.docs
+          .map((d) => {
+            knownDocPaths.add(`${searchesCol}/${d.id}`);
+            const data = d.data();
+            return {
+              query: String(data.query || ''),
+              searchedAt: Number(data.searchedAt || 0),
+            };
+          })
+          .sort((a, b) => b.searchedAt - a.searchedAt)
+          .slice(0, 20)
+          .map((item, idx) => ({
             uid: idx + 1,
-            query: String(data.query || ''),
-            searchedAt: Number(data.searchedAt || 0),
-          };
-        });
+            query: item.query,
+            searchedAt: item.searchedAt,
+          }));
         cb.onRecentSearches(rows);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, searchesCol),
@@ -1031,7 +1094,7 @@ export function subscribeUserFirestoreData(
   const hiddenCol = `users/${uid}/hiddenTracks`;
   unsubs.push(
     onSnapshot(
-      collection(db, hiddenCol),
+      query(collection(db, hiddenCol), where('uid', '==', uid)),
       (snap) => {
         const ids = snap.docs.map((d) => {
           knownDocPaths.add(`${hiddenCol}/${d.id}`);
@@ -1046,7 +1109,7 @@ export function subscribeUserFirestoreData(
   const tasteCol = `users/${uid}/tasteExclusions`;
   unsubs.push(
     onSnapshot(
-      collection(db, tasteCol),
+      query(collection(db, tasteCol), where('uid', '==', uid)),
       (snap) => {
         const ids = snap.docs.map((d) => {
           knownDocPaths.add(`${tasteCol}/${d.id}`);
@@ -1102,100 +1165,132 @@ export async function seedCloudIfEmptyFromLocal(
 ): Promise<{ seededCount: number }> {
   let seededCount = 0;
 
+  async function isCollectionEmpty(colPath: string): Promise<boolean> {
+    try {
+      const snap = await getDocs(
+        query(collection(db, colPath), where('uid', '==', uid), limit(1)),
+      );
+      return snap.empty;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.LIST, colPath);
+    }
+  }
+
+  const prefPath = `users/${uid}/settings/preferences`;
+  let prefExists = false;
   try {
-    const prefSnap = await getDoc(doc(db, `users/${uid}/settings/preferences`));
-    if (!prefSnap.exists()) {
-      await saveUserPreferencesToFirestore(uid, localData.settings);
-      seededCount += 1;
-    }
+    prefExists = (await getDoc(doc(db, prefPath))).exists();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, prefPath);
+  }
+  if (!prefExists) {
+    await saveUserPreferencesToFirestore(uid, localData.settings);
+    seededCount += 1;
+  } else {
+    knownDocPaths.add(prefPath);
+  }
 
-    const audioSnap = await getDoc(doc(db, `users/${uid}/audioProfiles/cloud`));
-    if (!audioSnap.exists()) {
-      await saveAudioProfileToFirestore(uid, 'cloud', localData.localProfile);
-      seededCount += 1;
-    }
+  const audioPath = `users/${uid}/audioProfiles/cloud`;
+  let audioExists = false;
+  try {
+    audioExists = (await getDoc(doc(db, audioPath))).exists();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, audioPath);
+  }
+  if (!audioExists) {
+    await saveAudioProfileToFirestore(uid, 'cloud', localData.localProfile);
+    seededCount += 1;
+  } else {
+    knownDocPaths.add(audioPath);
+  }
 
-    const [existingPlaylists, existingLikes] = await Promise.all([
-      getDocs(query(collection(db, `users/${uid}/playlists`), limit(1))),
-      getDocs(query(collection(db, `users/${uid}/likedTracks`), limit(1))),
-    ]);
-
-    if (existingPlaylists.empty && localData.playlists.length > 0) {
+  if (localData.playlists.length > 0 || localData.folders.length > 0) {
+    if (await isCollectionEmpty(`users/${uid}/playlists`)) {
       for (const pl of localData.playlists.slice(0, 50)) {
         await savePlaylistToFirestore(uid, pl, 'create');
         seededCount += 1;
       }
-      for (const fl of localData.folders.slice(0, 30)) {
-        await saveFolderToFirestore(uid, fl);
-        seededCount += 1;
-      }
-    }
-
-    if (existingLikes.empty && localData.likedTracks.length > 0) {
-      const now = Date.now();
-      for (let i = 0; i < Math.min(localData.likedTracks.length, 100); i += 1) {
-        const track = localData.likedTracks[i];
-        await saveLikedTrackToFirestore(uid, track, now - i);
-        seededCount += 1;
-      }
-    }
-
-    if (localData.savedAlbums.length > 0) {
-      const existingAlbums = await getDocs(query(collection(db, `users/${uid}/savedAlbums`), limit(1)));
-      if (existingAlbums.empty) {
-        for (const al of localData.savedAlbums.slice(0, 50)) {
-          await saveAlbumToFirestore(uid, al);
+      if (localData.folders.length > 0 && (await isCollectionEmpty(`users/${uid}/folders`))) {
+        for (const fl of localData.folders.slice(0, 30)) {
+          await saveFolderToFirestore(uid, fl);
           seededCount += 1;
         }
       }
     }
+  }
 
-    if (localData.followedArtists.length > 0) {
-      const existingArtists = await getDocs(
-        query(collection(db, `users/${uid}/followedArtists`), limit(1)),
-      );
-      if (existingArtists.empty) {
-        for (const ar of localData.followedArtists.slice(0, 50)) {
-          await saveFollowedArtistToFirestore(uid, ar);
-          seededCount += 1;
-        }
-      }
+  if (localData.likedTracks.length > 0 && (await isCollectionEmpty(`users/${uid}/likedTracks`))) {
+    const now = Date.now();
+    for (let i = 0; i < Math.min(localData.likedTracks.length, 100); i += 1) {
+      const track = localData.likedTracks[i];
+      await saveLikedTrackToFirestore(uid, track, now - i);
+      seededCount += 1;
     }
+  }
 
-    if (localData.savedPodcasts.length > 0) {
-      const existingPodcasts = await getDocs(
-        query(collection(db, `users/${uid}/savedPodcasts`), limit(1)),
-      );
-      if (existingPodcasts.empty) {
-        for (const pod of localData.savedPodcasts.slice(0, 50)) {
-          await savePodcastToFirestore(uid, pod);
-          seededCount += 1;
-        }
-      }
+  if (localData.savedAlbums.length > 0 && (await isCollectionEmpty(`users/${uid}/savedAlbums`))) {
+    for (const al of localData.savedAlbums.slice(0, 50)) {
+      await saveAlbumToFirestore(uid, al);
+      seededCount += 1;
     }
+  }
 
-    const epEntries = Object.values(localData.episodeProgress);
-    if (epEntries.length > 0) {
-      const existingEp = await getDocs(query(collection(db, `users/${uid}/episodeProgress`), limit(1)));
-      if (existingEp.empty) {
-        for (const ep of epEntries.slice(0, 50)) {
-          await saveEpisodeProgressToFirestore(uid, ep);
-          seededCount += 1;
-        }
-      }
+  if (
+    localData.followedArtists.length > 0 &&
+    (await isCollectionEmpty(`users/${uid}/followedArtists`))
+  ) {
+    for (const ar of localData.followedArtists.slice(0, 50)) {
+      await saveFollowedArtistToFirestore(uid, ar);
+      seededCount += 1;
     }
+  }
 
+  if (
+    localData.savedPodcasts.length > 0 &&
+    (await isCollectionEmpty(`users/${uid}/savedPodcasts`))
+  ) {
+    for (const pod of localData.savedPodcasts.slice(0, 50)) {
+      await savePodcastToFirestore(uid, pod);
+      seededCount += 1;
+    }
+  }
+
+  const epEntries = Object.values(localData.episodeProgress);
+  if (epEntries.length > 0 && (await isCollectionEmpty(`users/${uid}/episodeProgress`))) {
+    for (const ep of epEntries.slice(0, 50)) {
+      await saveEpisodeProgressToFirestore(uid, ep);
+      seededCount += 1;
+    }
+  }
+
+  if (
+    localData.hiddenTrackIds.length > 0 &&
+    (await isCollectionEmpty(`users/${uid}/hiddenTracks`))
+  ) {
     for (const hid of localData.hiddenTrackIds.slice(0, 50)) {
       await saveHiddenTrackToFirestore(uid, hid);
+      seededCount += 1;
     }
+  }
+
+  if (
+    localData.excludedTasteIds.length > 0 &&
+    (await isCollectionEmpty(`users/${uid}/tasteExclusions`))
+  ) {
     for (const tid of localData.excludedTasteIds.slice(0, 50)) {
       await saveTasteExclusionToFirestore(uid, tid);
+      seededCount += 1;
     }
+  }
+
+  if (
+    localData.recentSearches.length > 0 &&
+    (await isCollectionEmpty(`users/${uid}/recentSearches`))
+  ) {
     for (const sr of localData.recentSearches.slice(0, 20)) {
       await addRecentSearchToFirestore(uid, sr);
+      seededCount += 1;
     }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
   }
 
   return { seededCount };
