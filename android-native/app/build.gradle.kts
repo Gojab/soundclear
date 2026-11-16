@@ -19,7 +19,12 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "API_BASE_URL", "\"https://soundclear-lyart.vercel.app/\"")
+        val apiBaseUrl = (
+            System.getenv("SOUNDCLEAR_API_BASE_URL")
+                ?: System.getenv("VITE_API_BASE_URL")
+                ?: "https://soundclear-lyart.vercel.app/"
+        ).trim().trimEnd('/') + "/"
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildTypes {

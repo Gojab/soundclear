@@ -21,3 +21,8 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+android-native/.gradle/
+android-native/build/
+android-native/app/build/
+android-native/local.properties
+android-native/.idea/
