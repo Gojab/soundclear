@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { resolvePlayableYoutube } from '../api/client';
-import { syncCapacitorPlaybackNotification } from '../audio/capacitorAudioBridge';
+import {
+  isCapacitorAndroidPlatform,
+  syncCapacitorPlaybackNotification,
+} from '../audio/capacitorAudioBridge';
 import {
   registerMediaSessionHandlers,
   syncMediaSessionMetadata,
@@ -174,6 +177,7 @@ export function YouTubePlayerBridge() {
   const fallbackCountRef = useRef(0);
   const desiredVideoIdRef = useRef<string | null>(null);
   const handleYtErrorRef = useRef<() => void>(() => {});
+  const handleYtStateChangeRef = useRef<(event: { target: YTPlayerInstance; data: number }) => void>(() => {});
   const ytActuallyPlayingRef = useRef(false);
   const ytEverPlayedForTrackRef = useRef(false);
   const ytPlayRequestedAtRef = useRef(0);
@@ -503,11 +507,17 @@ export function YouTubePlayerBridge() {
         });
 
         if (st.isPlaying) {
-          if (document.visibilityState === 'hidden') {
+          const elapsedSinceReq = Date.now() - ytPlayRequestedAtRef.current;
+          const shouldGraceRetry =
+            document.visibilityState === 'hidden' ||
+            (!ytEverPlayedForTrackRef.current &&
+              (isCapacitorAndroidPlatform() || elapsedSinceReq < 1600));
+
+          if (shouldGraceRetry) {
             try {
               event.target.playVideo();
             } catch {
-              // Ignore background resume error
+              // Ignore transient resume error
             }
             ytPauseVerifyTimerRef.current = window.setTimeout(() => {
               ytPauseVerifyTimerRef.current = null;
@@ -515,9 +525,22 @@ export function YouTubePlayerBridge() {
               if (!latest.isPlaying || !isYoutubeIframeActive(latest.activeStreamMeta)) return;
               const checkState = event.target.getPlayerState?.();
               if (checkState !== 1 && checkState !== 3) {
+                const blocked =
+                  document.visibilityState === 'visible' &&
+                  shouldTreatYoutubeAsAutoplayBlocked({
+                    isPlaying: latest.isPlaying,
+                    isYoutubeIframe: true,
+                    visibilityState: document.visibilityState,
+                    playerState: typeof checkState === 'number' ? checkState : 2,
+                    elapsedSincePlayRequestMs: Date.now() - ytPlayRequestedAtRef.current,
+                    wasEverPlayingForTrack: ytEverPlayedForTrackRef.current,
+                  });
                 ytActuallyPlayingRef.current = false;
                 stopSilentKeepaliveAudio();
                 latest.setIsPlaying(false);
+                if (blocked && !isCapacitorAndroidPlatform()) {
+                  latest.setAutoplayBlockedPendingResume(true);
+                }
                 syncMediaSessionPlaybackState('paused');
               }
             }, 900);
@@ -532,7 +555,7 @@ export function YouTubePlayerBridge() {
               wasEverPlayingForTrack: ytEverPlayedForTrackRef.current,
             });
             st.setIsPlaying(false);
-            if (blocked) {
+            if (blocked && !isCapacitorAndroidPlatform()) {
               st.setAutoplayBlockedPendingResume(true);
             }
           }
@@ -547,6 +570,7 @@ export function YouTubePlayerBridge() {
         syncMediaSessionPlaybackState('paused');
       }
     };
+    handleYtStateChangeRef.current = handlePlayerStateChange;
 
     const warmStandby = async () => {
       try {
@@ -796,6 +820,7 @@ export function YouTubePlayerBridge() {
       loadedVideoIdRef.current = null;
       ytActuallyPlayingRef.current = false;
       ytEverPlayedForTrackRef.current = false;
+      ytPlayRequestedAtRef.current = 0;
       if (playerRef.current && playerReadyRef.current) {
         try {
           playerRef.current.stopVideo();
@@ -812,6 +837,7 @@ export function YouTubePlayerBridge() {
       attemptedVideoIdsRef.current = new Set([targetVideoId]);
       fallbackCountRef.current = 0;
       ytEverPlayedForTrackRef.current = false;
+      ytPlayRequestedAtRef.current = usePlayerStore.getState().isPlaying ? Date.now() : 0;
     } else {
       attemptedVideoIdsRef.current.add(targetVideoId);
     }
@@ -956,7 +982,7 @@ export function YouTubePlayerBridge() {
           videoId: targetVideoId,
           host: 'https://www.youtube-nocookie.com',
           playerVars: {
-            autoplay: initialState.isPlaying ? 1 : 0,
+            autoplay: 0,
             controls: 0,
             disablekb: 1,
             enablejsapi: 1,
@@ -997,78 +1023,7 @@ export function YouTubePlayerBridge() {
               }
             },
             onStateChange: (event) => {
-              const st = usePlayerStore.getState();
-              if (!isYoutubeIframeActive(st.activeStreamMeta)) return;
-
-              const stateCode = event.data;
-              if (stateCode === 1) {
-                ytActuallyPlayingRef.current = true;
-                ytEverPlayedForTrackRef.current = true;
-                st.setIsBuffering(false);
-                st.setPlayerError(null);
-                st.setAutoplayBlockedPendingResume(false);
-                st.clearPendingSeek();
-                const dur = event.target.getDuration?.() ?? 0;
-                const cur = event.target.getCurrentTime?.() ?? st.currentTime;
-                if (Number.isFinite(cur)) {
-                  st.setProgress(cur, dur > 0 ? dur : undefined);
-                }
-                if (!st.isPlaying) {
-                  ytActuallyPlayingRef.current = false;
-                  stopSilentKeepaliveAudio();
-                  syncMediaSessionPlaybackState('paused');
-                  try {
-                    event.target.pauseVideo();
-                  } catch {
-                    // Ignore
-                  }
-                } else {
-                  syncMediaSessionPlaybackState('playing');
-                  syncCapacitorPlaybackNotification({
-                    track: st.currentTrack,
-                    isPlaying: true,
-                    duration: dur > 0 ? dur : st.duration,
-                    currentTime: Number.isFinite(cur) ? cur : st.currentTime,
-                    playbackRate: st.playbackRate || 1,
-                    force: true,
-                  });
-                }
-              } else if (stateCode === 3) {
-                ytActuallyPlayingRef.current = false;
-                st.setIsBuffering(true);
-                syncMediaSessionPlaybackState('paused');
-              } else if (stateCode === 2) {
-                ytActuallyPlayingRef.current = false;
-                st.setIsBuffering(false);
-                stopSilentKeepaliveAudio();
-                syncMediaSessionPlaybackState('paused');
-                if (st.isPlaying && document.visibilityState === 'hidden') {
-                  try {
-                    event.target.playVideo();
-                  } catch {
-                    // Ignore background resume error
-                  }
-                } else if (st.isPlaying && document.visibilityState === 'visible') {
-                  const elapsed = Date.now() - ytPlayRequestedAtRef.current;
-                  const blocked = shouldTreatYoutubeAsAutoplayBlocked({
-                    isPlaying: st.isPlaying,
-                    isYoutubeIframe: true,
-                    visibilityState: document.visibilityState,
-                    playerState: 2,
-                    elapsedSincePlayRequestMs: elapsed,
-                    wasEverPlayingForTrack: ytEverPlayedForTrackRef.current,
-                  });
-                  st.setIsPlaying(false);
-                  if (blocked) st.setAutoplayBlockedPendingResume(true);
-                }
-              } else if (stateCode === 0) {
-                ytActuallyPlayingRef.current = false;
-                stopSilentKeepaliveAudio();
-                st.handleTrackEnded();
-              } else if (stateCode === 5 || stateCode === -1) {
-                ytActuallyPlayingRef.current = false;
-                syncMediaSessionPlaybackState('paused');
-              }
+              handleYtStateChangeRef.current(event);
             },
             onError: () => {
               handleYtErrorRef.current();
@@ -1100,12 +1055,13 @@ export function YouTubePlayerBridge() {
 
   // Sync play / pause / stop state
   useEffect(() => {
-    if (!iframeActive || !playerRef.current || !playerReadyRef.current) return;
+    if (!iframeActive) return;
+    ytPlayRequestedAtRef.current = isPlaying ? Date.now() : 0;
+    if (!playerRef.current || !playerReadyRef.current) return;
     const p = playerRef.current;
     const st = usePlayerStore.getState();
     try {
       if (isPlaying) {
-        ytPlayRequestedAtRef.current = Date.now();
         p.playVideo();
       } else if (!st.hasActiveSessionPlayback && st.currentTime === 0) {
         ytActuallyPlayingRef.current = false;
@@ -1179,9 +1135,8 @@ export function YouTubePlayerBridge() {
   // Progress & MediaSession polling strictly gated on actual YT PLAYING (1) state
   useEffect(() => {
     if (!iframeActive || !isPlaying) return;
-    if (ytPlayRequestedAtRef.current === 0) {
-      ytPlayRequestedAtRef.current = Date.now();
-    }
+    ytPlayRequestedAtRef.current = Date.now();
+    const onCapAndroid = isCapacitorAndroidPlatform();
 
     const timer = window.setInterval(() => {
       const p = playerRef.current;
@@ -1198,7 +1153,9 @@ export function YouTubePlayerBridge() {
         if (pState !== 1) {
           ytActuallyPlayingRef.current = false;
           const elapsed = Date.now() - ytPlayRequestedAtRef.current;
+          const allowTimeoutCheck = !onCapAndroid || elapsed >= 10000;
           if (
+            allowTimeoutCheck &&
             shouldTreatYoutubeAsAutoplayBlocked({
               isPlaying: store.isPlaying,
               isYoutubeIframe: true,
@@ -1212,7 +1169,9 @@ export function YouTubePlayerBridge() {
             syncMediaSessionPlaybackState('paused');
             store.setIsBuffering(false);
             store.setIsPlaying(false);
-            store.setAutoplayBlockedPendingResume(true);
+            if (!onCapAndroid) {
+              store.setAutoplayBlockedPendingResume(true);
+            }
           }
           return;
         }

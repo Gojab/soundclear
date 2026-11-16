@@ -12,8 +12,6 @@ import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.media.AudioAttributes;
-import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -73,8 +71,6 @@ public class MediaPlaybackService extends Service {
     }
 
     private MediaSessionCompat mediaSession;
-    private AudioManager audioManager;
-    private AudioFocusRequest audioFocusRequest;
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock wifiLock;
 
@@ -93,41 +89,12 @@ public class MediaPlaybackService extends Service {
     private long durationMs = 0L;
     private long positionMs = 0L;
     private float playbackRate = 1.0f;
-    private boolean hasAudioFocus = false;
-    private boolean resumeAfterFocusGain = false;
     private boolean noisyReceiverRegistered = false;
-
-    private final AudioManager.OnAudioFocusChangeListener focusListener = focusChange -> {
-        switch (focusChange) {
-            case AudioManager.AUDIOFOCUS_GAIN:
-                hasAudioFocus = true;
-                BackgroundAudioPlugin.dispatchAudioFocusChange("unduck");
-                if (resumeAfterFocusGain) {
-                    resumeAfterFocusGain = false;
-                    BackgroundAudioPlugin.dispatchAudioFocusChange("resume");
-                }
-                break;
-            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                hasAudioFocus = false;
-                resumeAfterFocusGain = isPlaying;
-                BackgroundAudioPlugin.dispatchAudioFocusChange("pause-transient");
-                break;
-            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                BackgroundAudioPlugin.dispatchAudioFocusChange("duck");
-                break;
-            case AudioManager.AUDIOFOCUS_LOSS:
-                hasAudioFocus = false;
-                resumeAfterFocusGain = false;
-                BackgroundAudioPlugin.dispatchAudioFocusChange("pause-permanent");
-                break;
-        }
-    };
 
     private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
-                resumeAfterFocusGain = false;
                 BackgroundAudioPlugin.dispatchMediaAction("pause", null);
             }
         }
@@ -138,7 +105,6 @@ public class MediaPlaybackService extends Service {
         super.onCreate();
         serviceRunning = true;
         createNotificationChannel();
-        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         if (pm != null) {
@@ -159,13 +125,11 @@ public class MediaPlaybackService extends Service {
         mediaSession.setCallback(new MediaSessionCompat.Callback() {
             @Override
             public void onPlay() {
-                requestAudioFocusIfNeeded();
                 BackgroundAudioPlugin.dispatchMediaAction("play", null);
             }
 
             @Override
             public void onPause() {
-                resumeAfterFocusGain = false;
                 BackgroundAudioPlugin.dispatchMediaAction("pause", null);
             }
 
@@ -186,7 +150,6 @@ public class MediaPlaybackService extends Service {
 
             @Override
             public void onStop() {
-                resumeAfterFocusGain = false;
                 BackgroundAudioPlugin.dispatchMediaAction("stop", null);
                 stopSelfSafely();
             }
@@ -224,7 +187,6 @@ public class MediaPlaybackService extends Service {
                 playbackRate = Math.max(0.25f, Math.min(4.0f, intent.getFloatExtra(EXTRA_PLAYBACK_RATE, 1.0f)));
 
                 if (isPlaying) {
-                    requestAudioFocusIfNeeded();
                     acquireLocks();
                 } else {
                     releaseLocks();
@@ -242,17 +204,13 @@ public class MediaPlaybackService extends Service {
                 updateSessionAndForeground();
                 return START_STICKY;
             } else if (ACTION_PLAY.equals(action)) {
-                requestAudioFocusIfNeeded();
                 BackgroundAudioPlugin.dispatchMediaAction("play", null);
             } else if (ACTION_PAUSE.equals(action)) {
-                resumeAfterFocusGain = false;
                 BackgroundAudioPlugin.dispatchMediaAction("pause", null);
             } else if (ACTION_TOGGLE.equals(action)) {
                 if (isPlaying) {
-                    resumeAfterFocusGain = false;
                     BackgroundAudioPlugin.dispatchMediaAction("pause", null);
                 } else {
-                    requestAudioFocusIfNeeded();
                     BackgroundAudioPlugin.dispatchMediaAction("play", null);
                 }
             } else if (ACTION_NEXT.equals(action)) {
@@ -260,7 +218,6 @@ public class MediaPlaybackService extends Service {
             } else if (ACTION_PREV.equals(action)) {
                 BackgroundAudioPlugin.dispatchMediaAction("previoustrack", null);
             } else if (ACTION_STOP.equals(action)) {
-                resumeAfterFocusGain = false;
                 BackgroundAudioPlugin.dispatchMediaAction("stop", null);
                 stopSelfSafely();
                 return START_NOT_STICKY;
@@ -440,38 +397,13 @@ public class MediaPlaybackService extends Service {
     }
 
     private void requestAudioFocusIfNeeded() {
-        if (audioManager == null || hasAudioFocus) return;
-        int res;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            AudioAttributes attrs = new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build();
-            audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(attrs)
-                .setAcceptsDelayedFocusGain(true)
-                .setWillPauseWhenDucked(false)
-                .setOnAudioFocusChangeListener(focusListener)
-                .build();
-            res = audioManager.requestAudioFocus(audioFocusRequest);
-        } else {
-            res = audioManager.requestAudioFocus(
-                focusListener,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN
-            );
-        }
-        hasAudioFocus = (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED);
+        // WebView (Chromium MediaSession/AudioFocusDelegate) already acquires Android AudioFocus
+        // for HTML5 <audio> and YouTube <iframe>. Requesting a separate AUDIOFOCUS_GAIN here
+        // triggers a self-inflicted AUDIOFOCUS_LOSS inside the same app and immediately pauses playback.
     }
 
     private void abandonAudioFocus() {
-        if (audioManager == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && audioFocusRequest != null) {
-            audioManager.abandonAudioFocusRequest(audioFocusRequest);
-        } else {
-            audioManager.abandonAudioFocus(focusListener);
-        }
-        hasAudioFocus = false;
+        // Handled natively by WebView.
     }
 
     private void acquireLocks() {

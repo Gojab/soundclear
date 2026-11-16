@@ -146,9 +146,11 @@ function applyPlayCommandFromNative(): void {
   void resumeAudioContext();
   st.setIsPlaying(true);
 
-  const el = getActiveHtmlAudio();
-  if (el && el.src && el.paused && el.dataset.scPriming !== '1') {
-    void el.play().catch(() => {});
+  if (st.activeStreamMeta?.sourceMode !== 'youtube-iframe') {
+    const el = getActiveHtmlAudio();
+    if (el && el.src && el.paused && el.dataset.scPriming !== '1') {
+      void el.play().catch(() => {});
+    }
   }
   syncMediaSessionPlaybackState('playing');
   syncCapacitorPlaybackNotification({
@@ -164,9 +166,11 @@ function applyPlayCommandFromNative(): void {
 function applyPauseCommandFromNative(): void {
   const st = usePlayerStore.getState();
   stopSilentKeepaliveAudio();
-  const el = getActiveHtmlAudio();
-  if (el && !el.paused) {
-    pauseAudioElementProgrammatically(el);
+  if (st.activeStreamMeta?.sourceMode !== 'youtube-iframe') {
+    const el = getActiveHtmlAudio();
+    if (el && !el.paused) {
+      pauseAudioElementProgrammatically(el);
+    }
   }
   st.setIsPlaying(false);
   syncMediaSessionPlaybackState('paused');
