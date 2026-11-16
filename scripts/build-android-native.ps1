@@ -20,29 +20,51 @@ if (-not (Test-Path $SdkDir)) {
 $SdkEscaped = $SdkDir -replace '\\', '/'
 "sdk.dir=$SdkEscaped" | Set-Content (Join-Path $NativeDir "local.properties") -Encoding ascii
 
-# 2. Pastikan JDK 21 tersedia (dibutuhkan oleh android-native / AGP 8.7.3)
+# 2. Pastikan JDK 21 aktif (Gradle 8.11.1 & AGP 8.7.3 tidak mendukung JDK 25)
 function Test-Jdk21([string]$JavaExe) {
-  if (-not (Test-Path $JavaExe)) { return $false }
-  $ver = (& $JavaExe -version 2>&1 | Out-String)
-  return ($ver -match 'version "21\.')
+  if (-not $JavaExe -or -not (Test-Path $JavaExe)) { return $false }
+  $prevPref = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $ver = (& $JavaExe -version 2>&1 | Out-String)
+    return ($ver -match 'version "21(\.|")')
+  } finally {
+    $ErrorActionPreference = $prevPref
+  }
 }
 
 $CurrentJavaCmd = Get-Command java -ErrorAction SilentlyContinue
 $CurrentJava = if ($CurrentJavaCmd) { $CurrentJavaCmd.Source } else { $null }
-if (-not ($CurrentJava -and (Test-Jdk21 $CurrentJava))) {
+if (-not (Test-Jdk21 $CurrentJava)) {
   $JdkCandidates = @(
     $env:JAVA_HOME,
     "C:\Program Files\Android\Android Studio\jbr",
     "C:\Program Files\Android\Android Studio Preview\jbr",
     (Join-Path $env:LOCALAPPDATA "Programs\Android Studio\jbr")
   )
+  $JdkCandidates += (Get-ChildItem (Join-Path $env:LOCALAPPDATA "JetBrains\Toolbox\apps\AndroidStudio\*\*\jbr") -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
   $JdkCandidates += (Get-ChildItem "C:\Program Files\Eclipse Adoptium\jdk-21*" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
   $JdkCandidates += (Get-ChildItem "C:\Program Files\Java\jdk-21*" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
   $JdkCandidates += (Get-ChildItem "C:\Program Files\Microsoft\jdk-21*" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  $JdkCandidates += (Get-ChildItem "C:\Program Files\Amazon Corretto\jdk21*" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  $JdkCandidates += (Get-ChildItem "C:\Program Files\Zulu\zulu-21*" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  $JdkCandidates += (Get-ChildItem (Join-Path $env:USERPROFILE ".gradle\jdks\*21*") -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  $JdkCandidates += (Get-ChildItem (Join-Path $env:LOCALAPPDATA "SoundClear\jdk-21\*") -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
 
   $MatchedHome = $JdkCandidates | Where-Object { $_ -and (Test-Jdk21 (Join-Path $_ "bin\java.exe")) } | Select-Object -First 1
   if (-not $MatchedHome) {
-    throw "JDK 21 tidak ditemukan. Pasang JDK 21 atau Android Studio (JBR 21), lalu set `$env:JAVA_HOME."
+    $JdkCache = Join-Path $env:LOCALAPPDATA "SoundClear\jdk-21"
+    New-Item -ItemType Directory -Force $JdkCache | Out-Null
+    $JdkZip = Join-Path $JdkCache "temurin-21.zip"
+    Write-Host "[soundclear] JDK 21 tidak ditemukan di sistem. Mengunduh Temurin JDK 21 portabel..."
+    Invoke-WebRequest -Uri "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse" -OutFile $JdkZip
+    Expand-Archive -Path $JdkZip -DestinationPath $JdkCache -Force
+    Remove-Item -Force $JdkZip
+    $MatchedDir = Get-ChildItem $JdkCache -Directory | Where-Object { Test-Jdk21 (Join-Path $_.FullName "bin\java.exe") } | Select-Object -First 1
+    $MatchedHome = if ($MatchedDir) { $MatchedDir.FullName } else { $null }
+    if (-not $MatchedHome) {
+      throw "Gagal menyiapkan JDK 21 di $JdkCache."
+    }
   }
   $env:JAVA_HOME = $MatchedHome
   $env:PATH = "$(Join-Path $MatchedHome 'bin');$env:PATH"
