@@ -105,8 +105,15 @@ public final class LocalAudioStreamProxy {
         new ClientProfile(
             "ANDROID_VR",
             "28",
-            "1.60.19",
-            "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+            "1.61.48",
+            "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+            "https://www.youtube.com"
+        ),
+        new ClientProfile(
+            "IOS",
+            "5",
+            "20.10.4",
+            "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
             "https://www.youtube.com"
         ),
         new ClientProfile(
@@ -115,13 +122,6 @@ public final class LocalAudioStreamProxy {
             "7.29.52",
             "com.google.android.apps.youtube.music/7.29.52 (Linux; U; Android 14) gzip",
             "https://music.youtube.com"
-        ),
-        new ClientProfile(
-            "IOS",
-            "5",
-            "19.45.4",
-            "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)",
-            "https://www.youtube.com"
         )
     };
 
@@ -133,6 +133,8 @@ public final class LocalAudioStreamProxy {
     private ServerSocket serverSocket;
     private volatile int port = -1;
     private volatile boolean started = false;
+    private volatile String cachedVisitorData = "";
+    private volatile long visitorDataExpiresAtMs = 0L;
 
     private LocalAudioStreamProxy() {
         this.httpClient = new OkHttpClient.Builder()
@@ -200,7 +202,42 @@ public final class LocalAudioStreamProxy {
         return new ResolvedAudioResult(proxyUrl, cached.mimeType, cached.bitrateKbps, cached.codec);
     }
 
+    private String getVisitorData() {
+        long now = System.currentTimeMillis();
+        if (!TextUtils.isEmpty(cachedVisitorData) && now < visitorDataExpiresAtMs) {
+            return cachedVisitorData;
+        }
+        try {
+            Request req = new Request.Builder()
+                .url("https://www.youtube.com/sw.js_data")
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36")
+                .build();
+            try (Response res = httpClient.newCall(req).execute()) {
+                ResponseBody body = res.body();
+                if (res.isSuccessful() && body != null) {
+                    String raw = body.string();
+                    int idx = raw.indexOf("\"Cg");
+                    if (idx >= 0) {
+                        int end = raw.indexOf('"', idx + 1);
+                        if (end > idx + 3) {
+                            String candidate = raw.substring(idx + 1, end);
+                            if (candidate.length() >= 10 && candidate.length() <= 128) {
+                                cachedVisitorData = candidate;
+                                visitorDataExpiresAtMs = now + 30L * 60L * 1000L;
+                                return cachedVisitorData;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Optional visitorData
+        }
+        return cachedVisitorData;
+    }
+
     private CachedStream resolveViaInnerTube(String videoId) {
+        String visitorData = getVisitorData();
         for (ClientProfile client : CLIENTS) {
             try {
                 JSONObject clientJson = new JSONObject();
@@ -208,13 +245,16 @@ public final class LocalAudioStreamProxy {
                 clientJson.put("clientVersion", client.version);
                 clientJson.put("hl", "id");
                 clientJson.put("gl", "ID");
+                if (!TextUtils.isEmpty(visitorData)) {
+                    clientJson.put("visitorData", visitorData);
+                }
                 if (client.name.startsWith("ANDROID")) {
                     clientJson.put("androidSdkVersion", 34);
                 } else if ("IOS".equals(client.name)) {
                     clientJson.put("deviceMake", "Apple");
                     clientJson.put("deviceModel", "iPhone16,2");
                     clientJson.put("osName", "iPhone");
-                    clientJson.put("osVersion", "18.1.0.22B83");
+                    clientJson.put("osVersion", "18.3.2.22D82");
                 }
 
                 JSONObject contextJson = new JSONObject();
@@ -226,15 +266,18 @@ public final class LocalAudioStreamProxy {
                 payload.put("contentCheckOk", true);
                 payload.put("racyCheckOk", true);
 
-                Request req = new Request.Builder()
+                Request.Builder reqBuilder = new Request.Builder()
                     .url(client.origin + "/youtubei/v1/player?prettyPrint=false")
                     .post(RequestBody.create(payload.toString(), JSON_MEDIA_TYPE))
                     .header("Content-Type", "application/json")
                     .header("Origin", client.origin)
                     .header("User-Agent", client.userAgent)
                     .header("X-YouTube-Client-Name", client.clientId)
-                    .header("X-YouTube-Client-Version", client.version)
-                    .build();
+                    .header("X-YouTube-Client-Version", client.version);
+                if (!TextUtils.isEmpty(visitorData)) {
+                    reqBuilder.header("X-Goog-Visitor-Id", visitorData);
+                }
+                Request req = reqBuilder.build();
 
                 try (Response res = httpClient.newCall(req).execute()) {
                     if (!res.isSuccessful()) continue;

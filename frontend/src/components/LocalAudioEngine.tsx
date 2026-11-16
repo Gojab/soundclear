@@ -7,7 +7,16 @@ import {
 import {
   isAndroidAudioFocusDucked,
   isCapacitorAndroidPlatform,
+  isCapacitorNativeStreamActive,
+  pauseCapacitorNativeStream,
+  playCapacitorNativeStream,
   resolveCapacitorDirectAudioUrl,
+  resumeCapacitorNativeStream,
+  seekCapacitorNativeStream,
+  setCapacitorNativePlaybackRate,
+  setCapacitorNativeStreamErrorHandler,
+  setCapacitorNativeVolume,
+  stopCapacitorNativeStream,
   syncCapacitorPlaybackNotification,
 } from '../audio/capacitorAudioBridge';
 import {
@@ -229,10 +238,12 @@ export function LocalAudioEngine() {
   const isLoadingAudioRef = useRef(false);
   const preloadGenerationRef = useRef(0);
   const standaloneObjectUrlRef = useRef<string | null>(null);
+  const loadingNativeForKeyRef = useRef<string | null>(null);
   const manualMixRequestVersion = usePlayerStore((s) => s.manualMixRequestVersion);
 
   useEffect(() => {
     return () => {
+      void stopCapacitorNativeStream();
       if (pauseTimerRef.current !== null) {
         window.clearTimeout(pauseTimerRef.current);
         pauseTimerRef.current = null;
@@ -261,6 +272,10 @@ export function LocalAudioEngine() {
     const effectiveVolume = localActive
       ? volume
       : clampYoutubeVolume(volume, youtubeSound.maxVolumeLimit, isMuted);
+
+    if (isCapacitorNativeStreamActive()) {
+      void setCapacitorNativeVolume(effectiveVolume, isMuted);
+    }
 
     applyAudioProfileToGraph({
       profile: localProfile,
@@ -324,6 +339,9 @@ export function LocalAudioEngine() {
 
   // Apply playbackRate with pitch preservation (unless currently tempo-gliding back from beat match)
   useEffect(() => {
+    if (isCapacitorNativeStreamActive()) {
+      void setCapacitorNativePlaybackRate(playbackRate);
+    }
     const graph = ensureAudioGraph();
     if (graph) {
       [...graph.decks, graph.directDeck].forEach((deck) => {
@@ -378,6 +396,7 @@ export function LocalAudioEngine() {
     };
 
     const keepAliveOrFallbackForBackground = () => {
+      if (isCapacitorNativeStreamActive()) return;
       const graph = ensureAudioGraph();
       const state = usePlayerStore.getState();
       if (!graph || !state.isPlaying || isYoutubeIframeActive(state.activeStreamMeta)) return;
@@ -423,6 +442,7 @@ export function LocalAudioEngine() {
       }
 
       clearFallbackTimer();
+      if (isCapacitorNativeStreamActive()) return;
       const graph = ensureAudioGraph();
       const state = usePlayerStore.getState();
       const directMode = useSettingsStore.getState().localProfile.directMode;
@@ -459,6 +479,7 @@ export function LocalAudioEngine() {
     };
 
     const unsubscribeInterrupt = subscribeAudioContextInterrupted(() => {
+      if (isCapacitorNativeStreamActive()) return;
       const latest = usePlayerStore.getState();
       const g = ensureAudioGraph();
       if (!g) return;
@@ -712,6 +733,7 @@ export function LocalAudioEngine() {
   // Pause HTML5 audio decks cleanly whenever youtube-iframe mode takes over
   useEffect(() => {
     if (activeStreamSourceMode !== 'youtube-iframe') return;
+    void stopCapacitorNativeStream();
     resetDirectDeck();
     const graph = ensureAudioGraph();
     if (graph) {
@@ -728,6 +750,8 @@ export function LocalAudioEngine() {
 
     if (!htmlAudioTrackKey) {
       loadedKeyRef.current = null;
+      loadingNativeForKeyRef.current = null;
+      void stopCapacitorNativeStream();
       resetDirectDeck();
       if (standaloneObjectUrlRef.current) {
         URL.revokeObjectURL(standaloneObjectUrlRef.current);
@@ -831,6 +855,11 @@ export function LocalAudioEngine() {
     const loadSource = async () => {
       isLoadingAudioRef.current = true;
       ensurePlaybackAudioSession();
+      void stopCapacitorNativeStream();
+      loadingNativeForKeyRef.current =
+        isCapacitorAndroidPlatform() && !localActive && !useOfflineBlob && rawVideoId
+          ? htmlAudioTrackKey
+          : null;
 
       const useDirectTarget =
         !graph ||
@@ -1041,47 +1070,19 @@ export function LocalAudioEngine() {
         const defaultBitrate =
           targetStreamTier === 'low' ? 96 : targetStreamTier === 'normal' ? 128 : 160;
 
-        // On Capacitor Android, guarantee HTML5 <audio> playback via native InnerTube loopback proxy
-        // whenever backend stream meta is restricted or unreachable (never fall back to YouTube iframe).
+        // On Capacitor Android, resolve via on-device InnerTube proxy first (mobile IP, full HTTP 206 range support),
+        // then fall back to backend stream proxy, and execute playback natively inside MediaPlaybackService
+        // so background / app-exit / lockscreen playback never pauses when WebView goes offscreen.
         const onCapAndroid = isCapacitorAndroidPlatform();
         let resolvedNativeUrl: string | null = null;
-        try {
-          if (onCapAndroid && shouldFastRouteToIframe(streamVideoId)) {
-            throw new Error('fast-native-proxy');
-          }
-          const probeMeta = await probeStreamWithCache(
-            streamVideoId,
-            streamQueryMeta,
-            (vid, q) => fetchStreamAudioMeta(vid, q),
-          );
+        let usedNativeProxyUrl = false;
+
+        if (onCapAndroid) {
+          const nativeStream = await resolveCapacitorDirectAudioUrl(streamVideoId);
           if (cancelled) return;
-          if (decideOnlineStreamAction(probeMeta) === 'use-youtube-iframe') {
-            if (!onCapAndroid) {
-              isLoadingAudioRef.current = false;
-              pauseAudioElementProgrammatically(audio);
-              audio.removeAttribute('src');
-              usePlayerStore
-                .getState()
-                .setActiveStreamMeta(
-                  buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
-                );
-              return;
-            }
-            const nativeStream = await resolveCapacitorDirectAudioUrl(streamVideoId);
-            if (cancelled) return;
-            if (!nativeStream?.available || !nativeStream.url) {
-              isLoadingAudioRef.current = false;
-              setElementBusyForLoad(audio, false);
-              pauseAudioElementProgrammatically(audio);
-              audio.removeAttribute('src');
-              usePlayerStore
-                .getState()
-                .setActiveStreamMeta(
-                  buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
-                );
-              return;
-            }
+          if (nativeStream?.available && nativeStream.url) {
             resolvedNativeUrl = nativeStream.url;
+            usedNativeProxyUrl = true;
             const nativeKbps = nativeStream.bitrateKbps ?? defaultBitrate;
             const nativeCodec = nativeStream.codec || 'AAC';
             metaToReport = {
@@ -1096,12 +1097,38 @@ export function LocalAudioEngine() {
               lossless: false,
               hiRes: false,
               badgeLabel: `${nativeCodec} ${nativeKbps} kbps`,
-              sourceMode: !graph ? 'fallback-no-fx' : 'direct',
+              sourceMode: 'direct',
               proxiedViaBackend: false,
               audiodownloadAllowed: true,
               replayGainDb: null,
             };
-          } else {
+          }
+        }
+
+        if (!resolvedNativeUrl) {
+          try {
+            if (onCapAndroid && shouldFastRouteToIframe(streamVideoId)) {
+              throw new Error('fast-native-proxy');
+            }
+            const probeMeta = await probeStreamWithCache(
+              streamVideoId,
+              streamQueryMeta,
+              (vid, q) => fetchStreamAudioMeta(vid, q),
+            );
+            if (cancelled) return;
+            if (decideOnlineStreamAction(probeMeta) === 'use-youtube-iframe') {
+              isLoadingAudioRef.current = false;
+              loadingNativeForKeyRef.current = null;
+              setElementBusyForLoad(audio, false);
+              pauseAudioElementProgrammatically(audio);
+              audio.removeAttribute('src');
+              usePlayerStore
+                .getState()
+                .setActiveStreamMeta(
+                  buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
+                );
+              return;
+            }
             const kbps = probeMeta.bitrateKbps ?? defaultBitrate;
             metaToReport = {
               trackId: rawVideoId,
@@ -1115,52 +1142,22 @@ export function LocalAudioEngine() {
               lossless: false,
               hiRes: false,
               badgeLabel: `${probeMeta.codec || 'AAC'} ${kbps} kbps`,
-              sourceMode: !graph ? 'fallback-no-fx' : useDirectTarget || localProfile.directMode ? 'direct' : 'webaudio',
+              sourceMode: onCapAndroid
+                ? 'direct'
+                : !graph
+                  ? 'fallback-no-fx'
+                  : useDirectTarget || localProfile.directMode
+                    ? 'direct'
+                    : 'webaudio',
               proxiedViaBackend: true,
               audiodownloadAllowed: true,
               replayGainDb: null,
             };
-          }
-        } catch {
-          if (cancelled) return;
-          if (onCapAndroid) {
-            const nativeStream = await resolveCapacitorDirectAudioUrl(streamVideoId);
+          } catch {
             if (cancelled) return;
-            if (nativeStream?.available && nativeStream.url) {
-              resolvedNativeUrl = nativeStream.url;
-              const nativeKbps = nativeStream.bitrateKbps ?? defaultBitrate;
-              const nativeCodec = nativeStream.codec || 'AAC';
-              metaToReport = {
-                trackId: rawVideoId,
-                resolvedVideoId: streamVideoId,
-                requestedTier: targetStreamTier,
-                actualTier: targetStreamTier,
-                codec: nativeCodec,
-                bitrateKbps: nativeKbps,
-                sampleRateHz: 44100,
-                bitDepth: null,
-                lossless: false,
-                hiRes: false,
-                badgeLabel: `${nativeCodec} ${nativeKbps} kbps`,
-                sourceMode: !graph ? 'fallback-no-fx' : 'direct',
-                proxiedViaBackend: false,
-                audiodownloadAllowed: true,
-                replayGainDb: null,
-              };
-            } else {
-              isLoadingAudioRef.current = false;
-              setElementBusyForLoad(audio, false);
-              pauseAudioElementProgrammatically(audio);
-              audio.removeAttribute('src');
-              usePlayerStore
-                .getState()
-                .setActiveStreamMeta(
-                  buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
-                );
-              return;
-            }
-          } else {
             isLoadingAudioRef.current = false;
+            loadingNativeForKeyRef.current = null;
+            setElementBusyForLoad(audio, false);
             pauseAudioElementProgrammatically(audio);
             audio.removeAttribute('src');
             usePlayerStore
@@ -1176,11 +1173,182 @@ export function LocalAudioEngine() {
         resolvedTrackKey = rawVideoId;
         usePlayerStore.getState().setActiveStreamMeta(metaToReport);
         streamMetaFetchTarget = null;
+
+        if (onCapAndroid && urlToLoad) {
+          if (graph) {
+            [graph.decks[0], graph.decks[1], graph.directDeck].forEach((el) => {
+              pauseAudioElementProgrammatically(el);
+              el.removeAttribute('src');
+              el.load();
+            });
+          } else if (standalone) {
+            pauseAudioElementProgrammatically(standalone);
+            standalone.removeAttribute('src');
+            standalone.load();
+          }
+          setElementBusyForLoad(audio, false);
+          stopSilentKeepaliveAudio();
+
+          const stNative = usePlayerStore.getState();
+          const capTargetSeek = stNative.pendingSeekSeconds ?? stNative.currentTime ?? 0;
+          const capEffVol = clampYoutubeVolume(
+            stNative.volume,
+            useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+            stNative.isMuted,
+          );
+
+          const handleNativeStreamError = async () => {
+            if (cancelled) return;
+            const latest = usePlayerStore.getState();
+            const curTrack = latest.currentTrack;
+            const fallbackVol = clampYoutubeVolume(
+              latest.volume,
+              useSettingsStore.getState().youtubeSound.maxVolumeLimit,
+              latest.isMuted,
+            );
+            const resumeAt = Math.max(0, latest.currentTime || 0);
+
+            // Step 1: if proxy URL failed, try backend proxy stream for same streamVideoId
+            if (usedNativeProxyUrl && !fallbackAttemptedRef.current) {
+              usedNativeProxyUrl = false;
+              const backendMeta = await probeStreamWithCache(
+                streamVideoId,
+                streamQueryMeta,
+                (vid, q) => fetchStreamAudioMeta(vid, q),
+              ).catch(() => null);
+              if (cancelled) return;
+              if (decideOnlineStreamAction(backendMeta) !== 'use-youtube-iframe') {
+                const backendUrl = buildStreamAudioUrl(streamVideoId, streamQueryMeta);
+                const startedBackend = await playCapacitorNativeStream({
+                  url: backendUrl,
+                  track: curTrack ?? currentTrack,
+                  startSeconds: resumeAt,
+                  volume0to100: fallbackVol,
+                  isMuted: latest.isMuted,
+                  playbackRate: latest.playbackRate || 1,
+                  autoplay: latest.isPlaying,
+                });
+                if (startedBackend) return;
+              }
+            }
+
+            // Step 2: resolve alternative video ID and try native proxy -> backend stream
+            if (!fallbackAttemptedRef.current && curTrack) {
+              fallbackAttemptedRef.current = true;
+              latest.setIsBuffering(true);
+              try {
+                const resolved = await resolvePlayableYoutube(rawVideoId, {
+                  title: curTrack.title,
+                  artist: artistName,
+                  type: curTrack.type,
+                  durationSeconds: curTrack.durationSeconds,
+                  fallback: true,
+                  exclude: [rawVideoId],
+                });
+                if (cancelled) return;
+                const altId = resolved.youtubeVideoId || resolved.candidates?.[0] || rawVideoId;
+                const nativeAlt = await resolveCapacitorDirectAudioUrl(altId);
+                if (cancelled) return;
+                if (nativeAlt?.available && nativeAlt.url) {
+                  const okAlt = await playCapacitorNativeStream({
+                    url: nativeAlt.url,
+                    track: curTrack,
+                    startSeconds: 0,
+                    volume0to100: fallbackVol,
+                    isMuted: usePlayerStore.getState().isMuted,
+                    playbackRate: usePlayerStore.getState().playbackRate || 1,
+                    autoplay: usePlayerStore.getState().isPlaying,
+                  });
+                  if (okAlt) return;
+                }
+                const altQueryMeta = {
+                  title: curTrack.title,
+                  artist: artistName,
+                  durationSeconds: curTrack.durationSeconds,
+                  quality: targetStreamTier,
+                };
+                const altMeta = await fetchStreamAudioMeta(altId, altQueryMeta).catch(() => null);
+                if (cancelled) return;
+                if (decideOnlineStreamAction(altMeta) !== 'use-youtube-iframe') {
+                  const okAltBackend = await playCapacitorNativeStream({
+                    url: buildStreamAudioUrl(altId, altQueryMeta),
+                    track: curTrack,
+                    startSeconds: 0,
+                    volume0to100: fallbackVol,
+                    isMuted: usePlayerStore.getState().isMuted,
+                    playbackRate: usePlayerStore.getState().playbackRate || 1,
+                    autoplay: usePlayerStore.getState().isPlaying,
+                  });
+                  if (okAltBackend) return;
+                }
+              } catch {
+                // Fall through to YouTube IFrame fallback
+              }
+            }
+
+            if (cancelled) return;
+            setCapacitorNativeStreamErrorHandler(null);
+            await stopCapacitorNativeStream();
+            usePlayerStore
+              .getState()
+              .setActiveStreamMeta(
+                buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
+              );
+          };
+
+          setCapacitorNativeStreamErrorHandler(() => {
+            void handleNativeStreamError();
+          });
+
+          const nativeStarted = await playCapacitorNativeStream({
+            url: urlToLoad,
+            track: currentTrack,
+            startSeconds: capTargetSeek,
+            volume0to100: capEffVol,
+            isMuted: stNative.isMuted,
+            playbackRate: stNative.playbackRate || 1,
+            autoplay: stNative.isPlaying,
+          });
+          loadingNativeForKeyRef.current = null;
+          isLoadingAudioRef.current = false;
+
+          if (cancelled) {
+            setCapacitorNativeStreamErrorHandler(null);
+            void stopCapacitorNativeStream();
+            return;
+          }
+
+          if (nativeStarted) {
+            stNative.clearPendingSeek();
+            stNative.setPlayerError(null);
+            stNative.setWebAudioWarning(null);
+            const nextUpcoming = stNative.manualQueue[0] ?? stNative.sourceQueue[0] ?? null;
+            if (nextUpcoming && !isLocalTrack(nextUpcoming)) {
+              const nextVid = getPlayableVideoId(nextUpcoming);
+              if (nextVid) {
+                void resolveCapacitorDirectAudioUrl(nextVid);
+                prefetchStreamProbe(
+                  nextVid,
+                  {
+                    title: nextUpcoming.title,
+                    artist: formatArtists(nextUpcoming.artists),
+                    durationSeconds: nextUpcoming.durationSeconds,
+                    quality: targetStreamTier,
+                  },
+                  (vid, q) => fetchStreamAudioMeta(vid, q),
+                );
+              }
+            }
+            return;
+          }
+          setCapacitorNativeStreamErrorHandler(null);
+        }
       }
 
       if (!urlToLoad || cancelled) {
         setElementBusyForLoad(audio, false);
         isLoadingAudioRef.current = false;
+        loadingNativeForKeyRef.current = null;
         return;
       }
 
@@ -1625,6 +1793,8 @@ export function LocalAudioEngine() {
     return () => {
       cancelled = true;
       isLoadingAudioRef.current = false;
+      loadingNativeForKeyRef.current = null;
+      setCapacitorNativeStreamErrorHandler(null);
       clearStallTimer();
       detachListeners?.();
     };
@@ -1687,6 +1857,15 @@ export function LocalAudioEngine() {
     const standalone = !graph ? ensureStandaloneDirectDeck() : null;
     if ((!graph && !standalone) || !htmlAudioTrackKey) return;
     if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) return;
+    if (loadingNativeForKeyRef.current === htmlAudioTrackKey) return;
+    if (isCapacitorNativeStreamActive()) {
+      if (isPlaying) {
+        void resumeCapacitorNativeStream();
+      } else {
+        void pauseCapacitorNativeStream();
+      }
+      return;
+    }
     if (graph && isBackgroundHandoffActive()) return;
 
     if (pauseTimerRef.current !== null) {
@@ -1835,6 +2014,15 @@ export function LocalAudioEngine() {
     const standalone = !graph ? ensureStandaloneDirectDeck() : null;
     if (!htmlAudioTrackKey || pendingSeekSeconds === null || (!graph && !standalone)) return;
     if (isYoutubeIframeActive(usePlayerStore.getState().activeStreamMeta)) return;
+
+    if (isCapacitorNativeStreamActive()) {
+      const st = usePlayerStore.getState();
+      const dur = st.duration > 0 ? st.duration : null;
+      const clampedSeek = clampSeekTarget(pendingSeekSeconds, dur);
+      void seekCapacitorNativeStream(clampedSeek);
+      st.clearPendingSeek();
+      return;
+    }
 
     const activeAudio = graph ? getActivePlaybackElement(graph) : standalone!;
     if (Number.isFinite(activeAudio.duration) && activeAudio.duration > 0) {
@@ -2065,6 +2253,7 @@ export function LocalAudioEngine() {
 
     if (!graph && standalone) {
       const syncStandaloneTick = () => {
+        if (isCapacitorNativeStreamActive()) return;
         if (!standalone.src || standalone.dataset.scPriming === '1') return;
         const store = usePlayerStore.getState();
         const cur = standalone.currentTime;
@@ -2207,6 +2396,7 @@ export function LocalAudioEngine() {
     lastProgressTickAtRef.current = Date.now();
 
     const syncProgressTick = () => {
+      if (isCapacitorNativeStreamActive()) return;
       const nowTickMs = Date.now();
       const deltaMs = Math.max(0, Math.min(500, nowTickMs - lastProgressTickAtRef.current));
       lastProgressTickAtRef.current = nowTickMs;

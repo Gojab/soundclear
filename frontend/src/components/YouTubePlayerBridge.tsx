@@ -2,6 +2,11 @@ import { useEffect, useRef } from 'react';
 import { resolvePlayableYoutube } from '../api/client';
 import {
   isCapacitorAndroidPlatform,
+  isCapacitorNativeStreamActive,
+  pauseCapacitorNativeStream,
+  resumeCapacitorNativeStream,
+  seekCapacitorNativeStream,
+  stopCapacitorNativeStream,
   syncCapacitorPlaybackNotification,
 } from '../audio/capacitorAudioBridge';
 import {
@@ -224,7 +229,10 @@ export function YouTubePlayerBridge() {
       const target = clampSeekTarget(rawTarget, dur);
       st.requestSeek(target);
 
-      if (isYoutubeIframeActive(st.activeStreamMeta) && playerRef.current && playerReadyRef.current) {
+      if (isCapacitorNativeStreamActive()) {
+        void seekCapacitorNativeStream(target);
+        st.clearPendingSeek();
+      } else if (isYoutubeIframeActive(st.activeStreamMeta) && playerRef.current && playerReadyRef.current) {
         try {
           playerRef.current.seekTo(target, true);
           st.clearPendingSeek();
@@ -256,7 +264,9 @@ export function YouTubePlayerBridge() {
         unlockPlaybackOnUserGesture();
         void resumeAudioContext();
         st.setIsPlaying(true);
-        if (isYoutubeIframeActive(st.activeStreamMeta)) {
+        if (isCapacitorNativeStreamActive()) {
+          void resumeCapacitorNativeStream();
+        } else if (isYoutubeIframeActive(st.activeStreamMeta)) {
           ytPlayRequestedAtRef.current = Date.now();
           if (playerRef.current && playerReadyRef.current) {
             try {
@@ -283,7 +293,9 @@ export function YouTubePlayerBridge() {
         const st = usePlayerStore.getState();
         stopSilentKeepaliveAudio();
         ytActuallyPlayingRef.current = false;
-        if (isYoutubeIframeActive(st.activeStreamMeta)) {
+        if (isCapacitorNativeStreamActive()) {
+          void pauseCapacitorNativeStream();
+        } else if (isYoutubeIframeActive(st.activeStreamMeta)) {
           if (playerRef.current && playerReadyRef.current) {
             try {
               playerRef.current.pauseVideo();
@@ -304,7 +316,9 @@ export function YouTubePlayerBridge() {
         const st = usePlayerStore.getState();
         stopSilentKeepaliveAudio();
         ytActuallyPlayingRef.current = false;
-        if (isYoutubeIframeActive(st.activeStreamMeta)) {
+        if (isCapacitorNativeStreamActive()) {
+          void stopCapacitorNativeStream();
+        } else if (isYoutubeIframeActive(st.activeStreamMeta)) {
           if (playerRef.current && playerReadyRef.current) {
             try {
               playerRef.current.stopVideo();

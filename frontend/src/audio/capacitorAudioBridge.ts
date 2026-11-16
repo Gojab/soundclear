@@ -28,7 +28,34 @@ export interface DirectAudioResolutionResult {
   codec?: string;
 }
 
+export interface NativePlaybackStateEvent {
+  active: boolean;
+  isPlaying: boolean;
+  isBuffering: boolean;
+  currentTime: number;
+  duration: number;
+  ended: boolean;
+  error: boolean;
+}
+
 interface SoundClearBackgroundAudioPlugin {
+  playNativeStream(options: {
+    url: string;
+    title: string;
+    artist: string;
+    album: string;
+    artworkUrl: string;
+    startSeconds: number;
+    volume: number;
+    playbackRate: number;
+    autoplay: boolean;
+  }): Promise<void>;
+  pauseNativeStream(): Promise<void>;
+  resumeNativeStream(): Promise<void>;
+  stopNativeStream(): Promise<void>;
+  seekNativeStream(options: { positionSeconds: number }): Promise<void>;
+  setNativeVolume(options: { volume: number }): Promise<void>;
+  setNativePlaybackRate(options: { playbackRate: number }): Promise<void>;
   syncPlaybackState(options: {
     title: string;
     artist: string;
@@ -51,6 +78,10 @@ interface SoundClearBackgroundAudioPlugin {
   addListener(
     eventName: 'audioFocusChange',
     listenerFunc: (event: { state: string }) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'nativePlaybackState',
+    listenerFunc: (event: NativePlaybackStateEvent) => void,
   ): Promise<PluginListenerHandle>;
 }
 
@@ -75,9 +106,124 @@ function getActiveHtmlAudio(): HTMLAudioElement | null {
 let lastNotificationSyncKey = '';
 let lastNotificationSyncAtMs = 0;
 let audioFocusDucked = false;
+let nativeStreamActive = false;
+let lastJsNativeCommandAtMs = 0;
+let nativeStreamErrorHandler: (() => void) | null = null;
 
 export function isAndroidAudioFocusDucked(): boolean {
   return audioFocusDucked;
+}
+
+export function isCapacitorNativeStreamActive(): boolean {
+  return isCapacitorAndroidPlatform() && nativeStreamActive;
+}
+
+export function setCapacitorNativeStreamErrorHandler(handler: (() => void) | null): void {
+  nativeStreamErrorHandler = handler;
+}
+
+export async function playCapacitorNativeStream(params: {
+  url: string;
+  track: MediaItem;
+  startSeconds: number;
+  volume0to100: number;
+  isMuted: boolean;
+  playbackRate: number;
+  autoplay: boolean;
+}): Promise<boolean> {
+  if (!isCapacitorAndroidPlatform() || !params.url) return false;
+  nativeStreamActive = true;
+  lastJsNativeCommandAtMs = Date.now();
+  const normalizedVol = params.isMuted
+    ? 0
+    : Math.max(0, Math.min(1, params.volume0to100 / 100));
+  try {
+    await SoundClearBackgroundAudio.playNativeStream({
+      url: params.url,
+      title: params.track.title || 'SoundClear',
+      artist: formatArtists(params.track.artists) || 'SoundClear',
+      album: params.track.album?.name || 'SoundClear',
+      artworkUrl: params.track.thumbnail || '',
+      startSeconds: Math.max(0, params.startSeconds || 0),
+      volume: normalizedVol,
+      playbackRate:
+        Number.isFinite(params.playbackRate) && params.playbackRate > 0 ? params.playbackRate : 1,
+      autoplay: params.autoplay,
+    });
+    return true;
+  } catch {
+    nativeStreamActive = false;
+    return false;
+  }
+}
+
+export async function pauseCapacitorNativeStream(): Promise<void> {
+  if (!isCapacitorAndroidPlatform() || !nativeStreamActive) return;
+  lastJsNativeCommandAtMs = Date.now();
+  try {
+    await SoundClearBackgroundAudio.pauseNativeStream();
+  } catch {
+    // Ignore
+  }
+}
+
+export async function resumeCapacitorNativeStream(): Promise<void> {
+  if (!isCapacitorAndroidPlatform() || !nativeStreamActive) return;
+  lastJsNativeCommandAtMs = Date.now();
+  try {
+    await SoundClearBackgroundAudio.resumeNativeStream();
+  } catch {
+    // Ignore
+  }
+}
+
+export async function stopCapacitorNativeStream(): Promise<void> {
+  nativeStreamErrorHandler = null;
+  if (!nativeStreamActive) return;
+  nativeStreamActive = false;
+  lastJsNativeCommandAtMs = Date.now();
+  if (!isCapacitorAndroidPlatform()) return;
+  try {
+    await SoundClearBackgroundAudio.stopNativeStream();
+  } catch {
+    // Ignore
+  }
+}
+
+export async function seekCapacitorNativeStream(positionSeconds: number): Promise<void> {
+  if (!isCapacitorAndroidPlatform() || !nativeStreamActive) return;
+  lastJsNativeCommandAtMs = Date.now();
+  try {
+    await SoundClearBackgroundAudio.seekNativeStream({
+      positionSeconds: Math.max(0, positionSeconds),
+    });
+  } catch {
+    // Ignore
+  }
+}
+
+export async function setCapacitorNativeVolume(
+  volume0to100: number,
+  isMuted: boolean,
+): Promise<void> {
+  if (!isCapacitorAndroidPlatform() || !nativeStreamActive) return;
+  const vol = isMuted ? 0 : Math.max(0, Math.min(1, volume0to100 / 100));
+  try {
+    await SoundClearBackgroundAudio.setNativeVolume({ volume: vol });
+  } catch {
+    // Ignore
+  }
+}
+
+export async function setCapacitorNativePlaybackRate(rate: number): Promise<void> {
+  if (!isCapacitorAndroidPlatform() || !nativeStreamActive) return;
+  try {
+    await SoundClearBackgroundAudio.setNativePlaybackRate({
+      playbackRate: Number.isFinite(rate) && rate > 0 ? rate : 1,
+    });
+  } catch {
+    // Ignore
+  }
 }
 
 export function syncCapacitorPlaybackNotification(params: {
@@ -91,10 +237,16 @@ export function syncCapacitorPlaybackNotification(params: {
   if (!isCapacitorAndroidPlatform()) return;
 
   if (!params.track) {
+    nativeStreamActive = false;
+    nativeStreamErrorHandler = null;
     if (lastNotificationSyncKey !== 'idle') {
       lastNotificationSyncKey = 'idle';
       void SoundClearBackgroundAudio.setIdle().catch(() => {});
     }
+    return;
+  }
+
+  if (nativeStreamActive) {
     return;
   }
 
@@ -146,6 +298,12 @@ function applyPlayCommandFromNative(): void {
   void resumeAudioContext();
   st.setIsPlaying(true);
 
+  if (nativeStreamActive) {
+    void resumeCapacitorNativeStream();
+    syncMediaSessionPlaybackState('playing');
+    return;
+  }
+
   if (st.activeStreamMeta?.sourceMode !== 'youtube-iframe') {
     const el = getActiveHtmlAudio();
     if (el && el.src && el.paused && el.dataset.scPriming !== '1') {
@@ -166,6 +324,12 @@ function applyPlayCommandFromNative(): void {
 function applyPauseCommandFromNative(): void {
   const st = usePlayerStore.getState();
   stopSilentKeepaliveAudio();
+  if (nativeStreamActive) {
+    void pauseCapacitorNativeStream();
+    st.setIsPlaying(false);
+    syncMediaSessionPlaybackState('paused');
+    return;
+  }
   if (st.activeStreamMeta?.sourceMode !== 'youtube-iframe') {
     const el = getActiveHtmlAudio();
     if (el && !el.paused) {
@@ -247,6 +411,8 @@ export function initCapacitorAndroidBridge(): () => void {
         applyPauseCommandFromNative();
       } else if (action === 'stop') {
         pausedByCallFocus = false;
+        nativeStreamActive = false;
+        nativeStreamErrorHandler = null;
         stopSilentKeepaliveAudio();
         const el = getActiveHtmlAudio();
         if (el) {
@@ -351,6 +517,57 @@ export function initCapacitorAndroidBridge(): () => void {
       return;
     }
     handles.push(focusHandle);
+
+    const nativeStateHandle = await SoundClearBackgroundAudio.addListener(
+      'nativePlaybackState',
+      (event) => {
+        if (!nativeStreamActive) return;
+        const st = usePlayerStore.getState();
+
+        if (event.error) {
+          nativeStreamActive = false;
+          const errHandler = nativeStreamErrorHandler;
+          nativeStreamErrorHandler = null;
+          st.setIsBuffering(false);
+          if (errHandler) {
+            errHandler();
+          } else {
+            st.setIsPlaying(false);
+            st.setPlayerError('Gagal memutar aliran audio di latar belakang.');
+          }
+          return;
+        }
+
+        if (event.ended) {
+          nativeStreamActive = false;
+          nativeStreamErrorHandler = null;
+          st.setIsBuffering(false);
+          st.handleTrackEnded();
+          return;
+        }
+
+        st.setIsBuffering(Boolean(event.isBuffering));
+        if (Number.isFinite(event.currentTime) && event.currentTime >= 0) {
+          st.setProgress(
+            event.currentTime,
+            Number.isFinite(event.duration) && event.duration > 0 ? event.duration : undefined,
+          );
+        }
+
+        if (
+          !event.isBuffering &&
+          Date.now() - lastJsNativeCommandAtMs > 700 &&
+          st.isPlaying !== Boolean(event.isPlaying)
+        ) {
+          st.setIsPlaying(Boolean(event.isPlaying));
+        }
+      },
+    );
+    if (disposed) {
+      void nativeStateHandle.remove();
+      return;
+    }
+    handles.push(nativeStateHandle);
   };
 
   void registerListeners();

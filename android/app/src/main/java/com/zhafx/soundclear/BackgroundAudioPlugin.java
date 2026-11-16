@@ -16,7 +16,8 @@ import java.util.concurrent.Executors;
 
 /**
  * Capacitor native plugin bridging web audio state <-> Android Foreground Service (MediaPlaybackService),
- * AudioFocus callbacks, battery optimization checks, and local HTTP direct audio proxy resolution.
+ * native MediaPlayer stream playback, AudioFocus callbacks, battery optimization checks,
+ * and local HTTP direct audio proxy resolution.
  */
 @CapacitorPlugin(name = "SoundClearBackgroundAudio")
 public class BackgroundAudioPlugin extends Plugin {
@@ -58,6 +59,141 @@ public class BackgroundAudioPlugin extends Plugin {
         plugin.notifyListeners("audioFocusChange", data);
     }
 
+    public static void dispatchNativePlaybackState(
+        boolean active,
+        boolean isPlaying,
+        boolean isBuffering,
+        double currentTimeSeconds,
+        double durationSeconds,
+        boolean ended,
+        boolean error
+    ) {
+        BackgroundAudioPlugin plugin = activeInstance;
+        if (plugin == null) return;
+        JSObject data = new JSObject();
+        data.put("active", active);
+        data.put("isPlaying", isPlaying);
+        data.put("isBuffering", isBuffering);
+        data.put("currentTime", currentTimeSeconds);
+        data.put("duration", durationSeconds);
+        data.put("ended", ended);
+        data.put("error", error);
+        plugin.notifyListeners("nativePlaybackState", data);
+    }
+
+    private void startServiceCompat(Context context, Intent intent) {
+        if (MediaPlaybackService.isServiceRunning()) {
+            context.startService(intent);
+        } else {
+            ContextCompat.startForegroundService(context, intent);
+        }
+    }
+
+    @PluginMethod
+    public void playNativeStream(PluginCall call) {
+        Context context = getContext();
+        String streamUrl = call.getString("url", "");
+        if (streamUrl == null || streamUrl.trim().isEmpty()) {
+            call.reject("Stream URL is required");
+            return;
+        }
+        String title = call.getString("title", "SoundClear");
+        String artist = call.getString("artist", "SoundClear");
+        String album = call.getString("album", "SoundClear");
+        String artworkUrl = call.getString("artworkUrl", "");
+        double startSeconds = call.getDouble("startSeconds", 0.0);
+        double volume = call.getDouble("volume", 1.0);
+        double rate = call.getDouble("playbackRate", 1.0);
+        boolean autoplay = Boolean.TRUE.equals(call.getBoolean("autoplay", true));
+
+        Intent intent = new Intent(context, MediaPlaybackService.class);
+        intent.setAction(MediaPlaybackService.ACTION_LOAD_AND_PLAY);
+        intent.putExtra(MediaPlaybackService.EXTRA_STREAM_URL, streamUrl.trim());
+        intent.putExtra(MediaPlaybackService.EXTRA_TITLE, title);
+        intent.putExtra(MediaPlaybackService.EXTRA_ARTIST, artist);
+        intent.putExtra(MediaPlaybackService.EXTRA_ALBUM, album);
+        intent.putExtra(MediaPlaybackService.EXTRA_ARTWORK_URL, artworkUrl);
+        intent.putExtra(MediaPlaybackService.EXTRA_POSITION_MS, Math.max(0L, Math.round(startSeconds * 1000.0)));
+        intent.putExtra(MediaPlaybackService.EXTRA_VOLUME, (float) Math.max(0.0, Math.min(1.0, volume)));
+        intent.putExtra(MediaPlaybackService.EXTRA_PLAYBACK_RATE, (float) rate);
+        intent.putExtra(MediaPlaybackService.EXTRA_IS_PLAYING, autoplay);
+
+        startServiceCompat(context, intent);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void pauseNativeStream(PluginCall call) {
+        Context context = getContext();
+        if (MediaPlaybackService.isServiceRunning()) {
+            Intent intent = new Intent(context, MediaPlaybackService.class);
+            intent.setAction(MediaPlaybackService.ACTION_PAUSE_NATIVE);
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void resumeNativeStream(PluginCall call) {
+        Context context = getContext();
+        if (MediaPlaybackService.isServiceRunning()) {
+            Intent intent = new Intent(context, MediaPlaybackService.class);
+            intent.setAction(MediaPlaybackService.ACTION_RESUME_NATIVE);
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void stopNativeStream(PluginCall call) {
+        Context context = getContext();
+        if (MediaPlaybackService.isServiceRunning()) {
+            Intent intent = new Intent(context, MediaPlaybackService.class);
+            intent.setAction(MediaPlaybackService.ACTION_STOP_NATIVE);
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void seekNativeStream(PluginCall call) {
+        Context context = getContext();
+        double posSec = call.getDouble("positionSeconds", 0.0);
+        if (MediaPlaybackService.isServiceRunning()) {
+            Intent intent = new Intent(context, MediaPlaybackService.class);
+            intent.setAction(MediaPlaybackService.ACTION_SEEK_NATIVE);
+            intent.putExtra(MediaPlaybackService.EXTRA_POSITION_MS, Math.max(0L, Math.round(posSec * 1000.0)));
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setNativeVolume(PluginCall call) {
+        Context context = getContext();
+        double vol = call.getDouble("volume", 1.0);
+        if (MediaPlaybackService.isServiceRunning()) {
+            Intent intent = new Intent(context, MediaPlaybackService.class);
+            intent.setAction(MediaPlaybackService.ACTION_SET_VOLUME_NATIVE);
+            intent.putExtra(MediaPlaybackService.EXTRA_VOLUME, (float) Math.max(0.0, Math.min(1.0, vol)));
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setNativePlaybackRate(PluginCall call) {
+        Context context = getContext();
+        double rate = call.getDouble("playbackRate", 1.0);
+        if (MediaPlaybackService.isServiceRunning()) {
+            Intent intent = new Intent(context, MediaPlaybackService.class);
+            intent.setAction(MediaPlaybackService.ACTION_SET_RATE_NATIVE);
+            intent.putExtra(MediaPlaybackService.EXTRA_PLAYBACK_RATE, (float) rate);
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
     @PluginMethod
     public void syncPlaybackState(PluginCall call) {
         Context context = getContext();
@@ -86,11 +222,7 @@ public class BackgroundAudioPlugin extends Plugin {
         intent.putExtra(MediaPlaybackService.EXTRA_POSITION_MS, Math.max(0L, Math.round(currentTimeSec * 1000.0)));
         intent.putExtra(MediaPlaybackService.EXTRA_PLAYBACK_RATE, (float) rate);
 
-        if (MediaPlaybackService.isServiceRunning()) {
-            context.startService(intent);
-        } else {
-            ContextCompat.startForegroundService(context, intent);
-        }
+        startServiceCompat(context, intent);
         call.resolve();
     }
 
