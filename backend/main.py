@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -48,6 +49,27 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="SoundClear API", version="3.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=[
+        "Content-Length",
+        "Content-Range",
+        "Accept-Ranges",
+        "X-Audio-Codec",
+        "X-Audio-Bitrate-Kbps",
+        "X-Audio-Sample-Rate",
+        "X-Audio-Source",
+        "X-Audio-Tier",
+        "X-Audio-Cache-Ready",
+        "X-Copyright-Owner",
+        "X-Copyright-Protected",
+    ],
+)
 
 
 class RateBody(BaseModel):

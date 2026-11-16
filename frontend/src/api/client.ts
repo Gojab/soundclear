@@ -46,10 +46,42 @@ export function getApiBaseUrl(): string {
   return '';
 }
 
+export function setApiBaseUrl(url: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const clean = url.trim().replace(/\/+$/, '');
+    if (clean && /^https?:\/\//i.test(clean)) {
+      window.localStorage.setItem(API_BASE_STORAGE_KEY, clean);
+    } else {
+      window.localStorage.removeItem(API_BASE_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function resolveApiUrl(apiPath: string): string {
   const normalized = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
   const base = getApiBaseUrl();
   return base ? `${base}${normalized}` : normalized;
+}
+
+function isCapacitorNativeRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const cap = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  return Boolean(cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform());
+}
+
+function buildNonJsonErrorMessage(status: number, rawBody: string): string {
+  const trimmed = rawBody.trim().toLowerCase();
+  const looksLikeHtml = trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.startsWith('<');
+  if (looksLikeHtml && isCapacitorNativeRuntime() && !getApiBaseUrl()) {
+    return 'Server backend SoundClear belum dihubungkan untuk APK mobile. Atur VITE_API_BASE_URL (URL server backend / Vercel) lalu rebuild APK.';
+  }
+  if (looksLikeHtml) {
+    return `Respons server berupa HTML bukan JSON (${status || 200}). Periksa URL server backend SoundClear.`;
+  }
+  return `Respons server tidak valid (${status || 500}).`;
 }
 
 export class ApiError extends Error {
@@ -80,18 +112,30 @@ async function requestJson<T>(
     signal: options?.signal,
   });
 
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+
   if (!res.ok) {
     let detail = `Terjadi kesalahan (${res.status})`;
     try {
-      const data = (await res.json()) as { detail?: string };
-      if (data?.detail) detail = data.detail;
+      const text = await res.text();
+      if (contentType.includes('application/json') || text.trim().startsWith('{')) {
+        const data = JSON.parse(text) as { detail?: string };
+        if (data?.detail) detail = data.detail;
+      } else if (text.trim()) {
+        detail = buildNonJsonErrorMessage(res.status, text);
+      }
     } catch {
       // Fallback to generic message
     }
     throw new ApiError(detail, res.status);
   }
 
-  return (await res.json()) as T;
+  const rawText = await res.text();
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    throw new ApiError(buildNonJsonErrorMessage(res.status, rawText), res.status || 502);
+  }
 }
 
 export function fetchHome(signal?: AbortSignal): Promise<HomeResponse> {

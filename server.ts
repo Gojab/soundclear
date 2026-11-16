@@ -362,8 +362,20 @@ function proxyApiToPython(req: Request, res: Response): void {
   const targetPath = req.originalUrl;
   const pathname = targetPath.split('?')[0];
 
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Range, Authorization, X-Copyright-Token');
+  res.setHeader(
+    'Access-Control-Expose-Headers',
+    'Content-Length, Content-Range, Accept-Ranges, X-Audio-Codec, X-Audio-Bitrate-Kbps, X-Audio-Sample-Rate, X-Audio-Source, X-Audio-Tier, X-Audio-Cache-Ready, X-Copyright-Owner, X-Copyright-Protected',
+  );
   res.setHeader('X-Copyright-Owner', EXPECTED_COPYRIGHT_OWNER);
   res.setHeader('X-Copyright-Protected', 'true');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
 
   const integrity = verifyNodeCopyrightIntegrity();
   if (
