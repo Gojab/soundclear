@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SoundClear</string>
+    <string name="playback_channel_name">Pemutaran Musik</string>
+    <string name="playback_channel_desc">Kontrol pemutaran musik SoundClear di latar belakang</string>
+</resources>

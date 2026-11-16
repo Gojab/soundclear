@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="obsidian_bg">#000000</color>
+    <color name="obsidian_surface">#0B0F0D</color>
+    <color name="emerald_bright">#19EE8A</color>
+    <color name="emerald_primary">#0AD36C</color>
+    <color name="emerald_deep">#01BA53</color>
+    <color name="mint_text">#E8FFF3</color>
+</resources>
