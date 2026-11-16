@@ -20,6 +20,14 @@ if (-not (Test-Path $SdkDir)) {
 $SdkEscaped = $SdkDir -replace '\\', '/'
 "sdk.dir=$SdkEscaped" | Set-Content (Join-Path $NativeDir "local.properties") -Encoding ascii
 
+# Pastikan libs.versions.toml bebas BOM UTF-8 (PowerShell 5.1 Set-Content -Encoding utf8 menambahkan BOM)
+$TomlPath = Join-Path $NativeDir "gradle\libs.versions.toml"
+if (Test-Path $TomlPath) {
+  $TomlRaw = [System.IO.File]::ReadAllText($TomlPath).TrimStart([char]0xFEFF)
+  $TomlRaw = $TomlRaw -replace 'id = "org\.jetbrains\.kotlin"', 'id = "org.jetbrains.kotlin.android"'
+  [System.IO.File]::WriteAllText($TomlPath, $TomlRaw, (New-Object System.Text.UTF8Encoding($false)))
+}
+
 # 2. Pastikan JDK 21 aktif (Gradle 8.11.1 & AGP 8.7.3 tidak mendukung JDK 25)
 function Test-Jdk21([string]$JavaExe) {
   if (-not $JavaExe -or -not (Test-Path $JavaExe)) { return $false }

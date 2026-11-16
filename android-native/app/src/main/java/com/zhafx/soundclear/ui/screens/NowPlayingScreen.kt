@@ -474,8 +474,8 @@ fun NowPlayingScreen(
             Column(modifier = Modifier.fillMaxWidth().height(560.dp).padding(horizontal = 20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(track.title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
-                        Text(extras.lyricsSource ?: track.primaryArtistName, style = MaterialTheme.typography.bodySmall)
+                        Text(track?.title.orEmpty(), style = MaterialTheme.typography.titleLarge, maxLines = 1)
+                        Text(extras.lyricsSource ?: track?.primaryArtistName.orEmpty(), style = MaterialTheme.typography.bodySmall)
                     }
                     Button(
                         onClick = { playbackController.togglePlayPause() },
