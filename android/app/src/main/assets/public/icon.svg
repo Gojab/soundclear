@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="sc-emerald" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1DF78E" />
+      <stop offset="55%" stop-color="#0AD26C" />
+      <stop offset="100%" stop-color="#00B555" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="118" fill="url(#sc-emerald)" />
+  <path
+    fill="#FFFFFF"
+    d="M352 104c8.8 0 16 7.2 16 16v218c0 30.9-26.9 56-60 56s-60-25.1-60-56 26.9-56 60-56c10.7 0 20.7 2.6 29.4 7.2V193.5l-124 27.6V366c0 30.9-26.9 56-60 56s-60-25.1-60-56 26.9-56 60-56c10.7 0 20.7 2.6 29.4 7.2V150c0-10.6 7.4-19.8 17.8-22l148-32.4c1.1-.4 2.3-.6 3.4-.6Z"
+  />
+</svg>

@@ -5,6 +5,13 @@ import {
   resolvePlayableYoutube,
 } from '../api/client';
 import {
+  isAndroidAudioFocusDucked,
+  isCapacitorAndroidPlatform,
+  resolveCapacitorDirectAudioUrl,
+  syncCapacitorPlaybackNotification,
+} from '../audio/capacitorAudioBridge';
+import {
+  syncMediaSessionMetadata,
   syncMediaSessionPlaybackState,
   syncMediaSessionPosition,
 } from '../audio/mediaSessionService';
@@ -268,7 +275,8 @@ export function LocalAudioEngine() {
     });
 
     const graph = ensureAudioGraph();
-    const directVol = isMuted ? 0 : Math.max(0, Math.min(1, effectiveVolume / 100));
+    const duckScale = isAndroidAudioFocusDucked() ? 0.25 : 1;
+    const directVol = isMuted ? 0 : Math.max(0, Math.min(1, (effectiveVolume / 100) * duckScale));
     if (graph) {
       graph.directDeck.muted = isMuted;
       graph.directDeck.volume = directVol;
@@ -731,7 +739,13 @@ export function LocalAudioEngine() {
       return;
     }
 
-    if (!localActive && !useOfflineBlob && rawVideoId && shouldFastRouteToIframe(rawVideoId)) {
+    if (
+      !localActive &&
+      !useOfflineBlob &&
+      rawVideoId &&
+      !isCapacitorAndroidPlatform() &&
+      shouldFastRouteToIframe(rawVideoId)
+    ) {
       loadedKeyRef.current = htmlAudioTrackKey;
       resetDirectDeck();
       if (graph) {
@@ -1027,8 +1041,14 @@ export function LocalAudioEngine() {
         const defaultBitrate =
           targetStreamTier === 'low' ? 96 : targetStreamTier === 'normal' ? 128 : 160;
 
-        // Check if backend YT Music stream extraction is available using cached probe
+        // On Capacitor Android, guarantee HTML5 <audio> playback via native InnerTube loopback proxy
+        // whenever backend stream meta is restricted or unreachable (never fall back to YouTube iframe).
+        const onCapAndroid = isCapacitorAndroidPlatform();
+        let resolvedNativeUrl: string | null = null;
         try {
+          if (onCapAndroid && shouldFastRouteToIframe(streamVideoId)) {
+            throw new Error('fast-native-proxy');
+          }
           const probeMeta = await probeStreamWithCache(
             streamVideoId,
             streamQueryMeta,
@@ -1036,6 +1056,110 @@ export function LocalAudioEngine() {
           );
           if (cancelled) return;
           if (decideOnlineStreamAction(probeMeta) === 'use-youtube-iframe') {
+            if (!onCapAndroid) {
+              isLoadingAudioRef.current = false;
+              pauseAudioElementProgrammatically(audio);
+              audio.removeAttribute('src');
+              usePlayerStore
+                .getState()
+                .setActiveStreamMeta(
+                  buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
+                );
+              return;
+            }
+            const nativeStream = await resolveCapacitorDirectAudioUrl(streamVideoId);
+            if (cancelled) return;
+            if (!nativeStream?.available || !nativeStream.url) {
+              isLoadingAudioRef.current = false;
+              setElementBusyForLoad(audio, false);
+              pauseAudioElementProgrammatically(audio);
+              audio.removeAttribute('src');
+              usePlayerStore.getState().setIsBuffering(false);
+              usePlayerStore.getState().setIsPlaying(false);
+              usePlayerStore
+                .getState()
+                .setPlayerError('Aliran audio langsung tidak tersedia di perangkat ini.');
+              return;
+            }
+            resolvedNativeUrl = nativeStream.url;
+            const nativeKbps = nativeStream.bitrateKbps ?? defaultBitrate;
+            const nativeCodec = nativeStream.codec || 'AAC';
+            metaToReport = {
+              trackId: rawVideoId,
+              resolvedVideoId: streamVideoId,
+              requestedTier: targetStreamTier,
+              actualTier: targetStreamTier,
+              codec: nativeCodec,
+              bitrateKbps: nativeKbps,
+              sampleRateHz: 44100,
+              bitDepth: null,
+              lossless: false,
+              hiRes: false,
+              badgeLabel: `${nativeCodec} ${nativeKbps} kbps`,
+              sourceMode: !graph ? 'fallback-no-fx' : 'direct',
+              proxiedViaBackend: false,
+              audiodownloadAllowed: true,
+              replayGainDb: null,
+            };
+          } else {
+            const kbps = probeMeta.bitrateKbps ?? defaultBitrate;
+            metaToReport = {
+              trackId: rawVideoId,
+              resolvedVideoId: streamVideoId,
+              requestedTier: targetStreamTier,
+              actualTier: targetStreamTier,
+              codec: probeMeta.codec || 'AAC',
+              bitrateKbps: kbps,
+              sampleRateHz: probeMeta.sampleRateHz ?? 44100,
+              bitDepth: null,
+              lossless: false,
+              hiRes: false,
+              badgeLabel: `${probeMeta.codec || 'AAC'} ${kbps} kbps`,
+              sourceMode: !graph ? 'fallback-no-fx' : useDirectTarget || localProfile.directMode ? 'direct' : 'webaudio',
+              proxiedViaBackend: true,
+              audiodownloadAllowed: true,
+              replayGainDb: null,
+            };
+          }
+        } catch {
+          if (cancelled) return;
+          if (onCapAndroid) {
+            const nativeStream = await resolveCapacitorDirectAudioUrl(streamVideoId);
+            if (cancelled) return;
+            if (nativeStream?.available && nativeStream.url) {
+              resolvedNativeUrl = nativeStream.url;
+              const nativeKbps = nativeStream.bitrateKbps ?? defaultBitrate;
+              const nativeCodec = nativeStream.codec || 'AAC';
+              metaToReport = {
+                trackId: rawVideoId,
+                resolvedVideoId: streamVideoId,
+                requestedTier: targetStreamTier,
+                actualTier: targetStreamTier,
+                codec: nativeCodec,
+                bitrateKbps: nativeKbps,
+                sampleRateHz: 44100,
+                bitDepth: null,
+                lossless: false,
+                hiRes: false,
+                badgeLabel: `${nativeCodec} ${nativeKbps} kbps`,
+                sourceMode: !graph ? 'fallback-no-fx' : 'direct',
+                proxiedViaBackend: false,
+                audiodownloadAllowed: true,
+                replayGainDb: null,
+              };
+            } else {
+              isLoadingAudioRef.current = false;
+              setElementBusyForLoad(audio, false);
+              pauseAudioElementProgrammatically(audio);
+              audio.removeAttribute('src');
+              usePlayerStore.getState().setIsBuffering(false);
+              usePlayerStore.getState().setIsPlaying(false);
+              usePlayerStore
+                .getState()
+                .setPlayerError('Gagal memuat aliran audio. Periksa koneksi internet Anda.');
+              return;
+            }
+          } else {
             isLoadingAudioRef.current = false;
             pauseAudioElementProgrammatically(audio);
             audio.removeAttribute('src');
@@ -1046,38 +1170,9 @@ export function LocalAudioEngine() {
               );
             return;
           }
-          const kbps = probeMeta.bitrateKbps ?? defaultBitrate;
-          metaToReport = {
-            trackId: rawVideoId,
-            resolvedVideoId: streamVideoId,
-            requestedTier: targetStreamTier,
-            actualTier: targetStreamTier,
-            codec: probeMeta.codec || 'AAC',
-            bitrateKbps: kbps,
-            sampleRateHz: probeMeta.sampleRateHz ?? 44100,
-            bitDepth: null,
-            lossless: false,
-            hiRes: false,
-            badgeLabel: `${probeMeta.codec || 'AAC'} ${kbps} kbps`,
-            sourceMode: !graph ? 'fallback-no-fx' : useDirectTarget || localProfile.directMode ? 'direct' : 'webaudio',
-            proxiedViaBackend: true,
-            audiodownloadAllowed: true,
-            replayGainDb: null,
-          };
-        } catch {
-          if (cancelled) return;
-          isLoadingAudioRef.current = false;
-          pauseAudioElementProgrammatically(audio);
-          audio.removeAttribute('src');
-          usePlayerStore
-            .getState()
-            .setActiveStreamMeta(
-              buildYoutubeIframeStreamMeta(rawVideoId, streamVideoId, targetStreamTier),
-            );
-          return;
         }
 
-        urlToLoad = buildStreamAudioUrl(streamVideoId, streamQueryMeta);
+        urlToLoad = resolvedNativeUrl || buildStreamAudioUrl(streamVideoId, streamQueryMeta);
         resolvedTrackKey = rawVideoId;
         usePlayerStore.getState().setActiveStreamMeta(metaToReport);
         streamMetaFetchTarget = null;
@@ -1323,11 +1418,22 @@ export function LocalAudioEngine() {
             !g || g.backgroundDirectActive || g.ctx.state === 'running',
           ),
         });
+        syncMediaSessionMetadata(st.currentTrack);
         syncMediaSessionPlaybackState(playbackState);
+        const durVal = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : st.duration;
+        const curVal = Number.isFinite(audio.currentTime) ? audio.currentTime : st.currentTime;
         syncMediaSessionPosition({
-          duration: Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : st.duration,
-          currentTime: Number.isFinite(audio.currentTime) ? audio.currentTime : st.currentTime,
+          duration: durVal,
+          currentTime: curVal,
           playbackRate: st.playbackRate,
+        });
+        syncCapacitorPlaybackNotification({
+          track: st.currentTrack,
+          isPlaying: playbackState === 'playing',
+          duration: durVal,
+          currentTime: curVal,
+          playbackRate: st.playbackRate || 1,
+          force: true,
         });
       };
 
@@ -1390,6 +1496,7 @@ export function LocalAudioEngine() {
           fallbackAttemptedRef.current = true;
           usePlayerStore.getState().setIsBuffering(true);
           const queryArtist = formatArtists(currentTrack.artists);
+          const onCapAndroid = isCapacitorAndroidPlatform();
           void resolvePlayableYoutube(rawVideoId, {
             title: currentTrack.title,
             artist: queryArtist,
@@ -1410,23 +1517,51 @@ export function LocalAudioEngine() {
               const altMeta = await fetchStreamAudioMeta(altId, altQueryMeta).catch(() => null);
               if (cancelled) return;
               if (decideOnlineStreamAction(altMeta) === 'use-youtube-iframe') {
-                pauseAudioElementProgrammatically(audio);
-                audio.removeAttribute('src');
-                syncMediaSessionPlaybackState('paused');
-                usePlayerStore
-                  .getState()
-                  .setActiveStreamMeta(
-                    buildYoutubeIframeStreamMeta(rawVideoId, altId, targetStreamTier),
-                  );
-                return;
+                if (onCapAndroid) {
+                  const nativeAlt = await resolveCapacitorDirectAudioUrl(altId);
+                  if (cancelled) return;
+                  if (nativeAlt?.available && nativeAlt.url) {
+                    audio.crossOrigin = null;
+                    audio.src = nativeAlt.url;
+                    audio.load();
+                    return;
+                  }
+                } else {
+                  pauseAudioElementProgrammatically(audio);
+                  audio.removeAttribute('src');
+                  syncMediaSessionPlaybackState('paused');
+                  usePlayerStore
+                    .getState()
+                    .setActiveStreamMeta(
+                      buildYoutubeIframeStreamMeta(rawVideoId, altId, targetStreamTier),
+                    );
+                  return;
+                }
               }
               const altUrl = buildStreamAudioUrl(altId, altQueryMeta);
               audio.crossOrigin = !graph || useDirectTarget ? null : 'anonymous';
               audio.src = altUrl;
               audio.load();
             })
-            .catch(() => {
+            .catch(async () => {
               if (cancelled) return;
+              if (onCapAndroid) {
+                const nativeRetry = await resolveCapacitorDirectAudioUrl(rawVideoId);
+                if (cancelled) return;
+                if (nativeRetry?.available && nativeRetry.url) {
+                  audio.crossOrigin = null;
+                  audio.src = nativeRetry.url;
+                  audio.load();
+                  return;
+                }
+                pauseAudioElementProgrammatically(audio);
+                audio.removeAttribute('src');
+                syncMediaSessionPlaybackState('paused');
+                usePlayerStore.getState().setIsBuffering(false);
+                usePlayerStore.getState().setIsPlaying(false);
+                usePlayerStore.getState().setPlayerError('Aliran audio gagal dimuat.');
+                return;
+              }
               pauseAudioElementProgrammatically(audio);
               audio.removeAttribute('src');
               syncMediaSessionPlaybackState('paused');
@@ -1688,6 +1823,19 @@ export function LocalAudioEngine() {
       stopSilentKeepaliveAudio();
     }
   }, [isPlaying, htmlAudioTrackKey, activeStreamSourceMode]);
+
+  // Keep Android Foreground Service notification/MediaSession synced on track or play/pause transitions
+  useEffect(() => {
+    const st = usePlayerStore.getState();
+    syncCapacitorPlaybackNotification({
+      track: currentTrack,
+      isPlaying,
+      duration: st.duration,
+      currentTime: st.currentTime,
+      playbackRate: st.playbackRate || 1,
+      force: true,
+    });
+  }, [currentTrack, isPlaying]);
 
   // Explicit Seek (cancels any active transition cleanly)
   useEffect(() => {
@@ -2184,6 +2332,13 @@ export function LocalAudioEngine() {
       }
 
       syncMediaSessionPosition({
+        duration: dur,
+        currentTime: cur,
+        playbackRate: store.playbackRate || 1,
+      });
+      syncCapacitorPlaybackNotification({
+        track: store.currentTrack,
+        isPlaying: store.isPlaying,
         duration: dur,
         currentTime: cur,
         playbackRate: store.playbackRate || 1,

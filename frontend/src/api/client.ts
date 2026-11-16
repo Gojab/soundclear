@@ -23,6 +23,35 @@ import type {
   WatchPlaylistResponse,
 } from '../types/music';
 
+const API_BASE_STORAGE_KEY = 'soundclear_api_base_url';
+
+export function getApiBaseUrl(): string {
+  const envUrl =
+    typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL
+      ? String(import.meta.env.VITE_API_BASE_URL).trim()
+      : '';
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = window.localStorage.getItem(API_BASE_STORAGE_KEY)?.trim() || '';
+      if (stored && /^https?:\/\//i.test(stored)) {
+        return stored.replace(/\/+$/, '');
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+  }
+  return '';
+}
+
+export function resolveApiUrl(apiPath: string): string {
+  const normalized = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+  const base = getApiBaseUrl();
+  return base ? `${base}${normalized}` : normalized;
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -41,7 +70,7 @@ async function requestJson<T>(
     body?: unknown;
   },
 ): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(resolveApiUrl(`/api${path}`), {
     method: options?.method ?? 'GET',
     headers: {
       Accept: 'application/json',
@@ -450,7 +479,9 @@ export function buildStreamAudioUrl(
     quality?: string;
   },
 ): string {
-  return `/api/stream/${encodeURIComponent(videoId)}${buildStreamQueryParams(meta)}`;
+  return resolveApiUrl(
+    `/api/stream/${encodeURIComponent(videoId)}${buildStreamQueryParams(meta)}`,
+  );
 }
 
 export function fetchStreamAudioMeta(
@@ -623,10 +654,11 @@ export function syncBackgroundSession(
 export function beaconBackgroundSession(payload: BackgroundSessionPayload): void {
   if (typeof window === 'undefined') return;
   const serialized = JSON.stringify(payload);
+  const targetUrl = resolveApiUrl('/api/background/session');
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
       const blob = new Blob([serialized], { type: 'application/json' });
-      if (navigator.sendBeacon('/api/background/session', blob)) {
+      if (navigator.sendBeacon(targetUrl, blob)) {
         return;
       }
     }
@@ -634,7 +666,7 @@ export function beaconBackgroundSession(payload: BackgroundSessionPayload): void
     // Fallback to keepalive fetch
   }
   try {
-    void fetch('/api/background/session', {
+    void fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: serialized,

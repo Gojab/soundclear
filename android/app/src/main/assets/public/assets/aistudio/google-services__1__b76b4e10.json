@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1032786080038",
+    "project_id": "soundclear",
+    "storage_bucket": "soundclear.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1032786080038:android:e633cf6fc7c2c5e2fc91e7",
+        "android_client_info": {
+          "package_name": "zhafx.corporation"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1032786080038-d4tj8fmi64hdmmg2pdg8pphpn8h4vrda.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0QD0pz1ayLRTnHq1ZNIXkAr89oF-Fscc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1032786080038-d4tj8fmi64hdmmg2pdg8pphpn8h4vrda.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

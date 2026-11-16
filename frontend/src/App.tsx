@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { fetchAccountStatus, fetchSuggest, fetchWatchPlaylist } from './api/client';
+import { initCapacitorAndroidBridge } from './audio/capacitorAudioBridge';
 import { CustomBackgroundLayer } from './components/CustomBackgroundLayer';
 import { FirebaseProvider } from './components/FirebaseProvider';
 import {
@@ -95,6 +96,7 @@ export default function App() {
   const setFirestoreError = useAuthStore((s) => s.setFirestoreError);
 
   useEffect(() => {
+    const cleanupCapacitor = initCapacitorAndroidBridge();
     const boot = async () => {
       const deepLink = parseDeepLinkSearch(window.location.search);
       if (deepLink) {
@@ -143,6 +145,9 @@ export default function App() {
         .catch(() => {});
     };
     void boot();
+    return () => {
+      cleanupCapacitor();
+    };
   }, []);
 
   useEffect(() => {
