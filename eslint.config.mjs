@@ -7,7 +7,7 @@ export default [
       'dev-dist/**/*',
       'backend/**/*',
       'node_modules/**/*',
-      'mobile-android/**/*',
+      'android/**/*',
       'desktop-windows/**/*',
     ],
   },
