@@ -3,15 +3,19 @@ import {
   BarChart3,
   ChevronRight,
   Clock,
+  Cloud,
   Heart,
   Keyboard,
   ListMusic,
+  LogIn,
+  LogOut,
   Palette,
   Plus,
   Settings,
   Sliders,
   X,
 } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -31,6 +35,14 @@ export function MobileProfileDrawer({
   const accountKey = useSettingsStore((s) => s.accountKey);
   const likedCount = useLibraryStore((s) => s.likedTracks.length);
   const playlistsCount = useLibraryStore((s) => s.playlists.length);
+
+  const user = useAuthStore((s) => s.user);
+  const signingIn = useAuthStore((s) => s.signingIn);
+  const syncActive = useAuthStore((s) => s.syncActive);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
+  const signOutUser = useAuthStore((s) => s.signOutUser);
+
+  const avatarLetter = (user?.displayName?.trim().charAt(0) || user?.email?.trim().charAt(0) || 'S').toUpperCase();
 
   useEffect(() => {
     if (!open) return;
@@ -68,13 +80,35 @@ export function MobileProfileDrawer({
               onClick={() => go({ name: 'library' })}
               className="flex items-center gap-3 min-w-0 flex-1 text-left"
             >
-              <span className="w-11 h-11 rounded-full bg-sc-gradient text-[#0F1F17] text-base font-extrabold flex items-center justify-center shrink-0">
-                S
-              </span>
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'Profil'}
+                  referrerPolicy="no-referrer"
+                  className="w-11 h-11 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <span className="w-11 h-11 rounded-full bg-sc-gradient text-[#0F1F17] text-base font-extrabold flex items-center justify-center shrink-0">
+                  {avatarLetter}
+                </span>
+              )}
               <div className="min-w-0">
-                <p className="text-base font-bold text-[#E8FFF3] truncate">SoundClear</p>
-                <p className="text-xs text-[#B3F7D1]/65 truncate">
-                  {accountKey === 'cloud' ? 'Streaming Audio' : 'Mode Lokal'} · Lihat koleksi
+                <p className="text-base font-bold text-[#E8FFF3] truncate">
+                  {user?.displayName || 'SoundClear'}
+                </p>
+                <p className="text-xs text-[#B3F7D1]/65 truncate flex items-center gap-1">
+                  {user ? (
+                    <>
+                      <Cloud className="w-3 h-3 text-[#19EE8A] shrink-0" strokeWidth={2} />
+                      <span className="truncate">
+                        {syncActive ? 'Firestore Aktif' : user.email || 'Akun Google'}
+                      </span>
+                    </>
+                  ) : (
+                    <span>
+                      {accountKey === 'cloud' ? 'Streaming Audio' : 'Mode Lokal'} · Lihat koleksi
+                    </span>
+                  )}
                 </p>
               </div>
             </button>
@@ -86,6 +120,34 @@ export function MobileProfileDrawer({
             >
               <X className="w-4 h-4" strokeWidth={2} />
             </button>
+          </div>
+
+          <div className="px-3.5 pb-3 flex items-center gap-2">
+            {user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  void signOutUser();
+                }}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-red-500/20 text-xs font-semibold text-[#E8FFF3] hover:text-red-200 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" strokeWidth={2} />
+                Keluar dari Google
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={signingIn}
+                onClick={() => {
+                  void signInWithGoogle();
+                }}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 disabled:opacity-50 transition-all"
+              >
+                <LogIn className="w-3.5 h-3.5" strokeWidth={2.2} />
+                {signingIn ? 'Menghubungkan Google...' : 'Masuk dengan Google (Firestore)'}
+              </button>
+            )}
           </div>
 
           <button

@@ -2,15 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import {
   BarChart3,
   Check,
+  Cloud,
   ExternalLink,
   Heart,
   Keyboard,
   Library,
+  LogIn,
+  LogOut,
   Palette,
   Settings,
   Sliders,
   User,
 } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -25,7 +29,13 @@ export function TopBarAccountMenu() {
   const likedCount = useLibraryStore((s) => s.likedTracks.length);
   const playlistsCount = useLibraryStore((s) => s.playlists.length);
 
-  const avatarLetter = 'S';
+  const user = useAuthStore((s) => s.user);
+  const signingIn = useAuthStore((s) => s.signingIn);
+  const syncActive = useAuthStore((s) => s.syncActive);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
+  const signOutUser = useAuthStore((s) => s.signOutUser);
+
+  const avatarLetter = (user?.displayName?.trim().charAt(0) || user?.email?.trim().charAt(0) || 'S').toUpperCase();
 
   useEffect(() => {
     if (!open) return;
@@ -63,24 +73,98 @@ export function TopBarAccountMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Menu akun dan pengaturan"
-        title="Akun & Pengaturan"
+        title={user ? `${user.displayName || user.email} · Firestore` : 'Akun & Pengaturan'}
         className={`w-9 h-9 rounded-full p-1 flex items-center justify-center transition-transform hover:scale-105 ${
           open || currentRoute.name === 'settings'
             ? 'bg-white/[0.14] ring-2 ring-[#B3F7D1]/30'
             : 'bg-white/[0.06] hover:bg-white/[0.11]'
         }`}
       >
-        <span className="w-full h-full rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center">
-          {avatarLetter}
-        </span>
+        {user?.photoURL ? (
+          <img
+            src={user.photoURL}
+            alt={user.displayName || 'Profil'}
+            referrerPolicy="no-referrer"
+            className="w-full h-full rounded-full object-cover"
+          />
+        ) : (
+          <span className="w-full h-full rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center">
+            {avatarLetter}
+          </span>
+        )}
       </button>
 
       {open && (
         <div
           role="menu"
           aria-label="Menu akun dan pengaturan"
-          className="absolute right-0 mt-2 w-[280px] rounded-xl bg-[#0B0F0D]/85 backdrop-blur-2xl border border-white/[0.14] shadow-[0_16px_40px_rgba(0,0,0,0.8)] p-1.5 z-50 text-left"
+          className="absolute right-0 mt-2 w-[290px] rounded-xl bg-[#0B0F0D]/90 backdrop-blur-2xl border border-white/[0.14] shadow-[0_16px_40px_rgba(0,0,0,0.8)] p-1.5 z-50 text-left"
         >
+          {/* Firebase Account Card */}
+          <div className="px-2.5 py-2.5 mb-1 rounded-lg bg-white/[0.05] border border-white/[0.08]">
+            {user ? (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName || 'Profil'}
+                      referrerPolicy="no-referrer"
+                      className="w-9 h-9 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <span className="w-9 h-9 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0">
+                      {avatarLetter}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-[#E8FFF3] truncate">
+                      {user.displayName || 'Pengguna SoundClear'}
+                    </p>
+                    <p className="text-[11px] text-[#B3F7D1]/65 truncate">{user.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#19EE8A]">
+                    <Cloud className="w-3.5 h-3.5" strokeWidth={2} />
+                    {syncActive ? 'Firestore Sinkron' : 'Menghubungkan...'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      void signOutUser();
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.08] hover:bg-red-500/20 text-[11px] font-medium text-[#E8FFF3] hover:text-red-200 transition-colors"
+                  >
+                    <LogOut className="w-3 h-3" strokeWidth={2} />
+                    Keluar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-[#E8FFF3]">Mode Lokal / Tamu</p>
+                  <p className="text-[11px] text-[#B3F7D1]/65 leading-snug mt-0.5">
+                    Masuk dengan Google untuk menyinkronkan playlist, suka &amp; EQ ke Firestore.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={signingIn}
+                  onClick={() => {
+                    void signInWithGoogle();
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 disabled:opacity-50 transition-all"
+                >
+                  <LogIn className="w-3.5 h-3.5" strokeWidth={2.2} />
+                  {signingIn ? 'Menghubungkan Google...' : 'Masuk dengan Google'}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-0.5">
             <button
               type="button"
@@ -90,7 +174,9 @@ export function TopBarAccountMenu() {
             >
               <span className="flex items-center gap-2.5">
                 <User className="w-4 h-4 text-[#B3F7D1]/70" strokeWidth={1.9} />
-                <span>Profil ({accountKey === 'cloud' ? 'Streaming Audio' : 'Mode Lokal'})</span>
+                <span>
+                  Akun ({user ? 'Firestore Cloud' : accountKey === 'cloud' ? 'Streaming Audio' : 'Mode Lokal'})
+                </span>
               </span>
               <ExternalLink className="w-3.5 h-3.5 text-[#B3F7D1]/50" strokeWidth={1.8} />
             </button>
@@ -188,13 +274,17 @@ export function TopBarAccountMenu() {
 
           <div className="my-1.5 border-t border-[#B3F7D1]/[0.12]" />
 
-          <div className="px-3 pt-1.5 pb-4">
-            <p className="text-[13px] font-bold text-[#E8FFF3]">Info Terkini</p>
-            <div className="mt-4 flex flex-col items-center text-center gap-2 px-2">
-              <Check className="w-7 h-7 text-[#19EE8A]" strokeWidth={2} />
-              <p className="text-xs font-bold text-[#E8FFF3]">Kamu sudah lihat semuanya</p>
+          <div className="px-3 pt-1.5 pb-3">
+            <p className="text-[13px] font-bold text-[#E8FFF3]">Status Sinkronisasi</p>
+            <div className="mt-2.5 flex flex-col items-center text-center gap-1.5 px-2">
+              <Check className="w-6 h-6 text-[#19EE8A]" strokeWidth={2} />
+              <p className="text-xs font-bold text-[#E8FFF3]">
+                {syncActive ? 'Pustaka tersinkron ke Firestore' : 'Penyimpanan lokal siap digunakan'}
+              </p>
               <p className="text-[11px] leading-relaxed text-[#B3F7D1]/65">
-                Pantau terus bagian ini untuk pembaruan pemutar audio, playlist, dan pustaka lokal Anda.
+                {user
+                  ? 'Perubahan playlist, lagu disukai, dan preset EQ tersimpan real-time di akun Google Anda.'
+                  : 'Masuk dengan Google kapan saja untuk mencadangkan pustaka ke cloud.'}
               </p>
             </div>
           </div>

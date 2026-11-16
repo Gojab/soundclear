@@ -5,6 +5,31 @@ import {
   fetchStreamAudioMeta,
 } from '../api/client';
 import { db, migrateLegacyLocalStorage } from '../db/soundclearDb';
+import { getActiveFirestoreUid } from '../firebase/activeAuth';
+import {
+  addPlayHistoryToFirestore,
+  addRecentSearchToFirestore,
+  clearPlayHistoryInFirestore,
+  clearRecentSearchesInFirestore,
+  deleteAlbumFromFirestore,
+  deleteFolderFromFirestore,
+  deleteFollowedArtistFromFirestore,
+  deleteHiddenTrackFromFirestore,
+  deleteLikedTrackFromFirestore,
+  deletePlaylistFromFirestore,
+  deletePodcastFromFirestore,
+  deleteRecentSearchFromFirestore,
+  deleteTasteExclusionFromFirestore,
+  saveAlbumToFirestore,
+  saveEpisodeProgressToFirestore,
+  saveFolderToFirestore,
+  saveFollowedArtistToFirestore,
+  saveHiddenTrackToFirestore,
+  saveLikedTrackToFirestore,
+  savePlaylistToFirestore,
+  savePodcastToFirestore,
+  saveTasteExclusionToFirestore,
+} from '../firebase/firestoreSync';
 import type {
   ConcreteQualityTier,
   EpisodeProgressEntry,
@@ -64,6 +89,17 @@ interface LibraryState {
   viewMode: LibraryViewMode;
 
   hydrate: () => Promise<void>;
+  applyFirestoreLikedTracks: (rows: Array<{ id: string; addedAt: number; track: MediaItem }>) => Promise<void>;
+  applyFirestorePlaylists: (playlists: LocalPlaylist[]) => Promise<void>;
+  applyFirestoreFolders: (folders: PlaylistFolder[]) => Promise<void>;
+  applyFirestoreSavedAlbums: (albums: SavedAlbumEntry[]) => Promise<void>;
+  applyFirestoreFollowedArtists: (artists: FollowedArtistEntry[]) => Promise<void>;
+  applyFirestoreSavedPodcasts: (podcasts: SavedPodcastEntry[]) => Promise<void>;
+  applyFirestoreEpisodeProgress: (progress: Record<string, EpisodeProgressEntry>) => Promise<void>;
+  applyFirestorePlayHistory: (history: PlayHistoryEntry[]) => Promise<void>;
+  applyFirestoreRecentSearches: (searches: RecentSearchEntry[]) => Promise<void>;
+  applyFirestoreHiddenTracks: (ids: string[]) => Promise<void>;
+  applyFirestoreTasteExclusions: (ids: string[]) => Promise<void>;
   setSortMode: (mode: LibrarySortMode) => void;
   setFilterType: (filter: LibraryFilterType) => void;
   setViewMode: (mode: LibraryViewMode) => void;
@@ -243,6 +279,99 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     });
   },
 
+  applyFirestoreLikedTracks: async (rows) => {
+    set({ likedTracks: rows.map((r) => r.track) });
+    await db.transaction('rw', db.likedTracks, async () => {
+      await db.likedTracks.clear();
+      if (rows.length > 0) await db.likedTracks.bulkPut(rows);
+    }).catch(() => {});
+  },
+
+  applyFirestorePlaylists: async (playlists) => {
+    set({ playlists });
+    await db.transaction('rw', db.playlists, async () => {
+      await db.playlists.clear();
+      if (playlists.length > 0) await db.playlists.bulkPut(playlists);
+    }).catch(() => {});
+  },
+
+  applyFirestoreFolders: async (folders) => {
+    set({ folders });
+    await db.transaction('rw', db.playlistFolders, async () => {
+      await db.playlistFolders.clear();
+      if (folders.length > 0) await db.playlistFolders.bulkPut(folders);
+    }).catch(() => {});
+  },
+
+  applyFirestoreSavedAlbums: async (savedAlbums) => {
+    set({ savedAlbums });
+    await db.transaction('rw', db.savedAlbums, async () => {
+      await db.savedAlbums.clear();
+      if (savedAlbums.length > 0) await db.savedAlbums.bulkPut(savedAlbums);
+    }).catch(() => {});
+  },
+
+  applyFirestoreFollowedArtists: async (followedArtists) => {
+    set({ followedArtists });
+    await db.transaction('rw', db.followedArtists, async () => {
+      await db.followedArtists.clear();
+      if (followedArtists.length > 0) await db.followedArtists.bulkPut(followedArtists);
+    }).catch(() => {});
+  },
+
+  applyFirestoreSavedPodcasts: async (savedPodcasts) => {
+    set({ savedPodcasts });
+    await db.transaction('rw', db.savedPodcasts, async () => {
+      await db.savedPodcasts.clear();
+      if (savedPodcasts.length > 0) await db.savedPodcasts.bulkPut(savedPodcasts);
+    }).catch(() => {});
+  },
+
+  applyFirestoreEpisodeProgress: async (episodeProgress) => {
+    set({ episodeProgress });
+    const entries = Object.values(episodeProgress);
+    await db.transaction('rw', db.episodeProgress, async () => {
+      await db.episodeProgress.clear();
+      if (entries.length > 0) await db.episodeProgress.bulkPut(entries);
+    }).catch(() => {});
+  },
+
+  applyFirestorePlayHistory: async (playHistory) => {
+    set({ playHistory });
+    await db.transaction('rw', db.playHistory, async () => {
+      await db.playHistory.clear();
+      if (playHistory.length > 0) {
+        await db.playHistory.bulkAdd(playHistory.map(({ uid: _uid, ...rest }) => rest));
+      }
+    }).catch(() => {});
+  },
+
+  applyFirestoreRecentSearches: async (recentSearches) => {
+    set({ recentSearches });
+    await db.transaction('rw', db.recentSearches, async () => {
+      await db.recentSearches.clear();
+      if (recentSearches.length > 0) {
+        await db.recentSearches.bulkAdd(recentSearches.map(({ uid: _uid, ...rest }) => rest));
+      }
+    }).catch(() => {});
+  },
+
+  applyFirestoreHiddenTracks: async (ids) => {
+    set({ hiddenTrackIds: ids });
+    const now = Date.now();
+    await db.transaction('rw', db.hiddenTracks, async () => {
+      await db.hiddenTracks.clear();
+      if (ids.length > 0) {
+        await db.hiddenTracks.bulkPut(ids.map((id) => ({ id, hiddenAt: now })));
+      }
+    }).catch(() => {});
+  },
+
+  applyFirestoreTasteExclusions: async (ids) => {
+    set({ excludedTasteIds: ids });
+    await db.kvState.put({ key: 'excluded_taste_ids', value: ids }).catch(() => {});
+  },
+
   setSortMode: (sortMode) => set({ sortMode }),
   setFilterType: (filterType) => set({ filterType }),
   setViewMode: (viewMode) => set({ viewMode }),
@@ -251,13 +380,17 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     const key = normalizeTrackId(track);
     const current = get().likedTracks;
     const exists = current.some((t) => normalizeTrackId(t) === key);
+    const uid = getActiveFirestoreUid();
     if (exists) {
       set({ likedTracks: current.filter((t) => normalizeTrackId(t) !== key) });
       void db.likedTracks.delete(key).catch(() => {});
+      if (uid) void deleteLikedTrackFromFirestore(uid, key).catch(() => {});
     } else {
       const normalized = { ...track, id: key };
+      const addedAt = Date.now();
       set({ likedTracks: [normalized, ...current] });
-      void db.likedTracks.put({ id: key, addedAt: Date.now(), track: normalized }).catch(() => {});
+      void db.likedTracks.put({ id: key, addedAt, track: normalized }).catch(() => {});
+      if (uid) void saveLikedTrackToFirestore(uid, normalized, addedAt).catch(() => {});
     }
   },
 
@@ -282,6 +415,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     };
     set((state) => ({ playlists: [newPlaylist, ...state.playlists] }));
     void db.playlists.put(newPlaylist).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void savePlaylistToFirestore(uid, newPlaylist, 'create').catch(() => {});
     return newPlaylist;
   },
 
@@ -309,16 +444,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     };
     set((state) => ({ playlists: [newPlaylist, ...state.playlists] }));
     void db.playlists.put(newPlaylist).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void savePlaylistToFirestore(uid, newPlaylist, 'create').catch(() => {});
     return newPlaylist;
   },
 
   updatePlaylist: (playlistId, patch) => {
     const updatedAt = Date.now();
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       playlists: state.playlists.map((pl) => {
         if (pl.id !== playlistId) return pl;
         const next = { ...pl, ...patch, updatedAt };
         void db.playlists.put(next).catch(() => {});
+        if (uid) void savePlaylistToFirestore(uid, next, 'meta').catch(() => {});
         return next;
       }),
     }));
@@ -341,6 +480,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       playlists: state.playlists.filter((pl) => pl.id !== playlistId),
     }));
     void db.playlists.delete(playlistId).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void deletePlaylistFromFirestore(uid, playlistId).catch(() => {});
   },
 
   togglePinPlaylist: (playlistId) => {
@@ -374,10 +515,13 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       playlists: state.playlists.map((p) => (p.id === playlistId ? nextPl : p)),
     }));
     void db.playlists.put(nextPl).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void savePlaylistToFirestore(uid, nextPl, 'tracks').catch(() => {});
     return true;
   },
 
   removeTrackFromPlaylist: (playlistId, trackId, index) => {
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       playlists: state.playlists.map((pl) => {
         if (pl.id !== playlistId) return pl;
@@ -387,6 +531,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             : pl.tracks.filter((t) => normalizeTrackId(t) !== trackId);
         const nextPl = { ...pl, updatedAt: Date.now(), tracks: nextTracks };
         void db.playlists.put(nextPl).catch(() => {});
+        if (uid) void savePlaylistToFirestore(uid, nextPl, 'tracks').catch(() => {});
         return nextPl;
       }),
     }));
@@ -394,6 +539,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   reorderPlaylistTracks: (playlistId, fromIndex, toIndex) => {
     if (fromIndex === toIndex) return;
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       playlists: state.playlists.map((pl) => {
         if (pl.id !== playlistId) return pl;
@@ -410,12 +556,14 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         copy.splice(toIndex, 0, moved);
         const nextPl = { ...pl, updatedAt: Date.now(), tracks: copy };
         void db.playlists.put(nextPl).catch(() => {});
+        if (uid) void savePlaylistToFirestore(uid, nextPl, 'tracks').catch(() => {});
         return nextPl;
       }),
     }));
   },
 
   removeDuplicatesFromPlaylist: (playlistId) => {
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       playlists: state.playlists.map((pl) => {
         if (pl.id !== playlistId) return pl;
@@ -430,17 +578,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         }
         const nextPl = { ...pl, updatedAt: Date.now(), tracks: unique };
         void db.playlists.put(nextPl).catch(() => {});
+        if (uid) void savePlaylistToFirestore(uid, nextPl, 'tracks').catch(() => {});
         return nextPl;
       }),
     }));
   },
 
   markPlaylistPlayed: (playlistId) => {
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       playlists: state.playlists.map((pl) => {
         if (pl.id !== playlistId) return pl;
         const nextPl = { ...pl, lastPlayedAt: Date.now() };
         void db.playlists.put(nextPl).catch(() => {});
+        if (uid) void savePlaylistToFirestore(uid, nextPl, 'played').catch(() => {});
         return nextPl;
       }),
     }));
@@ -454,41 +605,50 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     };
     set((state) => ({ folders: [folder, ...state.folders] }));
     void db.playlistFolders.put(folder).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void saveFolderToFirestore(uid, folder).catch(() => {});
     return folder;
   },
 
   renameFolder: (folderId, name) => {
     const clean = name.trim();
     if (!clean) return;
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       folders: state.folders.map((f) => {
         if (f.id !== folderId) return f;
         const updated = { ...f, name: clean };
         void db.playlistFolders.put(updated).catch(() => {});
+        if (uid) void saveFolderToFirestore(uid, updated).catch(() => {});
         return updated;
       }),
     }));
   },
 
   deleteFolder: (folderId) => {
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       folders: state.folders.filter((f) => f.id !== folderId),
       playlists: state.playlists.map((pl) => {
         if (pl.folderId !== folderId) return pl;
         const updated = { ...pl, folderId: null };
         void db.playlists.put(updated).catch(() => {});
+        if (uid) void savePlaylistToFirestore(uid, updated, 'meta').catch(() => {});
         return updated;
       }),
     }));
     void db.playlistFolders.delete(folderId).catch(() => {});
+    if (uid) void deleteFolderFromFirestore(uid, folderId).catch(() => {});
   },
 
   toggleSaveAlbum: (album) => {
     const id = album.browseId || album.id;
     const exists = get().savedAlbums.some((a) => a.id === id);
+    const uid = getActiveFirestoreUid();
     if (exists) {
       set((state) => ({ savedAlbums: state.savedAlbums.filter((a) => a.id !== id) }));
       void db.savedAlbums.delete(id).catch(() => {});
+      if (uid) void deleteAlbumFromFirestore(uid, id).catch(() => {});
     } else {
       const entry: SavedAlbumEntry = {
         id,
@@ -499,17 +659,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       };
       set((state) => ({ savedAlbums: [entry, ...state.savedAlbums] }));
       void db.savedAlbums.put(entry).catch(() => {});
+      if (uid) void saveAlbumToFirestore(uid, entry).catch(() => {});
     }
   },
 
   isAlbumSaved: (albumId) => get().savedAlbums.some((a) => a.id === albumId),
 
   togglePinAlbum: (albumId) => {
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       savedAlbums: state.savedAlbums.map((a) => {
         if (a.id !== albumId) return a;
         const next = { ...a, pinned: !a.pinned };
         void db.savedAlbums.put(next).catch(() => {});
+        if (uid) void saveAlbumToFirestore(uid, next).catch(() => {});
         return next;
       }),
     }));
@@ -518,9 +681,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   toggleFollowArtist: (artist) => {
     const id = artist.browseId || artist.id;
     const exists = get().followedArtists.some((a) => a.id === id);
+    const uid = getActiveFirestoreUid();
     if (exists) {
       set((state) => ({ followedArtists: state.followedArtists.filter((a) => a.id !== id) }));
       void db.followedArtists.delete(id).catch(() => {});
+      if (uid) void deleteFollowedArtistFromFirestore(uid, id).catch(() => {});
     } else {
       const entry: FollowedArtistEntry = {
         id,
@@ -531,17 +696,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       };
       set((state) => ({ followedArtists: [entry, ...state.followedArtists] }));
       void db.followedArtists.put(entry).catch(() => {});
+      if (uid) void saveFollowedArtistToFirestore(uid, entry).catch(() => {});
     }
   },
 
   isArtistFollowed: (artistId) => get().followedArtists.some((a) => a.id === artistId),
 
   togglePinArtist: (artistId) => {
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       followedArtists: state.followedArtists.map((a) => {
         if (a.id !== artistId) return a;
         const next = { ...a, pinned: !a.pinned };
         void db.followedArtists.put(next).catch(() => {});
+        if (uid) void saveFollowedArtistToFirestore(uid, next).catch(() => {});
         return next;
       }),
     }));
@@ -550,9 +718,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   toggleFollowPodcast: (podcast) => {
     const id = podcast.browseId || podcast.id;
     const exists = get().savedPodcasts.some((p) => p.id === id);
+    const uid = getActiveFirestoreUid();
     if (exists) {
       set((state) => ({ savedPodcasts: state.savedPodcasts.filter((p) => p.id !== id) }));
       void db.savedPodcasts.delete(id).catch(() => {});
+      if (uid) void deletePodcastFromFirestore(uid, id).catch(() => {});
     } else {
       const entry: SavedPodcastEntry = {
         id,
@@ -563,17 +733,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       };
       set((state) => ({ savedPodcasts: [entry, ...state.savedPodcasts] }));
       void db.savedPodcasts.put(entry).catch(() => {});
+      if (uid) void savePodcastToFirestore(uid, entry).catch(() => {});
     }
   },
 
   isPodcastFollowed: (podcastId) => get().savedPodcasts.some((p) => p.id === podcastId),
 
   togglePinPodcast: (podcastId) => {
+    const uid = getActiveFirestoreUid();
     set((state) => ({
       savedPodcasts: state.savedPodcasts.map((p) => {
         if (p.id !== podcastId) return p;
         const next = { ...p, pinned: !p.pinned };
         void db.savedPodcasts.put(next).catch(() => {});
+        if (uid) void savePodcastToFirestore(uid, next).catch(() => {});
         return next;
       }),
     }));
@@ -595,6 +768,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       episodeProgress: { ...state.episodeProgress, [episodeId]: entry },
     }));
     void db.episodeProgress.put(entry).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid && (!prev || Math.abs(entry.updatedAt - prev.updatedAt) >= 4000 || entry.completed !== prev.completed)) {
+      void saveEpisodeProgressToFirestore(uid, entry).catch(() => {});
+    }
   },
 
   markEpisodeCompleted: (episodeId, podcastId, completed) => {
@@ -611,6 +788,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       episodeProgress: { ...state.episodeProgress, [episodeId]: entry },
     }));
     void db.episodeProgress.put(entry).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void saveEpisodeProgressToFirestore(uid, entry).catch(() => {});
   },
 
   recordPlay: (track, durationListenedSec, genreHint) => {
@@ -635,11 +814,15 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         }));
       })
       .catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void addPlayHistoryToFirestore(uid, entry).catch(() => {});
   },
 
   clearPlayHistory: async () => {
     set({ playHistory: [] });
     await db.playHistory.clear();
+    const uid = getActiveFirestoreUid();
+    if (uid) await clearPlayHistoryInFirestore(uid).catch(() => {});
   },
 
   addRecentSearch: (query) => {
@@ -665,24 +848,35 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         }));
       })
       .catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void addRecentSearchToFirestore(uid, entry).catch(() => {});
   },
 
   removeRecentSearch: (uid) => {
+    const target = get().recentSearches.find((r) => r.uid === uid);
     set((state) => ({
       recentSearches: state.recentSearches.filter((r) => r.uid !== uid),
     }));
     void db.recentSearches.delete(uid).catch(() => {});
+    const authUid = getActiveFirestoreUid();
+    if (authUid && target?.query) {
+      void deleteRecentSearchFromFirestore(authUid, target.query).catch(() => {});
+    }
   },
 
   clearRecentSearches: () => {
     set({ recentSearches: [] });
     void db.recentSearches.clear().catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void clearRecentSearchesInFirestore(uid).catch(() => {});
   },
 
   hideTrack: (trackId) => {
     if (!trackId || get().hiddenTrackIds.includes(trackId)) return;
     set((state) => ({ hiddenTrackIds: [trackId, ...state.hiddenTrackIds] }));
     void db.hiddenTracks.put({ id: trackId, hiddenAt: Date.now() }).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void saveHiddenTrackToFirestore(uid, trackId).catch(() => {});
   },
 
   unhideTrack: (trackId) => {
@@ -690,6 +884,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       hiddenTrackIds: state.hiddenTrackIds.filter((id) => id !== trackId),
     }));
     void db.hiddenTracks.delete(trackId).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void deleteHiddenTrackFromFirestore(uid, trackId).catch(() => {});
   },
 
   isTrackHidden: (trackId) => {
@@ -702,6 +898,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     const next = [trackId, ...get().excludedTasteIds];
     set({ excludedTasteIds: next });
     void db.kvState.put({ key: 'excluded_taste_ids', value: next }).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void saveTasteExclusionToFirestore(uid, trackId).catch(() => {});
   },
 
   includeInTaste: (trackId) => {
@@ -709,6 +907,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     const next = get().excludedTasteIds.filter((id) => id !== trackId);
     set({ excludedTasteIds: next });
     void db.kvState.put({ key: 'excluded_taste_ids', value: next }).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) void deleteTasteExclusionFromFirestore(uid, trackId).catch(() => {});
   },
 
   isExcludedFromTaste: (trackId) => {

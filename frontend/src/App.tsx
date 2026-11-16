@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { fetchAccountStatus, fetchSuggest, fetchWatchPlaylist } from './api/client';
 import { CustomBackgroundLayer } from './components/CustomBackgroundLayer';
+import { FirebaseProvider } from './components/FirebaseProvider';
 import {
   FullscreenKaraokeModal,
   FullscreenNowPlayingModal,
@@ -49,6 +50,7 @@ import { RecapPage } from './pages/RecapPage';
 import { SearchPage } from './pages/SearchPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ShortcutsPage } from './pages/ShortcutsPage';
+import { useAuthStore } from './store/authStore';
 import { useLibraryStore } from './store/libraryStore';
 import { useNavigationStore } from './store/navigationStore';
 import { usePlayerStore } from './store/playerStore';
@@ -88,6 +90,9 @@ export default function App() {
   const customBackground = useSettingsStore((s) => s.customBackground);
   const bgActive = hasActiveCustomBackground(customBackground);
   const glassPanels = bgActive && customBackground.panelGlass;
+  const authUser = useAuthStore((s) => s.user);
+  const firestoreError = useAuthStore((s) => s.firestoreError);
+  const setFirestoreError = useAuthStore((s) => s.setFirestoreError);
 
   useEffect(() => {
     const boot = async () => {
@@ -130,6 +135,7 @@ export default function App() {
       }
       fetchAccountStatus()
         .then((status) => {
+          if (useAuthStore.getState().user?.emailVerified) return;
           void useSettingsStore
             .getState()
             .setAccountKey(status.mode === 'cloud' || status.authenticated ? 'cloud' : 'local');
@@ -236,7 +242,25 @@ export default function App() {
         bgActive ? 'bg-transparent' : 'bg-black'
       } text-[#E8FFF3] flex flex-col`}
     >
+      <FirebaseProvider />
       <CustomBackgroundLayer />
+
+      {firestoreError && (
+        <div
+          role="alert"
+          className="relative z-40 flex items-center justify-between gap-3 px-4 py-2 bg-amber-950/90 border-b border-amber-400/30 text-xs text-amber-100 backdrop-blur-md"
+        >
+          <span className="truncate">{firestoreError}</span>
+          <button
+            type="button"
+            onClick={() => setFirestoreError(null)}
+            aria-label="Tutup pemberitahuan Firestore"
+            className="w-6 h-6 rounded-full flex items-center justify-center text-amber-200/80 hover:text-white hover:bg-white/10 shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Desktop Top Bar */}
       <header
@@ -547,9 +571,18 @@ export default function App() {
                   type="button"
                   onClick={() => setMobileDrawerOpen(true)}
                   aria-label="Buka menu profil"
-                  className="w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0"
+                  className="w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0 overflow-hidden"
                 >
-                  S
+                  {authUser?.photoURL ? (
+                    <img
+                      src={authUser.photoURL}
+                      alt={authUser.displayName || 'Profil'}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    (authUser?.displayName?.trim().charAt(0) || 'S').toUpperCase()
+                  )}
                 </button>
                 <button
                   type="button"

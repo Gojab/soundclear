@@ -16,6 +16,11 @@ import {
   normalizeLocalAudioProfile,
   saveLocalAudioProfile,
 } from '../db/soundclearDb';
+import { getActiveFirestoreUid } from '../firebase/activeAuth';
+import {
+  saveAudioProfileToFirestore,
+  saveUserPreferencesToFirestore,
+} from '../firebase/firestoreSync';
 import type {
   CustomBackgroundSettings,
   EqPreset,
@@ -60,6 +65,8 @@ interface SettingsState extends UserSettings {
   hydrate: () => Promise<void>;
   setAccountKey: (accountKey: string) => Promise<void>;
   syncAudioSettingsFromBackend: (accountKey?: string) => Promise<void>;
+  applyFirestoreSettings: (raw: Partial<UserSettings>) => void;
+  applyFirestoreAudioProfile: (profile: LocalAudioProfile) => void;
   updateSetting: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
   updateYoutubeSound: <K extends keyof YouTubeSoundSettings>(
     key: K,
@@ -85,12 +92,13 @@ interface SettingsState extends UserSettings {
   resetCustomBackground: () => Promise<void>;
 }
 
-function persistSettings(s: UserSettings): void {
+let firestorePrefsSyncTimer: number | null = null;
+function persistSettings(s: UserSettings, syncToFirestore = true): void {
   const safeBackgroundMeta: CustomBackgroundSettings = {
     ...normalizeCustomBackground(s.customBackground, null),
     customImageDataUrl: null,
   };
-  const payload = {
+  const payload: UserSettings = {
     hideExplicit: s.hideExplicit,
     autoplay: s.autoplay,
     dataSaver: s.dataSaver,
@@ -114,6 +122,17 @@ function persistSettings(s: UserSettings): void {
       value: payload,
     })
     .catch(() => {});
+
+  const uid = syncToFirestore ? getActiveFirestoreUid() : null;
+  if (uid) {
+    if (firestorePrefsSyncTimer !== null) {
+      window.clearTimeout(firestorePrefsSyncTimer);
+    }
+    firestorePrefsSyncTimer = window.setTimeout(() => {
+      firestorePrefsSyncTimer = null;
+      void saveUserPreferencesToFirestore(uid, payload).catch(() => {});
+    }, 350);
+  }
 }
 
 let backendSyncTimer: number | null = null;
@@ -125,6 +144,11 @@ function scheduleBackendAudioSettingsSync(state: SettingsState): void {
   backendSyncTimer = window.setTimeout(() => {
     backendSyncTimer = null;
     const latest = useSettingsStore.getState();
+    const uid = getActiveFirestoreUid();
+    if (uid) {
+      void saveAudioProfileToFirestore(uid, 'cloud', latest.localProfile).catch(() => {});
+      void saveUserPreferencesToFirestore(uid, latest).catch(() => {});
+    }
     const bundle: ServerAudioSettingsBundle = {
       localProfile: latest.localProfile,
       defaultPlaybackRate: latest.youtubeSound.defaultPlaybackRate,
@@ -292,6 +316,45 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const profile = await loadLocalAudioProfile(cleanKey);
     set({ accountKey: cleanKey, localProfile: profile });
     await get().syncAudioSettingsFromBackend(cleanKey);
+  },
+
+  applyFirestoreSettings: (raw) => {
+    if (!raw || typeof raw !== 'object') return;
+    const currentBg = get().customBackground;
+    const preservedImage = isSafeBackgroundImageUrl(currentBg.customImageDataUrl)
+      ? currentBg.customImageDataUrl
+      : null;
+    const order =
+      Array.isArray(raw.homeSectionOrder) && raw.homeSectionOrder.length > 0
+        ? raw.homeSectionOrder
+        : get().homeSectionOrder;
+    const yt = {
+      ...DEFAULT_YOUTUBE_SOUND,
+      ...(raw.youtubeSound || {}),
+    };
+    yt.defaultPlaybackRate = clampPlaybackRate(yt.defaultPlaybackRate ?? 1);
+    const customBackground = normalizeCustomBackground(raw.customBackground, preservedImage);
+
+    set({
+      hideExplicit: raw.hideExplicit ?? get().hideExplicit,
+      autoplay: raw.autoplay ?? get().autoplay,
+      dataSaver: raw.dataSaver ?? get().dataSaver,
+      showRightPanel: raw.showRightPanel ?? get().showRightPanel,
+      lyricsPreviewEnabled: raw.lyricsPreviewEnabled ?? get().lyricsPreviewEnabled,
+      homeSectionOrder: order,
+      youtubeSound: yt,
+      episodePlaybackRates: raw.episodePlaybackRates || get().episodePlaybackRates,
+      customBackground,
+      notchDisplayMode: normalizeNotchDisplayMode(raw.notchDisplayMode ?? get().notchDisplayMode),
+      notchMonitor: normalizeNotchMonitor(raw.notchMonitor ?? get().notchMonitor),
+    });
+    persistSettings(get(), false);
+  },
+
+  applyFirestoreAudioProfile: (profile) => {
+    const normalized = normalizeLocalAudioProfile(profile);
+    set({ localProfile: normalized });
+    void saveLocalAudioProfile(get().accountKey || 'cloud', normalized).catch(() => {});
   },
 
   updateSetting: (key, value) => {
@@ -559,6 +622,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     persistSettings(latest);
     void saveLocalAudioProfile(latest.accountKey, freshProfile).catch(() => {});
     void resetAccountAudioSettings(latest.accountKey).catch(() => {});
+    const uid = getActiveFirestoreUid();
+    if (uid) {
+      void saveAudioProfileToFirestore(uid, 'cloud', freshProfile).catch(() => {});
+    }
   },
 
   enableAllDsp: () => {

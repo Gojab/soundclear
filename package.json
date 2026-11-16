@@ -15,6 +15,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.107.1",
@@ -23,7 +24,9 @@
     "buffer": "^6.0.3",
     "dexie": "^4.4.7",
     "dotenv": "^17.2.3",
+    "eslint": "^10.15.0",
     "express": "^4.21.2",
+    "firebase": "^13.3.0",
     "jpeg-js": "^0.4.4",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",

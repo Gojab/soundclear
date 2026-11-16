@@ -1,0 +1,705 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 4.1: Global Safety Net — default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    function hasMasterUserGate(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        && get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+    }
+
+    function isOptionalString(val, maxLen) {
+      return val == null || (val is string && val.size() <= maxLen);
+    }
+
+    function isOptionalNumber(val) {
+      return val == null || val is number;
+    }
+
+    function isValidTrackMap(track) {
+      return track is map
+        && track.keys().hasAll(['id', 'title', 'artists', 'type'])
+        && track.keys().hasOnly([
+          'id', 'title', 'artists', 'album', 'duration', 'durationSeconds',
+          'thumbnail', 'type', 'year', 'views', 'isExplicit', 'playlistId',
+          'videoId', 'browseId', 'description', 'published', 'podcastId',
+          'creditsBrowseId', 'genre', 'localFileId'
+        ])
+        && track.id is string && track.id.size() >= 1 && track.id.size() <= 256
+        && track.title is string && track.title.size() <= 500
+        && track.artists is list && track.artists.size() <= 50
+        && (track.artists.size() == 0 || track.artists[0] is map)
+        && track.type is string && track.type.size() >= 1 && track.type.size() <= 32
+        && (!('thumbnail' in track) || isOptionalString(track.thumbnail, 2048))
+        && (!('description' in track) || isOptionalString(track.description, 4000));
+    }
+
+    function isValidMixConfigMap(cfg) {
+      return cfg is map
+        && cfg.keys().hasOnly([
+          'enabled', 'durationSeconds', 'transitionStyle',
+          'beatMatch', 'eqBlend', 'volumeCurve'
+        ]);
+    }
+
+    // --- Validation Blueprints (Pillar 2) ---
+    function isValidUserPublicProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'photoURL', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'photoURL', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() <= 120
+        && data.photoURL is string && data.photoURL.size() <= 1024
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateAccount(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.email is string && data.email.size() <= 320
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidYoutubeSoundMap(yt) {
+      return yt is map
+        && yt.keys().hasAll([
+          'maxVolumeLimit', 'startupVolumeMode', 'startupFixedVolume',
+          'defaultPlaybackRate', 'trackFadeSeconds', 'fadeOnPauseResume',
+          'fadeOutOnSleepTimer', 'resumeLastPosition', 'autoStartOnOpen'
+        ])
+        && yt.keys().hasOnly([
+          'maxVolumeLimit', 'startupVolumeMode', 'startupFixedVolume',
+          'defaultPlaybackRate', 'trackFadeSeconds', 'fadeOnPauseResume',
+          'fadeOutOnSleepTimer', 'resumeLastPosition', 'autoStartOnOpen'
+        ])
+        && yt.maxVolumeLimit is number && yt.maxVolumeLimit >= 10 && yt.maxVolumeLimit <= 100
+        && yt.startupVolumeMode is string && yt.startupVolumeMode.size() <= 16 && yt.startupVolumeMode in ['last', 'fixed']
+        && yt.startupFixedVolume is number && yt.startupFixedVolume >= 0 && yt.startupFixedVolume <= 100
+        && yt.defaultPlaybackRate is number && yt.defaultPlaybackRate >= 0.5 && yt.defaultPlaybackRate <= 2.0
+        && yt.trackFadeSeconds is number && yt.trackFadeSeconds >= 0 && yt.trackFadeSeconds <= 15
+        && yt.fadeOnPauseResume is bool
+        && yt.fadeOutOnSleepTimer is bool
+        && yt.resumeLastPosition is bool
+        && yt.autoStartOnOpen is bool;
+    }
+
+    function isValidCustomBackgroundMap(bg) {
+      return bg is map
+        && bg.keys().hasAll([
+          'mode', 'presetId', 'solidColor', 'gradientFrom', 'gradientTo',
+          'gradientAngle', 'customImageDataUrl', 'customImageName',
+          'blurPx', 'dimOpacity', 'panelGlass'
+        ])
+        && bg.keys().hasOnly([
+          'mode', 'presetId', 'solidColor', 'gradientFrom', 'gradientTo',
+          'gradientAngle', 'customImageDataUrl', 'customImageName',
+          'blurPx', 'dimOpacity', 'panelGlass'
+        ])
+        && bg.mode is string && bg.mode.size() <= 24 && bg.mode in ['default', 'ambient', 'preset', 'color', 'gradient', 'image']
+        && bg.presetId is string && bg.presetId.size() <= 64
+        && bg.solidColor is string && bg.solidColor.size() <= 32
+        && bg.gradientFrom is string && bg.gradientFrom.size() <= 32
+        && bg.gradientTo is string && bg.gradientTo.size() <= 32
+        && bg.gradientAngle is number && bg.gradientAngle >= 0 && bg.gradientAngle <= 360
+        && bg.customImageDataUrl == null
+        && isOptionalString(bg.customImageName, 160)
+        && bg.blurPx is number && bg.blurPx >= 0 && bg.blurPx <= 40
+        && bg.dimOpacity is number && bg.dimOpacity >= 0 && bg.dimOpacity <= 1
+        && bg.panelGlass is bool;
+    }
+
+    function isValidUserPreferences(data) {
+      return data.keys().hasAll([
+          'uid', 'hideExplicit', 'autoplay', 'dataSaver', 'showRightPanel',
+          'lyricsPreviewEnabled', 'homeSectionOrder', 'youtubeSound',
+          'episodePlaybackRates', 'customBackground', 'notchDisplayMode',
+          'notchMonitor', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'hideExplicit', 'autoplay', 'dataSaver', 'showRightPanel',
+          'lyricsPreviewEnabled', 'homeSectionOrder', 'youtubeSound',
+          'episodePlaybackRates', 'customBackground', 'notchDisplayMode',
+          'notchMonitor', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.hideExplicit is bool
+        && data.autoplay is bool
+        && data.dataSaver is bool
+        && data.showRightPanel is bool
+        && data.lyricsPreviewEnabled is bool
+        && data.homeSectionOrder is list && data.homeSectionOrder.size() <= 20
+        && (data.homeSectionOrder.size() == 0 || (data.homeSectionOrder[0] is string && data.homeSectionOrder[0].size() <= 64))
+        && isValidYoutubeSoundMap(data.youtubeSound)
+        && data.episodePlaybackRates is map && data.episodePlaybackRates.size() <= 200
+        && isValidCustomBackgroundMap(data.customBackground)
+        && data.notchDisplayMode is string && data.notchDisplayMode.size() <= 32 && data.notchDisplayMode in ['always', 'background', 'off']
+        && data.notchMonitor is string && data.notchMonitor.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAudioProfileDoc(data) {
+      return data.keys().hasAll(['uid', 'profileId', 'profile', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'profileId', 'profile', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && isValidId(data.profileId)
+        && data.profile is map
+        && data.profile.keys().hasOnly([
+          'wifiQuality', 'cellularQuality', 'autoAdjustQuality', 'downloadQuality',
+          'eqEnabled', 'presetId', 'preampDb', 'bands', 'customPresets',
+          'bassBoostEnabled', 'bassBoostLevel', 'stereoWidenerEnabled', 'stereoWidenerLevel',
+          'normalizationTarget', 'useReplayGain', 'limiterEnabled', 'monoAudio',
+          'balance', 'outputDeviceId', 'directMode', 'crossfadeEnabled',
+          'crossfadeSeconds', 'gaplessPlayback', 'fadeOnPlayPause', 'skipSilence', 'djMix'
+        ])
+        && data.profile.bands is list && data.profile.bands.size() == 10
+        && data.profile.customPresets is list && data.profile.customPresets.size() <= 50
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLikedTrackDoc(data) {
+      return data.keys().hasAll(['uid', 'id', 'addedAt', 'track', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'id', 'addedAt', 'track', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 256
+        && data.addedAt is number && data.addedAt >= 0
+        && isValidTrackMap(data.track)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlaylistDoc(data) {
+      return data.keys().hasAll([
+          'uid', 'id', 'name', 'description', 'coverUrl', 'folderId',
+          'pinned', 'tracks', 'mixConfig', 'lastPlayedAt',
+          'createdAtMs', 'updatedAtMs', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'id', 'name', 'description', 'coverUrl', 'folderId',
+          'pinned', 'tracks', 'mixConfig', 'lastPlayedAt',
+          'createdAtMs', 'updatedAtMs', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 200
+        && data.description is string && data.description.size() <= 2000
+        && isOptionalString(data.coverUrl, 2048)
+        && isOptionalString(data.folderId, 128)
+        && data.pinned is bool
+        && data.tracks is list && data.tracks.size() <= 500
+        && (data.tracks.size() == 0 || isValidTrackMap(data.tracks[0]))
+        && (data.mixConfig == null || isValidMixConfigMap(data.mixConfig))
+        && isOptionalNumber(data.lastPlayedAt)
+        && data.createdAtMs is number && data.createdAtMs >= 0
+        && data.updatedAtMs is number && data.updatedAtMs >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlaylistFolderDoc(data) {
+      return data.keys().hasAll(['uid', 'id', 'name', 'createdAtMs', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'id', 'name', 'createdAtMs', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.createdAtMs is number && data.createdAtMs >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSavedAlbumDoc(data) {
+      return data.keys().hasAll(['uid', 'id', 'pinned', 'savedAt', 'lastPlayedAt', 'item', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'id', 'pinned', 'savedAt', 'lastPlayedAt', 'item', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 256
+        && data.pinned is bool
+        && data.savedAt is number && data.savedAt >= 0
+        && isOptionalNumber(data.lastPlayedAt)
+        && isValidTrackMap(data.item)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFollowedArtistDoc(data) {
+      return data.keys().hasAll(['uid', 'id', 'pinned', 'followedAt', 'lastPlayedAt', 'item', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'id', 'pinned', 'followedAt', 'lastPlayedAt', 'item', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 256
+        && data.pinned is bool
+        && data.followedAt is number && data.followedAt >= 0
+        && isOptionalNumber(data.lastPlayedAt)
+        && isValidTrackMap(data.item)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSavedPodcastDoc(data) {
+      return data.keys().hasAll(['uid', 'id', 'pinned', 'savedAt', 'lastPlayedAt', 'item', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'id', 'pinned', 'savedAt', 'lastPlayedAt', 'item', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 256
+        && data.pinned is bool
+        && data.savedAt is number && data.savedAt >= 0
+        && isOptionalNumber(data.lastPlayedAt)
+        && isValidTrackMap(data.item)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEpisodeProgressDoc(data) {
+      return data.keys().hasAll([
+          'uid', 'episodeId', 'podcastId', 'positionSeconds',
+          'durationSeconds', 'completed', 'updatedAtMs', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'episodeId', 'podcastId', 'positionSeconds',
+          'durationSeconds', 'completed', 'updatedAtMs', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.episodeId is string && data.episodeId.size() >= 1 && data.episodeId.size() <= 256
+        && isOptionalString(data.podcastId, 256)
+        && data.positionSeconds is number && data.positionSeconds >= 0
+        && data.durationSeconds is number && data.durationSeconds >= 0
+        && data.completed is bool
+        && data.updatedAtMs is number && data.updatedAtMs >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlayHistoryDoc(data) {
+      return data.keys().hasAll([
+          'uid', 'entryId', 'trackId', 'playedAt',
+          'durationListenedSec', 'sourceType', 'genreHint', 'track', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'entryId', 'trackId', 'playedAt',
+          'durationListenedSec', 'sourceType', 'genreHint', 'track', 'createdAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && isValidId(data.entryId)
+        && data.trackId is string && data.trackId.size() >= 1 && data.trackId.size() <= 256
+        && data.playedAt is number && data.playedAt >= 0
+        && data.durationListenedSec is number && data.durationListenedSec >= 0
+        && data.sourceType is string && data.sourceType.size() <= 32 && data.sourceType in ['song', 'episode']
+        && isOptionalString(data.genreHint, 120)
+        && isValidTrackMap(data.track)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidRecentSearchDoc(data) {
+      return data.keys().hasAll(['uid', 'searchId', 'query', 'searchedAt', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'searchId', 'query', 'searchedAt', 'createdAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && isValidId(data.searchId)
+        && data.query is string && data.query.size() >= 1 && data.query.size() <= 300
+        && data.searchedAt is number && data.searchedAt >= 0
+        && data.createdAt is timestamp;
+    }
+
+    function isValidHiddenTrackDoc(data) {
+      return data.keys().hasAll(['uid', 'id', 'hiddenAt', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'id', 'hiddenAt', 'createdAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 256
+        && data.hiddenAt is number && data.hiddenAt >= 0
+        && data.createdAt is timestamp;
+    }
+
+    function isValidTasteExclusionDoc(data) {
+      return data.keys().hasAll(['uid', 'id', 'excludedAt', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'id', 'excludedAt', 'createdAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 256
+        && data.excludedAt is number && data.excludedAt >= 0
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPlayerSessionDoc(data) {
+      return data.keys().hasAll([
+          'uid', 'currentTrack', 'queue', 'queueIndex', 'sourceQueue',
+          'sourceLabel', 'currentTime', 'duration', 'volume', 'isMuted',
+          'shuffle', 'smartShuffle', 'repeat', 'playbackRate',
+          'crossfadeSeconds', 'activeMixConfig', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'currentTrack', 'queue', 'queueIndex', 'sourceQueue',
+          'sourceLabel', 'currentTime', 'duration', 'volume', 'isMuted',
+          'shuffle', 'smartShuffle', 'repeat', 'playbackRate',
+          'crossfadeSeconds', 'activeMixConfig', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && (data.currentTrack == null || isValidTrackMap(data.currentTrack))
+        && data.queue is list && data.queue.size() <= 200
+        && (data.queue.size() == 0 || isValidTrackMap(data.queue[0]))
+        && data.queueIndex is number && data.queueIndex >= 0
+        && data.sourceQueue is list && data.sourceQueue.size() <= 200
+        && (data.sourceQueue.size() == 0 || isValidTrackMap(data.sourceQueue[0]))
+        && isOptionalString(data.sourceLabel, 300)
+        && data.currentTime is number && data.currentTime >= 0
+        && data.duration is number && data.duration >= 0
+        && data.volume is number && data.volume >= 0 && data.volume <= 100
+        && data.isMuted is bool
+        && data.shuffle is bool
+        && data.smartShuffle is bool
+        && data.repeat is string && data.repeat.size() <= 16 && data.repeat in ['off', 'all', 'one']
+        && data.playbackRate is number && data.playbackRate >= 0.5 && data.playbackRate <= 2.0
+        && data.crossfadeSeconds is number && data.crossfadeSeconds >= 0 && data.crossfadeSeconds <= 15
+        && (data.activeMixConfig == null || isValidMixConfigMap(data.activeMixConfig))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId)
+        && isValidUserPublicProfile(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && isValidUserPublicProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']);
+      allow delete: if isOwner(userId);
+
+      // Isolated PII subcollection
+      match /private/{docId} {
+        allow get: if isOwner(userId) && isValidId(docId) && docId == 'account' && hasMasterUserGate(userId);
+        allow list: if false;
+        allow create: if isOwner(userId) && isValidId(docId) && docId == 'account'
+          && isValidUserPrivateAccount(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(docId) && docId == 'account'
+          && isValidUserPrivateAccount(incoming())
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt'])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(docId) && docId == 'account' && hasMasterUserGate(userId);
+      }
+
+      // Preferences
+      match /settings/{settingId} {
+        allow get: if isOwner(userId) && isValidId(settingId) && settingId == 'preferences' && hasMasterUserGate(userId);
+        allow list: if false;
+        allow create: if isOwner(userId) && isValidId(settingId) && settingId == 'preferences'
+          && isValidUserPreferences(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(settingId) && settingId == 'preferences'
+          && isValidUserPreferences(incoming())
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'hideExplicit', 'autoplay', 'dataSaver', 'showRightPanel',
+            'lyricsPreviewEnabled', 'homeSectionOrder', 'youtubeSound',
+            'episodePlaybackRates', 'customBackground', 'notchDisplayMode',
+            'notchMonitor', 'updatedAt'
+          ])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(settingId) && settingId == 'preferences' && hasMasterUserGate(userId);
+      }
+
+      // Audio / DSP Profiles
+      match /audioProfiles/{profileId} {
+        allow get: if isOwner(userId) && isValidId(profileId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(profileId)
+          && isValidAudioProfileDoc(incoming())
+          && incoming().profileId == profileId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(profileId)
+          && isValidAudioProfileDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().profileId == existing().profileId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['profile', 'updatedAt'])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(profileId) && hasMasterUserGate(userId);
+      }
+
+      // Liked Tracks
+      match /likedTracks/{trackDocId} {
+        allow get: if isOwner(userId) && isValidId(trackDocId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(trackDocId)
+          && isValidLikedTrackDoc(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(trackDocId)
+          && isValidLikedTrackDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().id == existing().id
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['addedAt', 'track', 'updatedAt'])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(trackDocId) && hasMasterUserGate(userId);
+      }
+
+      // Playlists (Action-Based Updates)
+      match /playlists/{playlistId} {
+        allow get: if isOwner(userId) && isValidId(playlistId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(playlistId)
+          && isValidPlaylistDoc(incoming())
+          && incoming().id == playlistId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(playlistId)
+          && isValidPlaylistDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().id == existing().id
+          && incoming().createdAtMs == existing().createdAtMs
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'coverUrl', 'folderId', 'pinned', 'mixConfig', 'updatedAtMs', 'updatedAt'])
+            || incoming().diff(existing()).affectedKeys().hasOnly(['tracks', 'coverUrl', 'updatedAtMs', 'updatedAt'])
+            || incoming().diff(existing()).affectedKeys().hasOnly(['lastPlayedAt', 'updatedAt'])
+          )
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(playlistId) && hasMasterUserGate(userId);
+      }
+
+      // Playlist Folders
+      match /folders/{folderId} {
+        allow get: if isOwner(userId) && isValidId(folderId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(folderId)
+          && isValidPlaylistFolderDoc(incoming())
+          && incoming().id == folderId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(folderId)
+          && isValidPlaylistFolderDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().id == existing().id
+          && incoming().createdAtMs == existing().createdAtMs
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt'])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(folderId) && hasMasterUserGate(userId);
+      }
+
+      // Saved Albums
+      match /savedAlbums/{albumDocId} {
+        allow get: if isOwner(userId) && isValidId(albumDocId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(albumDocId)
+          && isValidSavedAlbumDoc(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(albumDocId)
+          && isValidSavedAlbumDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().id == existing().id
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['pinned', 'lastPlayedAt', 'item', 'updatedAt'])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(albumDocId) && hasMasterUserGate(userId);
+      }
+
+      // Followed Artists
+      match /followedArtists/{artistDocId} {
+        allow get: if isOwner(userId) && isValidId(artistDocId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(artistDocId)
+          && isValidFollowedArtistDoc(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(artistDocId)
+          && isValidFollowedArtistDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().id == existing().id
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['pinned', 'lastPlayedAt', 'item', 'updatedAt'])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(artistDocId) && hasMasterUserGate(userId);
+      }
+
+      // Saved Podcasts
+      match /savedPodcasts/{podcastDocId} {
+        allow get: if isOwner(userId) && isValidId(podcastDocId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(podcastDocId)
+          && isValidSavedPodcastDoc(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(podcastDocId)
+          && isValidSavedPodcastDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().id == existing().id
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['pinned', 'lastPlayedAt', 'item', 'updatedAt'])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(podcastDocId) && hasMasterUserGate(userId);
+      }
+
+      // Episode Progress
+      match /episodeProgress/{episodeDocId} {
+        allow get: if isOwner(userId) && isValidId(episodeDocId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(episodeDocId)
+          && isValidEpisodeProgressDoc(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(episodeDocId)
+          && isValidEpisodeProgressDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().episodeId == existing().episodeId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'podcastId', 'positionSeconds', 'durationSeconds', 'completed', 'updatedAtMs', 'updatedAt'
+          ])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(episodeDocId) && hasMasterUserGate(userId);
+      }
+
+      // Play History
+      match /playHistory/{entryId} {
+        allow get: if isOwner(userId) && isValidId(entryId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(entryId)
+          && isValidPlayHistoryDoc(incoming())
+          && incoming().entryId == entryId
+          && incoming().createdAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(entryId) && hasMasterUserGate(userId);
+      }
+
+      // Recent Searches
+      match /recentSearches/{searchId} {
+        allow get: if isOwner(userId) && isValidId(searchId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(searchId)
+          && isValidRecentSearchDoc(incoming())
+          && incoming().searchId == searchId
+          && incoming().createdAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(searchId) && hasMasterUserGate(userId);
+      }
+
+      // Hidden Tracks
+      match /hiddenTracks/{trackDocId} {
+        allow get: if isOwner(userId) && isValidId(trackDocId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(trackDocId)
+          && isValidHiddenTrackDoc(incoming())
+          && incoming().createdAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(trackDocId) && hasMasterUserGate(userId);
+      }
+
+      // Taste Exclusions
+      match /tasteExclusions/{trackDocId} {
+        allow get: if isOwner(userId) && isValidId(trackDocId) && hasMasterUserGate(userId);
+        allow list: if isOwner(userId) && existing().uid == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(trackDocId)
+          && isValidTasteExclusionDoc(incoming())
+          && incoming().createdAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(trackDocId) && hasMasterUserGate(userId);
+      }
+
+      // Player Session
+      match /playerSession/{sessionDocId} {
+        allow get: if isOwner(userId) && isValidId(sessionDocId) && sessionDocId == 'current' && hasMasterUserGate(userId);
+        allow list: if false;
+        allow create: if isOwner(userId) && isValidId(sessionDocId) && sessionDocId == 'current'
+          && isValidPlayerSessionDoc(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasMasterUserGate(userId);
+        allow update: if isOwner(userId) && isValidId(sessionDocId) && sessionDocId == 'current'
+          && isValidPlayerSessionDoc(incoming())
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'currentTrack', 'queue', 'queueIndex', 'sourceQueue', 'sourceLabel',
+            'currentTime', 'duration', 'volume', 'isMuted', 'shuffle',
+            'smartShuffle', 'repeat', 'playbackRate', 'crossfadeSeconds',
+            'activeMixConfig', 'updatedAt'
+          ])
+          && hasMasterUserGate(userId);
+        allow delete: if isOwner(userId) && isValidId(sessionDocId) && sessionDocId == 'current' && hasMasterUserGate(userId);
+      }
+    }
+  }
+}

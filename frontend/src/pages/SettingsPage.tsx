@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertCircle,
   ArrowDown,
   ArrowDownCircle,
   ArrowUp,
   BarChart2,
   ChevronLeft,
   ChevronRight,
+  Cloud,
   Download,
   Eye,
   Keyboard,
+  LogIn,
+  LogOut,
   MonitorSmartphone,
   Music,
   PlayCircle,
@@ -29,6 +33,13 @@ import { BackgroundSettingsSection } from '../components/BackgroundSettingsSecti
 import { CrossfadeControl } from '../components/CrossfadeControl';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { exportAllSoundClearData, importAllSoundClearData } from '../db/soundclearDb';
+import { firebaseProjectInfo } from '../firebase/firebase';
+import {
+  saveAudioProfileToFirestore,
+  saveUserPreferencesToFirestore,
+  seedCloudIfEmptyFromLocal,
+} from '../firebase/firestoreSync';
+import { useAuthStore } from '../store/authStore';
 import { useContextMenuStore } from '../store/contextMenuStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useNavigationStore } from '../store/navigationStore';
@@ -102,6 +113,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [firestoreSyncing, setFirestoreSyncing] = useState(false);
   const [monitorOptions, setMonitorOptions] = useState<NotchMonitorOption[]>(
     DEFAULT_NOTCH_MONITOR_OPTIONS,
   );
@@ -187,6 +199,15 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
   const showToast = useContextMenuStore((s) => s.showToast);
 
+  const authUser = useAuthStore((s) => s.user);
+  const signingIn = useAuthStore((s) => s.signingIn);
+  const syncActive = useAuthStore((s) => s.syncActive);
+  const firestoreError = useAuthStore((s) => s.firestoreError);
+  const lastSyncedAt = useAuthStore((s) => s.lastSyncedAt);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
+  const signOutUser = useAuthStore((s) => s.signOutUser);
+  const markSyncedNow = useAuthStore((s) => s.markSyncedNow);
+
   const accountStatusQuery = useQuery({
     queryKey: ['account-status'],
     queryFn: ({ signal }) => fetchAccountStatus(signal),
@@ -258,9 +279,12 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
       },
       {
         id: 'account',
-        title: 'Akun, data lokal & cadangan',
-        subtitle: 'Mode katalog • Ekspor / impor JSON • Bersihkan riwayat',
-        keywords: 'akun katalog sinkronisasi ekspor impor json backup cadangan hapus riwayat',
+        title: 'Akun Google, Firestore & cadangan',
+        subtitle: authUser
+          ? `Firestore aktif (${authUser.email || authUser.displayName})`
+          : 'Masuk Google Firestore • Ekspor / impor JSON',
+        keywords:
+          'akun google firebase firestore cloud sinkronisasi katalog ekspor impor json backup cadangan hapus riwayat',
         icon: (active) => (
           <UserCircle
             className={`w-5 h-5 ${active ? 'text-[#19EE8A]' : 'text-[#E8FFF3]/80'}`}
@@ -269,7 +293,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
         ),
       },
     ],
-    [autoplay, offlineDownloads.length],
+    [authUser, autoplay, offlineDownloads.length],
   );
 
   const filteredCategories = useMemo(() => {
@@ -364,6 +388,65 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
       showToast('Gagal menyinkronkan koleksi pustaka');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleManualFirestoreSync = async () => {
+    if (!authUser || !authUser.emailVerified) {
+      showToast('Silakan masuk dengan akun Google terlebih dahulu.');
+      return;
+    }
+    setFirestoreSyncing(true);
+    try {
+      const s = useSettingsStore.getState();
+      const lib = useLibraryStore.getState();
+      const uid = authUser.uid;
+      await saveUserPreferencesToFirestore(uid, {
+        hideExplicit: s.hideExplicit,
+        autoplay: s.autoplay,
+        dataSaver: s.dataSaver,
+        showRightPanel: s.showRightPanel,
+        lyricsPreviewEnabled: s.lyricsPreviewEnabled,
+        homeSectionOrder: s.homeSectionOrder,
+        youtubeSound: s.youtubeSound,
+        episodePlaybackRates: s.episodePlaybackRates,
+        customBackground: s.customBackground,
+        notchDisplayMode: s.notchDisplayMode,
+        notchMonitor: s.notchMonitor,
+      });
+      await saveAudioProfileToFirestore(uid, 'cloud', s.localProfile);
+      await seedCloudIfEmptyFromLocal(uid, {
+        settings: {
+          hideExplicit: s.hideExplicit,
+          autoplay: s.autoplay,
+          dataSaver: s.dataSaver,
+          showRightPanel: s.showRightPanel,
+          lyricsPreviewEnabled: s.lyricsPreviewEnabled,
+          homeSectionOrder: s.homeSectionOrder,
+          youtubeSound: s.youtubeSound,
+          episodePlaybackRates: s.episodePlaybackRates,
+          customBackground: s.customBackground,
+          notchDisplayMode: s.notchDisplayMode,
+          notchMonitor: s.notchMonitor,
+        },
+        localProfile: s.localProfile,
+        likedTracks: lib.likedTracks,
+        playlists: lib.playlists,
+        folders: lib.folders,
+        savedAlbums: lib.savedAlbums,
+        followedArtists: lib.followedArtists,
+        savedPodcasts: lib.savedPodcasts,
+        episodeProgress: lib.episodeProgress,
+        hiddenTrackIds: lib.hiddenTrackIds,
+        excludedTasteIds: lib.excludedTasteIds,
+        recentSearches: lib.recentSearches,
+      });
+      markSyncedNow();
+      showToast('Preferensi, EQ, dan pustaka berhasil disinkronkan ke Cloud Firestore');
+    } catch {
+      showToast('Gagal menyinkronkan ke Firestore');
+    } finally {
+      setFirestoreSyncing(false);
     }
   };
 
@@ -851,6 +934,112 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
       case 'account':
         return (
           <div className="space-y-5">
+            {/* Firebase Auth & Cloud Firestore Sync */}
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-[#E8FFF3] flex items-center gap-2">
+                    <Cloud className="w-4 h-4 text-[#19EE8A]" strokeWidth={2} />
+                    Akun Google &amp; Cloud Firestore
+                  </h2>
+                  <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+                    Proyek Firebase: <span className="font-mono text-[#E8FFF3]/90">{firebaseProjectInfo.projectId}</span>
+                  </p>
+                </div>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                    authUser && syncActive
+                      ? 'bg-[#19EE8A]/15 border-[#19EE8A]/35 text-[#19EE8A]'
+                      : 'bg-white/[0.06] border-white/[0.12] text-[#B3F7D1]/70'
+                  }`}
+                >
+                  {authUser
+                    ? syncActive
+                      ? 'Sinkronisasi Real-Time Aktif'
+                      : 'Menghubungkan Firestore...'
+                    : 'Mode Lokal'}
+                </span>
+              </div>
+
+              {firestoreError && (
+                <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-400/30 p-3 text-xs text-amber-200">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-300" />
+                  <span>{firestoreError}</span>
+                </div>
+              )}
+
+              {authUser ? (
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    {authUser.photoURL ? (
+                      <img
+                        src={authUser.photoURL}
+                        alt={authUser.displayName || 'Profil Google'}
+                        referrerPolicy="no-referrer"
+                        className="w-10 h-10 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <span className="w-10 h-10 rounded-full bg-sc-gradient text-[#0F1F17] text-sm font-extrabold flex items-center justify-center shrink-0">
+                        {(authUser.displayName?.trim().charAt(0) || 'S').toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[#E8FFF3] truncate">
+                        {authUser.displayName || 'Pengguna SoundClear'}
+                      </p>
+                      <p className="text-xs text-[#B3F7D1]/65 truncate">{authUser.email}</p>
+                      {lastSyncedAt && (
+                        <p className="text-[11px] text-[#19EE8A]/85 mt-0.5">
+                          Terakhir disinkronkan: {new Date(lastSyncedAt).toLocaleTimeString('id-ID')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      disabled={firestoreSyncing}
+                      onClick={() => void handleManualFirestoreSync()}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 disabled:opacity-50"
+                    >
+                      <RefreshCw
+                        className={`w-3.5 h-3.5 ${firestoreSyncing ? 'animate-spin' : ''}`}
+                        strokeWidth={2}
+                      />
+                      {firestoreSyncing ? 'Menyinkronkan...' : 'Sinkronkan ke Firestore'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void signOutUser()}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.07] border border-white/[0.1] hover:bg-red-500/20 hover:border-red-400/30 text-xs font-medium text-[#E8FFF3]/90 hover:text-red-200 transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" strokeWidth={2} />
+                      Keluar dari Google
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 pt-1">
+                  <p className="text-xs text-[#B3F7D1]/70 leading-relaxed">
+                    Masuk dengan akun Google untuk menyimpan dan menyinkronkan lagu disukai, playlist, folder,
+                    progres podcast, riwayat putar, preferensi tampilan, dan profil Equalizer 10-band Anda
+                    ke Cloud Firestore. File audio lokal &amp; wallpaper kustom tetap tersimpan aman di perangkat.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={signingIn}
+                    onClick={() => void signInWithGoogle()}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 disabled:opacity-50"
+                  >
+                    <LogIn className="w-4 h-4" strokeWidth={2.2} />
+                    {signingIn ? 'Menghubungkan Google...' : 'Masuk dengan Google'}
+                  </button>
+                </div>
+              )}
+            </section>
+
             {/* Mode Katalog & Pustaka */}
             <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-3">
               <h2 className="text-base font-semibold text-[#E8FFF3]">Mode Katalog &amp; Pustaka</h2>
@@ -1084,11 +1273,15 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
           {/* Status & Quick Equalizer CTA Row (IMG_4281 status strip) */}
           <div className="flex items-center justify-between gap-3 px-1">
             <div className="min-w-0">
-              <p className="text-sm font-bold text-[#E8FFF3] truncate">Mode Streaming Audio</p>
+              <p className="text-sm font-bold text-[#E8FFF3] truncate">
+                {authUser ? 'Firestore Cloud Aktif' : 'Mode Streaming Audio'}
+              </p>
               <p className="text-xs text-[#B3F7D1]/60 truncate">
-                {accountStatusQuery.data?.authenticated
-                  ? 'Pustaka terhubung & DSP siap'
-                  : 'Streaming & Audio Lokal Siap'}
+                {authUser
+                  ? `${authUser.displayName || authUser.email} · Pustaka tersinkron`
+                  : accountStatusQuery.data?.authenticated
+                    ? 'Pustaka terhubung & DSP siap'
+                    : 'Streaming & Audio Lokal Siap'}
               </p>
             </div>
             <button

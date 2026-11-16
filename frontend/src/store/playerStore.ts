@@ -13,6 +13,8 @@ import {
   unlockPlaybackOnUserGesture,
 } from '../audio/soundclearAudioEngine';
 import { db, type PersistedPlayerSession } from '../db/soundclearDb';
+import { getActiveFirestoreUid } from '../firebase/activeAuth';
+import { savePlayerSessionToFirestore } from '../firebase/firestoreSync';
 import type {
   ActiveStreamMeta,
   ConcreteQualityTier,
@@ -115,6 +117,7 @@ interface PlayerState {
   manualMixRequestVersion: number;
 
   hydrate: () => Promise<void>;
+  applyFirestorePlayerSession: (session: PersistedPlayerSession) => void;
   playTrack: (
     track: MediaItem,
     options?: {
@@ -191,6 +194,7 @@ const DEFAULT_AMBIENT: AmbientColor = { r: 22, g: 48, b: 40 };
 
 let lastPersistAt = 0;
 let lastBackendSyncAt = 0;
+let lastFirestoreSessionSyncAt = 0;
 let unloadHooksInstalled = false;
 
 function buildBgPayloadFromState(state: PlayerState) {
@@ -259,6 +263,12 @@ function persistPlayerSession(state: PlayerState, force = false): void {
   if (typeof window !== 'undefined' && state.hydrated && (force || now - lastBackendSyncAt >= 5000)) {
     lastBackendSyncAt = now;
     void syncBackgroundSession(buildBgPayloadFromState(state)).catch(() => {});
+  }
+
+  const firestoreUid = getActiveFirestoreUid();
+  if (firestoreUid && state.hydrated && (force || now - lastFirestoreSessionSyncAt >= 10000)) {
+    lastFirestoreSessionSyncAt = now;
+    void savePlayerSessionToFirestore(firestoreUid, payload).catch(() => {});
   }
 }
 
@@ -553,6 +563,52 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     } catch {
       set({ hydrated: true });
     }
+  },
+
+  applyFirestorePlayerSession: (session) => {
+    if (!session || typeof session !== 'object') return;
+    void db.kvState.put({ key: 'player_session', value: session }).catch(() => {});
+
+    const state = get();
+    if (state.isPlaying || state.currentTrack) {
+      return;
+    }
+
+    const remoteTrack = session.currentTrack ?? null;
+    if (!remoteTrack) {
+      return;
+    }
+
+    const ytSound = useSettingsStore.getState().youtubeSound;
+    const rawVol = typeof session.volume === 'number' ? session.volume : state.volume;
+    const effectiveVol = isLocalTrack(remoteTrack)
+      ? rawVol
+      : Math.min(ytSound.maxVolumeLimit, rawVol);
+    const resumedTime = ytSound.resumeLastPosition ? Math.max(0, session.currentTime || 0) : 0;
+
+    set({
+      currentTrack: remoteTrack,
+      manualQueue: Array.isArray(session.queue) ? session.queue : [],
+      sourceQueue: Array.isArray(session.sourceQueue) ? session.sourceQueue : [],
+      sourceLabel: session.sourceLabel ?? null,
+      currentTime: resumedTime,
+      duration: Math.max(0, session.duration || 0),
+      volume: effectiveVol,
+      lastNonZeroVolume: effectiveVol > 0 ? effectiveVol : 80,
+      isMuted: Boolean(session.isMuted),
+      shuffle: Boolean(session.shuffle),
+      smartShuffle: Boolean(session.smartShuffle),
+      repeat: session.repeat ?? 'off',
+      playbackRate: resolvePlaybackRateForTrack(remoteTrack),
+      crossfadeSeconds: clampCrossfadeSeconds(session.crossfadeSeconds ?? state.crossfadeSeconds),
+      activeMixConfig: session.activeMixConfig
+        ? normalizePlaylistMixSettings(session.activeMixConfig)
+        : null,
+      pendingSeekSeconds: resumedTime > 2 ? resumedTime : null,
+      isPlaying: false,
+    });
+
+    void hydrateTrackContext(remoteTrack, false, get, set);
   },
 
   playTrack: (track, options) => {

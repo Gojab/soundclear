@@ -1,0 +1,771 @@
+{
+  "entities": {
+    "UserPublicProfile": {
+      "title": "UserPublicProfile",
+      "description": "Public non-PII profile metadata for a SoundClear user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "photoURL", "createdAt", "updatedAt"]
+    },
+    "UserPrivateAccount": {
+      "title": "UserPrivateAccount",
+      "description": "Isolated PII account record for a SoundClear user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 320
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "User application, home layout, playback, and custom background metadata preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "hideExplicit": {
+          "type": "boolean"
+        },
+        "autoplay": {
+          "type": "boolean"
+        },
+        "dataSaver": {
+          "type": "boolean"
+        },
+        "showRightPanel": {
+          "type": "boolean"
+        },
+        "lyricsPreviewEnabled": {
+          "type": "boolean"
+        },
+        "homeSectionOrder": {
+          "type": "array",
+          "description": "Ordered list of home section identifiers (max 20 items)."
+        },
+        "youtubeSound": {
+          "type": "object"
+        },
+        "episodePlaybackRates": {
+          "type": "object"
+        },
+        "customBackground": {
+          "type": "object"
+        },
+        "notchDisplayMode": {
+          "type": "string",
+          "enum": ["always", "background", "off"],
+          "maxLength": 32
+        },
+        "notchMonitor": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "hideExplicit",
+        "autoplay",
+        "dataSaver",
+        "showRightPanel",
+        "lyricsPreviewEnabled",
+        "homeSectionOrder",
+        "youtubeSound",
+        "episodePlaybackRates",
+        "customBackground",
+        "notchDisplayMode",
+        "notchMonitor",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AudioProfileDoc": {
+      "title": "AudioProfileDoc",
+      "description": "User DSP, 10-band equalizer, normalization, and streaming quality profile.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "profile": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "profileId", "profile", "createdAt", "updatedAt"]
+    },
+    "LikedTrackDoc": {
+      "title": "LikedTrackDoc",
+      "description": "A liked track saved in the user's library.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "addedAt": {
+          "type": "number"
+        },
+        "track": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "id", "addedAt", "track", "createdAt", "updatedAt"]
+    },
+    "PlaylistDoc": {
+      "title": "PlaylistDoc",
+      "description": "A user-created playlist with tracks and optional DJ mix configuration.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "coverUrl": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "folderId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "tracks": {
+          "type": "array",
+          "description": "Tracks in playlist (max 500 items)."
+        },
+        "mixConfig": {
+          "type": "object"
+        },
+        "lastPlayedAt": {
+          "type": "number"
+        },
+        "createdAtMs": {
+          "type": "number"
+        },
+        "updatedAtMs": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "id",
+        "name",
+        "description",
+        "pinned",
+        "tracks",
+        "createdAtMs",
+        "updatedAtMs",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PlaylistFolderDoc": {
+      "title": "PlaylistFolderDoc",
+      "description": "A folder used to organize user playlists.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "createdAtMs": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "id", "name", "createdAtMs", "createdAt", "updatedAt"]
+    },
+    "SavedAlbumDoc": {
+      "title": "SavedAlbumDoc",
+      "description": "An album bookmarked by the user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "savedAt": {
+          "type": "number"
+        },
+        "lastPlayedAt": {
+          "type": "number"
+        },
+        "item": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "id", "pinned", "savedAt", "item", "createdAt", "updatedAt"]
+    },
+    "FollowedArtistDoc": {
+      "title": "FollowedArtistDoc",
+      "description": "An artist followed by the user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "followedAt": {
+          "type": "number"
+        },
+        "lastPlayedAt": {
+          "type": "number"
+        },
+        "item": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "id", "pinned", "followedAt", "item", "createdAt", "updatedAt"]
+    },
+    "SavedPodcastDoc": {
+      "title": "SavedPodcastDoc",
+      "description": "A podcast show followed by the user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "savedAt": {
+          "type": "number"
+        },
+        "lastPlayedAt": {
+          "type": "number"
+        },
+        "item": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "id", "pinned", "savedAt", "item", "createdAt", "updatedAt"]
+    },
+    "EpisodeProgressDoc": {
+      "title": "EpisodeProgressDoc",
+      "description": "Playback position and completion status for a podcast episode.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "episodeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "podcastId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "positionSeconds": {
+          "type": "number"
+        },
+        "durationSeconds": {
+          "type": "number"
+        },
+        "completed": {
+          "type": "boolean"
+        },
+        "updatedAtMs": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "episodeId",
+        "positionSeconds",
+        "durationSeconds",
+        "completed",
+        "updatedAtMs",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PlayHistoryDoc": {
+      "title": "PlayHistoryDoc",
+      "description": "Single listening history record for Recap and Continue Listening.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "entryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "trackId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "playedAt": {
+          "type": "number"
+        },
+        "durationListenedSec": {
+          "type": "number"
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": ["song", "episode"],
+          "maxLength": 32
+        },
+        "genreHint": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "track": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "entryId",
+        "trackId",
+        "playedAt",
+        "durationListenedSec",
+        "sourceType",
+        "track",
+        "createdAt"
+      ]
+    },
+    "RecentSearchDoc": {
+      "title": "RecentSearchDoc",
+      "description": "A recent search query saved for the user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "searchId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "searchedAt": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "searchId", "query", "searchedAt", "createdAt"]
+    },
+    "HiddenTrackDoc": {
+      "title": "HiddenTrackDoc",
+      "description": "A track hidden from playback/recommendations.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "hiddenAt": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "id", "hiddenAt", "createdAt"]
+    },
+    "TasteExclusionDoc": {
+      "title": "TasteExclusionDoc",
+      "description": "A track excluded from taste/recommendation profile.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "excludedAt": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "id", "excludedAt", "createdAt"]
+    },
+    "PlayerSessionDoc": {
+      "title": "PlayerSessionDoc",
+      "description": "Persisted cross-device playback queue and state.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "currentTrack": {
+          "type": "object"
+        },
+        "queue": {
+          "type": "array"
+        },
+        "queueIndex": {
+          "type": "number"
+        },
+        "sourceQueue": {
+          "type": "array"
+        },
+        "sourceLabel": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "currentTime": {
+          "type": "number"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "isMuted": {
+          "type": "boolean"
+        },
+        "shuffle": {
+          "type": "boolean"
+        },
+        "smartShuffle": {
+          "type": "boolean"
+        },
+        "repeat": {
+          "type": "string",
+          "enum": ["off", "all", "one"],
+          "maxLength": 16
+        },
+        "playbackRate": {
+          "type": "number"
+        },
+        "crossfadeSeconds": {
+          "type": "number"
+        },
+        "activeMixConfig": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "queue",
+        "queueIndex",
+        "sourceQueue",
+        "currentTime",
+        "duration",
+        "volume",
+        "isMuted",
+        "shuffle",
+        "smartShuffle",
+        "repeat",
+        "playbackRate",
+        "crossfadeSeconds",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublicProfile" },
+      "description": "Owner-only public profile metadata (no PII)."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateAccount" },
+      "description": "Isolated PII document (email) strictly readable/writable by owner."
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/UserPreferences" },
+      "description": "User application settings and preferences."
+    },
+    "/users/{userId}/audioProfiles/{profileId}": {
+      "schema": { "$ref": "#/entities/AudioProfileDoc" },
+      "description": "User 10-band EQ, DSP, and streaming quality profile."
+    },
+    "/users/{userId}/likedTracks/{trackDocId}": {
+      "schema": { "$ref": "#/entities/LikedTrackDoc" },
+      "description": "User's liked tracks."
+    },
+    "/users/{userId}/playlists/{playlistId}": {
+      "schema": { "$ref": "#/entities/PlaylistDoc" },
+      "description": "User's custom playlists."
+    },
+    "/users/{userId}/folders/{folderId}": {
+      "schema": { "$ref": "#/entities/PlaylistFolderDoc" },
+      "description": "User's playlist folders."
+    },
+    "/users/{userId}/savedAlbums/{albumDocId}": {
+      "schema": { "$ref": "#/entities/SavedAlbumDoc" },
+      "description": "User's saved albums."
+    },
+    "/users/{userId}/followedArtists/{artistDocId}": {
+      "schema": { "$ref": "#/entities/FollowedArtistDoc" },
+      "description": "User's followed artists."
+    },
+    "/users/{userId}/savedPodcasts/{podcastDocId}": {
+      "schema": { "$ref": "#/entities/SavedPodcastDoc" },
+      "description": "User's saved podcasts."
+    },
+    "/users/{userId}/episodeProgress/{episodeDocId}": {
+      "schema": { "$ref": "#/entities/EpisodeProgressDoc" },
+      "description": "User's podcast episode playback progress."
+    },
+    "/users/{userId}/playHistory/{entryId}": {
+      "schema": { "$ref": "#/entities/PlayHistoryDoc" },
+      "description": "User's listening history for Recap."
+    },
+    "/users/{userId}/recentSearches/{searchId}": {
+      "schema": { "$ref": "#/entities/RecentSearchDoc" },
+      "description": "User's recent search queries."
+    },
+    "/users/{userId}/hiddenTracks/{trackDocId}": {
+      "schema": { "$ref": "#/entities/HiddenTrackDoc" },
+      "description": "Tracks hidden by the user."
+    },
+    "/users/{userId}/tasteExclusions/{trackDocId}": {
+      "schema": { "$ref": "#/entities/TasteExclusionDoc" },
+      "description": "Tracks excluded from the user's taste profile."
+    },
+    "/users/{userId}/playerSession/{sessionDocId}": {
+      "schema": { "$ref": "#/entities/PlayerSessionDoc" },
+      "description": "Cross-device playback queue and session state."
+    }
+  }
+}
