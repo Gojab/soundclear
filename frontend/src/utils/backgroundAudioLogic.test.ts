@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   clampSeekTarget,
+  computeAudioChainNodes,
   isMobileAudioEnvironment,
+  resolvePlaybackEngineSummary,
   shouldEngageDirectDeckOnHide,
   shouldFallbackSuspendedDspToDirect,
   shouldLoadTrackDirectlyOnDirectDeck,
@@ -423,5 +425,125 @@ test('shouldSyncExternalPause catches OS/headphone pauses without false positive
     }),
     false,
   );
+});
+
+test('resolvePlaybackEngineSummary reports honest progressive enhancement status across desktop, mobile direct, and fallbacks', () => {
+  const desktopDsp = resolvePlaybackEngineSummary({
+    sourceMode: 'webaudio',
+    directMode: false,
+    isMobile: false,
+    backgroundDirectActive: false,
+  });
+  assert.equal(desktopDsp.dspActive, true);
+  assert.equal(desktopDsp.isDirectPath, false);
+  assert.equal(desktopDsp.activeBadgeLabel, 'Web Audio DSP Aktif');
+  assert.equal(desktopDsp.eqBypassNotice, null);
+
+  const mobileDirect = resolvePlaybackEngineSummary({
+    sourceMode: 'direct',
+    directMode: false,
+    isMobile: true,
+    backgroundDirectActive: false,
+  });
+  assert.equal(mobileDirect.dspActive, false);
+  assert.equal(mobileDirect.isDirectPath, true);
+  assert.equal(mobileDirect.activeBadgeLabel, 'HTML5 Direct (Mobile)');
+  assert.ok(mobileDirect.eqBypassNotice && mobileDirect.eqBypassNotice.includes('mobile'));
+
+  const userDirect = resolvePlaybackEngineSummary({
+    sourceMode: 'direct',
+    directMode: true,
+    isMobile: false,
+    backgroundDirectActive: false,
+  });
+  assert.equal(userDirect.dspActive, false);
+  assert.equal(userDirect.activeBadgeLabel, 'Direct Bypass DSP');
+  assert.ok(userDirect.eqBypassNotice && userDirect.eqBypassNotice.includes('Mode Direct'));
+
+  const desktopFallbackDirect = resolvePlaybackEngineSummary({
+    sourceMode: 'webaudio',
+    directMode: false,
+    isMobile: false,
+    backgroundDirectActive: true,
+  });
+  assert.equal(desktopFallbackDirect.dspActive, false);
+  assert.equal(desktopFallbackDirect.activeBadgeLabel, 'HTML5 Direct (Fallback)');
+
+  const corsFallback = resolvePlaybackEngineSummary({
+    sourceMode: 'fallback-no-fx',
+    directMode: false,
+    isMobile: false,
+  });
+  assert.equal(corsFallback.dspActive, false);
+  assert.equal(corsFallback.activeBadgeLabel, 'HTML5 Audio (Tanpa DSP)');
+
+  const iframeFallback = resolvePlaybackEngineSummary({
+    sourceMode: 'youtube-iframe',
+    directMode: false,
+    isMobile: true,
+  });
+  assert.equal(iframeFallback.dspActive, false);
+  assert.equal(iframeFallback.activeBadgeLabel, 'Cloud Audio (DSP Bypass)');
+});
+
+test('computeAudioChainNodes marks all DSP nodes bypassed during directDeck/mobile playback unless test tone is running', () => {
+  const baseProfile = {
+    directMode: false,
+    eqEnabled: true,
+    preampDb: 2,
+    bassBoostEnabled: true,
+    stereoWidenerEnabled: false,
+    normalizationTarget: 'normal',
+    limiterEnabled: true,
+    monoAudio: false,
+  };
+
+  const desktopDspNodes = computeAudioChainNodes({
+    sourceMode: 'webaudio',
+    testToneMode: null,
+    backgroundDirectActive: false,
+    profile: baseProfile,
+    lastEffectiveNormGain: 1.05,
+  });
+  assert.equal(desktopDspNodes.find((n) => n.id === 'source')?.status, 'active');
+  assert.equal(desktopDspNodes.find((n) => n.id === 'eq')?.status, 'active');
+  assert.equal(desktopDspNodes.find((n) => n.id === 'master')?.status, 'active');
+
+  const mobileDirectNodes = computeAudioChainNodes({
+    sourceMode: 'direct',
+    testToneMode: null,
+    backgroundDirectActive: false,
+    profile: baseProfile,
+    lastEffectiveNormGain: 1.05,
+  });
+  assert.equal(mobileDirectNodes.find((n) => n.id === 'source')?.status, 'bypassed');
+  assert.ok(
+    mobileDirectNodes.find((n) => n.id === 'source')?.label.includes('HTML5 Audio Langsung'),
+  );
+  assert.equal(mobileDirectNodes.find((n) => n.id === 'eq')?.status, 'bypassed');
+  assert.equal(mobileDirectNodes.find((n) => n.id === 'panner_mono')?.status, 'bypassed');
+  assert.equal(mobileDirectNodes.find((n) => n.id === 'master')?.status, 'bypassed');
+
+  const toneOnDirectNodes = computeAudioChainNodes({
+    sourceMode: 'direct',
+    testToneMode: 'sweep',
+    backgroundDirectActive: true,
+    profile: baseProfile,
+    lastEffectiveNormGain: 1.0,
+  });
+  assert.equal(toneOnDirectNodes.find((n) => n.id === 'source')?.status, 'active');
+  assert.equal(toneOnDirectNodes.find((n) => n.id === 'eq')?.status, 'active');
+  assert.equal(toneOnDirectNodes.find((n) => n.id === 'master')?.status, 'active');
+
+  const iframeNodes = computeAudioChainNodes({
+    sourceMode: 'youtube-iframe',
+    testToneMode: null,
+    backgroundDirectActive: false,
+    profile: baseProfile,
+    lastEffectiveNormGain: 1.0,
+  });
+  assert.equal(iframeNodes.find((n) => n.id === 'source')?.status, 'bypassed');
+  assert.equal(iframeNodes.find((n) => n.id === 'eq')?.status, 'inactive');
+  assert.equal(iframeNodes.find((n) => n.id === 'master')?.status, 'inactive');
 });
 

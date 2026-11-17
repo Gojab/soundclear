@@ -12,7 +12,7 @@ import {
   estimateFallbackBpm,
   type DjTransitionFrame,
 } from '../utils/djMixLogic';
-import { clampSeekTarget } from '../utils/backgroundAudioLogic';
+import { clampSeekTarget, computeAudioChainNodes } from '../utils/backgroundAudioLogic';
 
 export type TestToneMode = 'sweep' | 'pink';
 
@@ -1264,83 +1264,14 @@ export function getAudioDiagnosticsSnapshot(
   const graph = sharedGraph;
   const sink = getSinkIdSupport(graph);
   const profile = lastAppliedProfile;
-  const direct = Boolean(profile?.directMode);
-  const bypassedAll = sourceMode === 'youtube-iframe' || sourceMode === 'fallback-no-fx';
 
-  const activeNodes: ActiveNodeInfo[] = [
-    {
-      id: 'source',
-      label: testToneMode
-        ? `Sumber: Tes Nada (${testToneMode === 'sweep' ? 'Sweep' : 'Pink Noise'})`
-        : bypassedAll
-          ? 'Sumber: Audio Tanpa DSP (Direct)'
-          : 'Sumber: MediaElementAudioSource',
-      status: bypassedAll && !testToneMode ? 'bypassed' : 'active',
-    },
-    {
-      id: 'preamp',
-      label: 'Preamp',
-      status:
-        bypassedAll && !testToneMode
-          ? 'inactive'
-          : direct
-            ? 'bypassed'
-            : profile?.eqEnabled
-              ? 'active'
-              : 'bypassed',
-      detail: profile ? `${profile.preampDb > 0 ? '+' : ''}${profile.preampDb} dB` : undefined,
-    },
-    {
-      id: 'eq',
-      label: 'EQ 10-Band',
-      status:
-        bypassedAll && !testToneMode
-          ? 'inactive'
-          : direct
-            ? 'bypassed'
-            : profile?.eqEnabled
-              ? 'active'
-              : 'bypassed',
-    },
-    {
-      id: 'bass_widener',
-      label: 'Bass Boost & Widener',
-      status:
-        bypassedAll && !testToneMode
-          ? 'inactive'
-          : direct
-            ? 'bypassed'
-            : profile?.bassBoostEnabled || profile?.stereoWidenerEnabled
-              ? 'active'
-              : 'bypassed',
-    },
-    {
-      id: 'norm_limiter',
-      label: 'Normalisasi & Limiter',
-      status:
-        bypassedAll && !testToneMode
-          ? 'inactive'
-          : direct
-            ? 'bypassed'
-            : profile?.normalizationTarget !== 'off' || profile?.limiterEnabled
-              ? 'active'
-              : 'bypassed',
-      detail:
-        profile?.normalizationTarget && profile.normalizationTarget !== 'off'
-          ? `${lastEffectiveNormGain.toFixed(2)}x`
-          : undefined,
-    },
-    {
-      id: 'panner_mono',
-      label: profile?.monoAudio ? 'Mono + Balance' : 'Stereo + Balance',
-      status: bypassedAll && !testToneMode ? 'inactive' : 'active',
-    },
-    {
-      id: 'master',
-      label: 'Master Gain + Analyser',
-      status: bypassedAll && !testToneMode ? 'inactive' : 'active',
-    },
-  ];
+  const activeNodes: ActiveNodeInfo[] = computeAudioChainNodes({
+    sourceMode,
+    testToneMode,
+    backgroundDirectActive: Boolean(graph?.backgroundDirectActive),
+    profile,
+    lastEffectiveNormGain,
+  });
 
   const ctxAny = graph?.ctx as (AudioContext & { outputLatency?: number }) | undefined;
   return {

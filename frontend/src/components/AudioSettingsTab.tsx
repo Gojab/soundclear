@@ -48,6 +48,10 @@ import {
   PLAYBACK_RATE_OPTIONS,
   STREAM_QUALITY_TIERS,
 } from '../utils/audioMath';
+import {
+  isMobileAudioEnvironment,
+  resolvePlaybackEngineSummary,
+} from '../utils/backgroundAudioLogic';
 import { getTrackUniqueId, hasPlayableOfflineAudio, isLocalTrack } from '../utils/playerLogic';
 import { CrossfadeControl } from './CrossfadeControl';
 import { SpectrumAnalyzer } from './SpectrumAnalyzer';
@@ -364,6 +368,13 @@ export function AudioSettingsTab() {
     typeof navigator !== 'undefined' &&
     Boolean((navigator as Navigator & { connection?: unknown }).connection);
 
+  const isMobileEnv = isMobileAudioEnvironment();
+  const playbackSummary = resolvePlaybackEngineSummary({
+    sourceMode: activeStreamMeta?.sourceMode,
+    directMode: localProfile.directMode,
+    isMobile: isMobileEnv,
+  });
+
   return (
     <div className="space-y-6">
       {/* Top Action & Global DSP Controls */}
@@ -373,7 +384,7 @@ export function AudioSettingsTab() {
             Pengaturan Audio Lengkap ({accountKey})
           </p>
           <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
-            Semua kontrol DSP aktif dan diterapkan langsung ke mesin audio tanpa memuat ulang halaman.
+            {playbackSummary.topBannerSummary}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -531,12 +542,16 @@ export function AudioSettingsTab() {
                 <p className="font-semibold text-[#E8FFF3]">
                   {activeStreamMeta?.badgeLabel || 'Streaming Audio'}
                 </p>
-                <p className="text-[#B3F7D1]/60 mt-0.5">
-                  Streaming audio-only (tanpa video) diproses langsung melalui Web Audio DSP &amp; Equalizer.
-                </p>
+                <p className="text-[#B3F7D1]/60 mt-0.5">{playbackSummary.activeDetailText}</p>
               </div>
-              <span className="px-2 py-1 rounded-lg bg-[#19EE8A]/15 text-[#19EE8A] font-semibold">
-                {localProfile.directMode ? 'Direct Bypass DSP' : 'Web Audio DSP Aktif'}
+              <span
+                className={`px-2 py-1 rounded-lg font-semibold ${
+                  playbackSummary.dspActive
+                    ? 'bg-[#19EE8A]/15 text-[#19EE8A]'
+                    : 'bg-amber-400/15 text-amber-300'
+                }`}
+              >
+                {playbackSummary.activeBadgeLabel}
               </span>
             </div>
           )}
@@ -691,11 +706,9 @@ export function AudioSettingsTab() {
           </div>
         </div>
 
-        {(activeStreamMeta?.sourceMode === 'youtube-iframe' || localProfile.directMode) && (
+        {playbackSummary.eqBypassNotice && (
           <p className="text-[11px] text-amber-200/85 bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-2">
-            {localProfile.directMode
-              ? 'Mode Direct aktif — Equalizer & efek DSP dilewati. Nonaktifkan Mode Direct di bagian Output Audio agar EQ bekerja.'
-              : 'Cloud Audio melewati DSP browser — Equalizer aktif penuh pada File Lokal, Unduhan Offline, Direct Stream, dan Tes Nada.'}
+            {playbackSummary.eqBypassNotice}
           </p>
         )}
 

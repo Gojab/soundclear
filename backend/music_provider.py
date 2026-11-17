@@ -1013,18 +1013,50 @@ class AudioSettingsStore:
                 self._write_all(all_data)
 
 
+class _TimeoutSession(requests.Session):
+    def __init__(self, timeout: Tuple[float, float] = (5.0, 12.0)) -> None:
+        super().__init__()
+        self._default_timeout = timeout
+
+    def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+        if "timeout" not in kwargs or kwargs["timeout"] is None:
+            kwargs["timeout"] = self._default_timeout
+        return super().request(method, url, **kwargs)
+
+
+class _NullLock:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+
+_NULL_LOCK = _NullLock()
+
+
 class YTMusicClientGateway:
     """Thread-safe unauthenticated wrapper around ytmusicapi.YTMusic."""
 
     def __init__(self, *, client_factory: Optional[Callable[[], Any]] = None) -> None:
-        self._lock = threading.RLock()
-        self._client_factory = client_factory or (lambda: YTMusic(language="en", location="ID"))
+        self._has_custom_factory = client_factory is not None
+        self._lock: Any = threading.RLock() if self._has_custom_factory else _NULL_LOCK
+        self._client_factory = client_factory or (
+            lambda: YTMusic(language="en", location="ID", requests_session=_TimeoutSession())
+        )
         self._client: Optional[Any] = None
+        self._thread_local = threading.local()
 
     def _get_client(self) -> Any:
-        if self._client is None:
-            self._client = self._client_factory()
-        return self._client
+        if self._has_custom_factory:
+            if self._client is None:
+                self._client = self._client_factory()
+            return self._client
+        client = getattr(self._thread_local, "client", None)
+        if client is None:
+            client = self._client_factory()
+            self._thread_local.client = client
+        return client
 
     def search(self, query: str, filter: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
         with self._lock:
@@ -1448,7 +1480,10 @@ class MusicProvider:
         # In unauthenticated mode, charts['songs'] may be empty while charts['videos'] lists chart playlists
         chart_pool: List[Dict[str, Any]] = []
         if not songs and chart_playlist_ids:
-            for pl_id in chart_playlist_ids[:3]:
+            ordered_pl_ids = [
+                pid for pid in chart_playlist_ids if not pid.startswith("OLAK5uy_")
+            ] or chart_playlist_ids
+            for pl_id in ordered_pl_ids[:3]:
                 try:
                     pl_detail = self.get_playlist(pl_id, limit=35)
                     tracks = [
@@ -1458,6 +1493,8 @@ class MusicProvider:
                     ]
                     if tracks:
                         chart_pool.extend(tracks)
+                        if len(chart_pool) >= 25:
+                            break
                 except Exception:
                     continue
             if chart_pool:

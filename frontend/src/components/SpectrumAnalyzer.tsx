@@ -24,9 +24,10 @@ export function SpectrumAnalyzer() {
   }, []);
 
   const webAudioStreamActive = Boolean(
-    activeStreamMeta &&
-      (activeStreamMeta.sourceMode === 'webaudio' || activeStreamMeta.sourceMode === 'direct') &&
-      isPlaying,
+    activeStreamMeta && activeStreamMeta.sourceMode === 'webaudio' && isPlaying,
+  );
+  const directHtmlAudioActive = Boolean(
+    activeStreamMeta && activeStreamMeta.sourceMode === 'direct' && isPlaying,
   );
   const signalLive = testToneActive || webAudioStreamActive;
 
@@ -89,11 +90,13 @@ export function SpectrumAnalyzer() {
     ? 'Aktif (Tes Nada)'
     : webAudioStreamActive
       ? 'Aktif (Web Audio DSP)'
-      : activeStreamMeta?.sourceMode === 'youtube-iframe'
-        ? 'Cloud Audio (DSP Bypass)'
-        : activeStreamMeta?.sourceMode === 'fallback-no-fx'
-          ? 'Terbatas (Tanpa DSP)'
-          : 'Siaga';
+      : directHtmlAudioActive
+        ? 'HTML5 Langsung (DSP Bypass)'
+        : activeStreamMeta?.sourceMode === 'youtube-iframe'
+          ? 'Cloud Audio (DSP Bypass)'
+          : activeStreamMeta?.sourceMode === 'fallback-no-fx'
+            ? 'Terbatas (Tanpa DSP)'
+            : 'Siaga';
 
   return (
     <div className="rounded-xl bg-white/[0.045] backdrop-blur-xl border border-white/[0.11] p-3 space-y-2">
