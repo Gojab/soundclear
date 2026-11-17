@@ -359,24 +359,26 @@ export function SearchPage({
     <div className="space-y-6">
       {/* Top Spotify-style Cari Header & White Search Bar */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 min-w-0">
             {onOpenProfileDrawer && (
               <button
                 type="button"
                 onClick={onOpenProfileDrawer}
                 aria-label="Buka menu profil"
-                className="md:hidden w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0 shadow-md shadow-[#01BA53]/20"
+                className="md:hidden w-11 h-11 flex items-center justify-center shrink-0"
               >
-                S
+                <span className="w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shadow-md shadow-[#01BA53]/20">
+                  S
+                </span>
               </button>
             )}
-            <h1 className="text-2xl font-extrabold text-[#E8FFF3] tracking-tight">Cari</h1>
+            <h1 className="text-2xl font-extrabold text-[#E8FFF3] tracking-tight truncate">Cari</h1>
           </div>
           <button
             type="button"
             onClick={() => navigate({ name: 'moods' })}
-            className="text-xs font-semibold text-[#19EE8A] hover:underline"
+            className="inline-flex items-center min-h-[44px] px-2 text-xs font-semibold text-[#19EE8A] hover:underline whitespace-nowrap shrink-0"
           >
             Semua Mood
           </button>
@@ -385,11 +387,11 @@ export function SearchPage({
         {/* Sticky Crisp White Search Box matching IMG_4319 */}
         <div
           ref={searchBoxRef}
-          className="sticky top-0 z-20 pt-1 pb-1"
+          className="sticky top-0 z-20 py-1"
         >
           <form onSubmit={handleSubmit} className="relative flex items-center max-w-2xl">
             <Search
-              className="w-5 h-5 text-[#121212] absolute left-3.5 pointer-events-none"
+              className="w-5 h-5 text-[#121212] absolute left-4 pointer-events-none"
               strokeWidth={2.2}
             />
             <input
@@ -403,8 +405,8 @@ export function SearchPage({
               onFocus={() => setShowSuggestions(true)}
               placeholder="Apa yang ingin kamu dengarkan?"
               aria-label="Apa yang ingin kamu dengarkan?"
-              className={`w-full h-12 pl-11 rounded-lg bg-white text-[14px] sm:text-[15px] font-medium text-[#121212] placeholder:text-[#525252] shadow-lg focus:outline-none focus:ring-2 focus:ring-[#19EE8A] ${
-                inputValue ? 'pr-24' : 'pr-4'
+              className={`w-full h-12 pl-12 rounded-lg bg-white text-[14px] sm:text-[15px] font-medium text-[#121212] placeholder:text-[#525252] shadow-lg focus:outline-none focus:ring-2 focus:ring-[#19EE8A] ${
+                inputValue ? 'pr-28' : 'pr-4'
               }`}
             />
             {inputValue && (
@@ -418,7 +420,7 @@ export function SearchPage({
                   navigate({ name: 'search', query: '', filter });
                 }}
                 aria-label="Bersihkan pencarian"
-                className="absolute right-16 w-8 h-8 rounded-full flex items-center justify-center text-[#525252] hover:text-[#121212] hover:bg-black/5"
+                className="absolute right-14 w-11 h-11 rounded-full flex items-center justify-center text-[#525252] hover:text-[#121212] hover:bg-black/5"
               >
                 <X className="w-4 h-4" strokeWidth={2.2} />
               </button>
@@ -426,7 +428,7 @@ export function SearchPage({
             {inputValue.trim().length > 0 && (
               <button
                 type="submit"
-                className="absolute right-1.5 px-3 py-1.5 rounded-md bg-[#0F1F17] text-[#19EE8A] text-xs font-bold hover:brightness-110 transition-all"
+                className="absolute right-1 min-h-[40px] px-3 py-1 rounded-md bg-[#0F1F17] text-[#19EE8A] text-xs font-bold hover:brightness-110 transition-all"
               >
                 Cari
               </button>
@@ -439,7 +441,7 @@ export function SearchPage({
               <div
                 role="listbox"
                 aria-label="Saran pencarian"
-                className="absolute left-0 right-0 max-w-2xl top-14 z-30 rounded-xl p-1.5 bg-[#0B0F0D]/95 backdrop-blur-2xl border border-white/[0.14] shadow-2xl"
+                className="absolute left-0 right-0 max-w-2xl top-14 z-30 rounded-xl p-2 space-y-1 bg-[#0B0F0D]/95 backdrop-blur-2xl border border-white/[0.14] shadow-2xl"
               >
                 {filteredSuggestions.map((suggestion) => (
                   <button
@@ -448,7 +450,7 @@ export function SearchPage({
                     role="option"
                     aria-selected={false}
                     onClick={() => runSearch(suggestion)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm text-[#E8FFF3]/90 hover:bg-white/[0.1] hover:text-[#E8FFF3] transition-colors"
+                    className="w-full min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm text-[#E8FFF3]/90 hover:bg-white/[0.1] hover:text-[#E8FFF3] transition-colors"
                   >
                     <Search className="w-4 h-4 text-[#B3F7D1]/55 shrink-0" strokeWidth={1.9} />
                     <span className="truncate">{suggestion}</span>
@@ -464,7 +466,7 @@ export function SearchPage({
             <div
               role="tablist"
               aria-label="Filter hasil pencarian"
-              className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none"
+              className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none"
             >
               {FILTER_TABS.map((tab) => {
                 const active = filter === tab.id;
@@ -480,7 +482,7 @@ export function SearchPage({
                         navigate({ name: 'search', query: submittedQuery, filter: tab.id });
                       }
                     }}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
+                    className={`min-h-[44px] px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
                       active
                         ? 'bg-sc-gradient text-[#0F1F17] font-semibold'
                         : 'bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.1]'
@@ -497,7 +499,7 @@ export function SearchPage({
                 aria-label="Follow-up pencarian"
                 className="flex items-center gap-2 flex-wrap pt-1"
               >
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#B3F7D1]/50 mr-0.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#B3F7D1]/50 mr-1">
                   Follow-up:
                 </span>
                 {followUpChips.slice(0, 6).map((chip) => (
@@ -505,7 +507,7 @@ export function SearchPage({
                     key={chip.id}
                     type="button"
                     onClick={() => runSearch(chip.query, chip.filter)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.055] backdrop-blur-xl hover:bg-[#19EE8A]/15 border border-white/[0.11] hover:border-[#19EE8A]/45 text-xs text-[#E8FFF3]/85 hover:text-[#E8FFF3] transition-colors"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-white/[0.055] backdrop-blur-xl hover:bg-[#19EE8A]/15 border border-white/[0.11] hover:border-[#19EE8A]/45 text-xs text-[#E8FFF3]/85 hover:text-[#E8FFF3] transition-colors"
                   >
                     <CornerDownRight className="w-3 h-3 text-[#19EE8A] shrink-0" strokeWidth={2} />
                     <span className="truncate max-w-[220px]">{chip.label}</span>
@@ -568,7 +570,7 @@ export function SearchPage({
                   className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/45 to-black/35"
                 />
 
-                <div className="relative z-10 h-full min-h-[210px] sm:min-h-[240px] p-4 sm:p-5 flex flex-col justify-between">
+                <div className="relative z-10 h-full min-h-[210px] sm:min-h-[240px] p-4 sm:p-6 flex flex-col justify-between">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs sm:text-sm font-bold text-white drop-shadow">
                       {spotlight.artistLine}
@@ -582,18 +584,18 @@ export function SearchPage({
                         });
                       }}
                       aria-label={`Opsi untuk ${spotlight.item.title}`}
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white/90 hover:bg-black/40 transition-colors"
+                      className="w-11 h-11 rounded-full flex items-center justify-center text-white/90 hover:bg-black/40 transition-colors shrink-0"
                     >
                       <MoreHorizontal className="w-5 h-5" strokeWidth={2} />
                     </button>
                   </div>
 
-                  <div className="flex items-end justify-between gap-4 pt-10">
+                  <div className="flex items-end justify-between gap-4 pt-8">
                     <div className="min-w-0 flex-1 space-y-1">
                       <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight truncate drop-shadow">
                         {spotlight.item.title}
                       </h2>
-                      <p className="text-xs text-white/80 line-clamp-2 max-w-xl leading-relaxed">
+                      <p className="text-xs text-white/80 line-clamp-2 max-w-[65ch] leading-relaxed">
                         {spotlight.description}
                       </p>
                     </div>
@@ -614,11 +616,11 @@ export function SearchPage({
 
           {/* Temukan sesuatu yang lain (IMG_4319 bottom strip) */}
           {discoverMoreItems.length > 0 && (
-            <section aria-labelledby="discover-other-heading" className="space-y-3">
+            <section aria-labelledby="discover-other-heading" className="space-y-4">
               <h2 id="discover-other-heading" className="text-lg font-extrabold text-[#E8FFF3] tracking-tight">
                 Temukan sesuatu yang lain
               </h2>
-              <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-6 gap-3 overflow-x-auto @[440px]:overflow-visible pb-1 scrollbar-none snap-x [&>*]:w-[136px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
+              <div className="flex @[440px]:grid @[440px]:grid-cols-2 @[580px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-6 gap-4 overflow-x-auto @[440px]:overflow-visible pb-1 scrollbar-none snap-x [&>*]:w-[136px] [&>*]:shrink-0 [&>*]:snap-start @[440px]:[&>*]:w-auto">
                 {discoverMoreItems.map((item, idx) => (
                   <MediaCard
                     key={`disc-${item.id}-${idx}`}
@@ -632,7 +634,7 @@ export function SearchPage({
 
           {/* Pencarian Terakhir */}
           {recentSearches.length > 0 && (
-            <section aria-labelledby="recent-searches-heading" className="space-y-2.5">
+            <section aria-labelledby="recent-searches-heading" className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <h2 id="recent-searches-heading" className="text-base font-bold text-[#E8FFF3]">
                   Pencarian Terakhir
@@ -640,22 +642,22 @@ export function SearchPage({
                 <button
                   type="button"
                   onClick={clearRecentSearches}
-                  className="inline-flex items-center gap-1 text-xs text-[#B3F7D1]/60 hover:text-[#E8FFF3] transition-colors"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-2 text-xs text-[#B3F7D1]/60 hover:text-[#E8FFF3] transition-colors shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                   Hapus semua
                 </button>
               </div>
-              <div className="grid grid-cols-1 @[500px]:grid-cols-2 @[760px]:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 @[500px]:grid-cols-2 @[760px]:grid-cols-3 gap-2 sm:gap-4">
                 {recentSearches.map((entry, idx) => (
                   <div
                     key={`${entry.query}-${entry.uid ?? idx}`}
-                    className="glass-card rounded-xl px-3 py-2 flex items-center justify-between gap-2"
+                    className="glass-card rounded-xl pl-3 pr-1 py-1 min-h-[48px] flex items-center justify-between gap-2"
                   >
                     <button
                       type="button"
                       onClick={() => runSearch(entry.query)}
-                      className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                      className="flex items-center gap-3 min-w-0 min-h-[44px] flex-1 text-left"
                     >
                       <Clock className="w-3.5 h-3.5 text-[#B3F7D1]/50 shrink-0" strokeWidth={1.75} />
                       <span className="text-sm text-[#E8FFF3]/90 truncate">{entry.query}</span>
@@ -665,7 +667,7 @@ export function SearchPage({
                         type="button"
                         onClick={() => removeRecentSearch(entry.uid!)}
                         aria-label={`Hapus pencarian ${entry.query}`}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-[#E8FFF3] hover:bg-white/[0.1] shrink-0"
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-[#E8FFF3] hover:bg-white/[0.1] shrink-0"
                       >
                         <X className="w-3.5 h-3.5" strokeWidth={1.75} />
                       </button>
@@ -677,18 +679,18 @@ export function SearchPage({
           )}
 
           {/* Jelajahi Semua Kategori (IMG_4320, IMG_4321, IMG_4322 colored tilted cards) */}
-          <section aria-labelledby="browse-categories-heading" className="space-y-3">
+          <section aria-labelledby="browse-categories-heading" className="space-y-4">
             <h2 id="browse-categories-heading" className="text-lg font-extrabold text-[#E8FFF3] tracking-tight">
               Jelajahi semua
             </h2>
-            <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 gap-4">
               {allBrowseCards.map((card) => (
                 <button
                   key={card.id}
                   type="button"
                   onClick={() => handleBrowseCardClick(card)}
                   style={{ backgroundColor: card.bgColor }}
-                  className="group relative h-[106px] sm:h-[118px] rounded-xl overflow-hidden p-3.5 text-left transition-transform active:scale-[0.98] hover:brightness-110 shadow-lg"
+                  className="group relative h-[106px] sm:h-[118px] rounded-xl overflow-hidden p-4 text-left transition-transform active:scale-[0.98] hover:brightness-110 shadow-lg"
                 >
                   <span className="relative z-10 block text-[15px] sm:text-base font-bold text-white leading-snug max-w-[64%] drop-shadow-sm">
                     {card.title}
@@ -743,7 +745,7 @@ export function SearchPage({
                 ? 'Hasil untuk pencarian ini disembunyikan'
                 : <>Tidak ada hasil untuk &ldquo;{submittedQuery}&rdquo;</>}
             </p>
-            <p className="text-xs text-[#B3F7D1]/50 mt-1">
+            <p className="text-xs leading-relaxed max-w-[65ch] mx-auto text-[#B3F7D1]/50 mt-1">
               Lagu Jepang, India &amp; Mandarin disembunyikan dari pencarian. Coba kata kunci atau follow-up berikut:
             </p>
           </div>
@@ -754,7 +756,7 @@ export function SearchPage({
                   key={`empty-${chip.id}`}
                   type="button"
                   onClick={() => runSearch(chip.query, chip.filter)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.11] hover:bg-[#19EE8A] hover:text-[#0F1F17] text-xs font-medium text-[#E8FFF3]/90 transition-colors"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-white/[0.06] border border-white/[0.11] hover:bg-[#19EE8A] hover:text-[#0F1F17] text-xs font-medium text-[#E8FFF3]/90 transition-colors"
                 >
                   <CornerDownRight className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
                   <span>{chip.label}</span>
@@ -767,7 +769,7 @@ export function SearchPage({
         <div className="space-y-6">
           {/* Hasil Teratas */}
           {topResult && (
-            <section aria-labelledby="top-result-heading" className="space-y-2.5">
+            <section aria-labelledby="top-result-heading" className="space-y-4">
               <h2 id="top-result-heading" className="text-base font-semibold text-[#E8FFF3]">
                 Hasil Teratas
               </h2>
@@ -782,7 +784,7 @@ export function SearchPage({
                       navigateToItem(topResult);
                     }
                   }}
-                  className="flex items-center gap-4 min-w-0 flex-1 text-left"
+                  className="flex items-center gap-4 min-w-0 min-h-[44px] flex-1 text-left"
                 >
                   <ArtworkImage
                     src={topResult.thumbnail}
@@ -795,8 +797,8 @@ export function SearchPage({
                     <p className="text-[11px] text-[#19EE8A] font-medium capitalize">
                       {topResult.type}
                     </p>
-                    <p className="text-lg font-bold text-[#E8FFF3] truncate mt-0.5">{topResult.title}</p>
-                    <p className="text-xs text-[#B3F7D1]/65 truncate mt-0.5">
+                    <p className="text-lg font-bold text-[#E8FFF3] truncate mt-1">{topResult.title}</p>
+                    <p className="text-xs text-[#B3F7D1]/65 truncate mt-1">
                       {topResult.artists.length > 0
                         ? formatArtists(topResult.artists)
                         : topResult.year || topResult.views || 'Katalog SoundClear'}
@@ -817,7 +819,7 @@ export function SearchPage({
                         setResolvingTopPlay(false);
                       }
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold shrink-0 hover:brightness-105 disabled:opacity-70"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold shrink-0 hover:brightness-105 disabled:opacity-70"
                   >
                     {resolvingTopPlay ? (
                       <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
@@ -832,7 +834,7 @@ export function SearchPage({
                     <button
                       type="button"
                       onClick={() => navigateToItem(topResult)}
-                      className="px-4 py-2.5 rounded-xl bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] shrink-0"
+                      className="min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] shrink-0"
                     >
                       Buka
                     </button>
@@ -846,20 +848,20 @@ export function SearchPage({
           {topSongItem && (
             <section
               aria-label="Follow-up lagu"
-              className="rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.11] p-3.5 sm:p-4 space-y-3"
+              className="rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.11] p-4 space-y-4"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-[#19EE8A]">
                     Follow-up Lagu
                   </p>
-                  <p className="text-xs text-[#B3F7D1]/75 truncate mt-0.5">
+                  <p className="text-xs leading-relaxed max-w-[65ch] text-[#B3F7D1]/75 truncate mt-1">
                     Lanjutkan dari <span className="font-semibold text-[#E8FFF3]">{topSongItem.title}</span>
                     {topSongItem.artists[0]?.name ? ` — ${topSongItem.artists[0].name}` : ''}
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -876,7 +878,7 @@ export function SearchPage({
                         });
                       }
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
                   >
                     <Radio className="w-3.5 h-3.5" strokeWidth={2} />
                     Putar Radio
@@ -889,7 +891,7 @@ export function SearchPage({
                       setRightPanelTab('lyrics');
                       setRightPanelOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.09] hover:bg-white/[0.15] border border-white/[0.12] text-xs font-medium text-[#E8FFF3] transition-colors"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-white/[0.09] hover:bg-white/[0.15] border border-white/[0.12] text-xs font-medium text-[#E8FFF3] transition-colors"
                   >
                     <Mic2 className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.9} />
                     Putar &amp; Lirik
@@ -905,7 +907,7 @@ export function SearchPage({
                           fallbackQuery: topSongItem.artists[0].name,
                         })
                       }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.11] text-xs text-[#E8FFF3]/90 transition-colors"
+                      className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.11] text-xs text-[#E8FFF3]/90 transition-colors"
                     >
                       <span>Artis: {topSongItem.artists[0].name}</span>
                     </button>
@@ -914,7 +916,7 @@ export function SearchPage({
                   <button
                     type="button"
                     onClick={() => runSearch(`${topSongItem.title} akustik`, 'songs')}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#B3F7D1]/85 hover:text-[#E8FFF3] transition-colors"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-3 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#B3F7D1]/85 hover:text-[#E8FFF3] transition-colors"
                   >
                     <CornerDownRight className="w-3 h-3 text-[#19EE8A]" strokeWidth={2} />
                     Akustik
@@ -923,7 +925,7 @@ export function SearchPage({
                   <button
                     type="button"
                     onClick={() => runSearch(`${topSongItem.title} live`, 'songs')}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#B3F7D1]/85 hover:text-[#E8FFF3] transition-colors"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-3 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#B3F7D1]/85 hover:text-[#E8FFF3] transition-colors"
                   >
                     <CornerDownRight className="w-3 h-3 text-[#19EE8A]" strokeWidth={2} />
                     Live
@@ -932,7 +934,7 @@ export function SearchPage({
               </div>
 
               {relatedFollowUpTracks.length > 0 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
                   <span className="text-[11px] text-[#B3F7D1]/50 shrink-0">Lagu serupa:</span>
                   {relatedFollowUpTracks.slice(0, 4).map((rel, idx) => (
                     <button
@@ -945,7 +947,7 @@ export function SearchPage({
                           `Follow-up: ${topSongItem.title}`,
                         )
                       }
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#E8FFF3]/90 hover:text-[#E8FFF3] shrink-0 max-w-[220px] transition-colors"
+                      className="inline-flex items-center gap-2 min-h-[44px] px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#E8FFF3]/90 hover:text-[#E8FFF3] shrink-0 max-w-[220px] transition-colors"
                     >
                       <Play className="w-3 h-3 text-[#19EE8A] fill-current shrink-0" strokeWidth={2} />
                       <span className="truncate">{rel.title}</span>
@@ -957,11 +959,11 @@ export function SearchPage({
           )}
 
           {playableTracks.length > 0 && (
-            <section className="space-y-2">
+            <section className="space-y-4">
               {filter === 'all' && collectionItems.length > 0 && (
                 <h2 className="text-base font-semibold text-[#E8FFF3]">Lagu, Video & Episode</h2>
               )}
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {playableTracks.map((track, idx) => (
                   <TrackRow
                     key={`${track.id}-${idx}`}
@@ -981,7 +983,7 @@ export function SearchPage({
           )}
 
           {collectionItems.length > 0 && (
-            <section className="space-y-3">
+            <section className="space-y-4">
               {filter === 'all' && playableTracks.length > 0 && (
                 <h2 className="text-base font-semibold text-[#E8FFF3]">
                   Artis, Album, Playlist & Podcast
@@ -1006,17 +1008,17 @@ export function SearchPage({
             relatedFollowUpQuery.isLoading) && (
             <section
               aria-labelledby="search-followup-heading"
-              className="rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-5 space-y-5"
+              className="rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-6"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="min-w-0">
                   <h2
                     id="search-followup-heading"
                     className="text-base font-semibold text-[#E8FFF3]"
                   >
                     Follow-up Pencarian &amp; Rekomendasi Lanjutan
                   </h2>
-                  <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                  <p className="text-xs leading-relaxed max-w-[65ch] text-[#B3F7D1]/60 mt-1">
                     Jelajahi pencarian terkait atau putar lagu mirip dari &ldquo;{submittedQuery}&rdquo;
                   </p>
                 </div>
@@ -1030,7 +1032,7 @@ export function SearchPage({
                         `Radio Follow-up: ${submittedQuery}`,
                       )
                     }
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all shrink-0 self-start sm:self-auto"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all shrink-0 self-start sm:self-auto"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
                     Putar Radio Lanjutan
@@ -1047,7 +1049,7 @@ export function SearchPage({
                         key={`panel-${chip.id}`}
                         type="button"
                         onClick={() => runSearch(chip.query, chip.filter)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.11] text-xs font-medium text-[#E8FFF3]/90 hover:text-[#E8FFF3] transition-colors"
+                        className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.11] text-xs font-medium text-[#E8FFF3]/90 hover:text-[#E8FFF3] transition-colors"
                       >
                         <CornerDownRight
                           className="w-3.5 h-3.5 text-[#19EE8A] shrink-0"
@@ -1069,7 +1071,7 @@ export function SearchPage({
                       <p className="text-xs font-medium text-[#B3F7D1]/65">
                         Lagu terkait yang mungkin kamu suka
                       </p>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2">
                         {relatedFollowUpTracks.map((track, idx) => (
                           <TrackRow
                             key={`relfu-${track.id}-${idx}`}
@@ -1090,11 +1092,11 @@ export function SearchPage({
                   )}
 
                   {relatedFollowUpCollections.length > 0 && (
-                    <div className="space-y-2.5">
+                    <div className="space-y-4">
                       <p className="text-xs font-medium text-[#B3F7D1]/65">
                         Artis &amp; Playlist terkait
                       </p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                         {relatedFollowUpCollections.map((item, idx) => (
                           <MediaCard
                             key={`relcol-${item.id}-${idx}`}

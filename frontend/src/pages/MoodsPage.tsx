@@ -19,13 +19,13 @@ export function MoodsPage() {
         <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight">
           Mood & Genre
         </h1>
-        <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+        <p className="text-xs leading-relaxed max-w-[65ch] text-[#B3F7D1]/60 mt-1">
           Jelajahi daftar putar sesuai suasana hati dan genre favorit
         </p>
       </div>
 
       {moodsQuery.isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 animate-pulse">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="h-14 rounded-xl bg-white/[0.06] border border-white/[0.08]" />
           ))}
@@ -42,9 +42,9 @@ export function MoodsPage() {
       ) : (
         <div className="space-y-8">
           {moodsQuery.data?.groups.map((group) => (
-            <section key={group.title} className="space-y-3">
+            <section key={group.title} className="space-y-4">
               <h2 className="text-base font-semibold text-[#E8FFF3]">{group.title}</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {group.items.map((cat) => (
                   <button
                     key={cat.params}
@@ -52,7 +52,7 @@ export function MoodsPage() {
                     onClick={() =>
                       navigate({ name: 'mood-detail', params: cat.params, title: cat.title })
                     }
-                    className="glass-card rounded-xl px-4 py-3.5 flex items-center justify-between gap-2 text-left group hover:bg-white/[0.1] transition-colors"
+                    className="glass-card rounded-xl min-h-[48px] px-4 py-3 flex items-center justify-between gap-2 text-left group hover:bg-white/[0.1] transition-colors"
                   >
                     <span className="text-sm font-medium text-[#E8FFF3] truncate">{cat.title}</span>
                     <ChevronRight
@@ -93,7 +93,7 @@ export function MoodDetailPage({ params, title }: { params: string; title: strin
     <div className="space-y-6">
       <div>
         <p className="text-xs text-[#B3F7D1]/55">Mood & Genre</p>
-        <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight mt-0.5">
+        <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight mt-1">
           {title}
         </h1>
       </div>
@@ -117,7 +117,9 @@ export function MoodDetailPage({ params, title }: { params: string; title: strin
           ))}
         </div>
       ) : (
-        <p className="text-sm text-[#B3F7D1]/55">Tidak ada playlist ditemukan untuk kategori ini.</p>
+        <p className="text-sm leading-relaxed max-w-[65ch] text-[#B3F7D1]/55">
+          Tidak ada playlist ditemukan untuk kategori ini.
+        </p>
       )}
     </div>
   );

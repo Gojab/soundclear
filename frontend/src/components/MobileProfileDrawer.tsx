@@ -71,10 +71,10 @@ export function MobileProfileDrawer({
       />
 
       {/* Left Slide-Over Drawer (IMG_4282 layout, SoundClear glass & mint design) */}
-      <aside className="relative z-10 w-[84%] max-w-[330px] h-full bg-[#090D0B]/92 backdrop-blur-2xl border-r border-white/[0.12] flex flex-col overflow-y-auto px-4 pt-5 pb-8 shadow-2xl">
+      <aside className="relative z-10 w-[84%] max-w-[330px] h-full bg-[#090D0B]/92 backdrop-blur-2xl border-r border-white/[0.12] flex flex-col overflow-y-auto px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] shadow-2xl">
         {/* Top Stacked Profile Card */}
         <div className="rounded-2xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.11] overflow-hidden mb-4">
-          <div className="flex items-center justify-between gap-3 p-3.5">
+          <div className="flex items-center justify-between gap-2 p-4">
             <button
               type="button"
               onClick={() => go({ name: 'library' })}
@@ -116,13 +116,13 @@ export function MobileProfileDrawer({
               type="button"
               onClick={onClose}
               aria-label="Tutup laci profil"
-              className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-[#B3F7D1]/70"
+              className="w-11 h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-[#B3F7D1]/70 shrink-0"
             >
               <X className="w-4 h-4" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="px-3.5 pb-3 flex items-center gap-2">
+          <div className="px-4 pb-4 flex items-center gap-2">
             {user ? (
               <button
                 type="button"
@@ -130,7 +130,7 @@ export function MobileProfileDrawer({
                   onClose();
                   void signOutUser();
                 }}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-red-500/20 text-xs font-semibold text-[#E8FFF3] hover:text-red-200 transition-colors"
+                className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-red-500/20 text-xs font-semibold text-[#E8FFF3] hover:text-red-200 transition-colors"
               >
                 <LogOut className="w-3.5 h-3.5" strokeWidth={2} />
                 Keluar dari Google
@@ -142,7 +142,7 @@ export function MobileProfileDrawer({
                 onClick={() => {
                   void signInWithGoogle();
                 }}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 disabled:opacity-50 transition-all"
+                className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 disabled:opacity-50 transition-all"
               >
                 <LogIn className="w-3.5 h-3.5" strokeWidth={2.2} />
                 {signingIn ? 'Menghubungkan Google...' : 'Masuk dengan Google (Firestore)'}
@@ -156,7 +156,7 @@ export function MobileProfileDrawer({
               onClose();
               onOpenCreatePlaylist();
             }}
-            className="w-full flex items-center gap-3 px-3.5 py-3 border-t border-white/[0.09] hover:bg-white/[0.08] text-left transition-colors"
+            className="w-full min-h-[48px] flex items-center gap-4 px-4 py-2 border-t border-white/[0.09] hover:bg-white/[0.08] text-left transition-colors"
           >
             <span className="w-8 h-8 rounded-full bg-white/[0.08] flex items-center justify-center text-[#E8FFF3] shrink-0">
               <Plus className="w-4 h-4" strokeWidth={2} />
@@ -166,11 +166,11 @@ export function MobileProfileDrawer({
         </div>
 
         {/* Main Drawer Links */}
-        <nav aria-label="Menu profil" className="space-y-1">
+        <nav aria-label="Menu profil" className="space-y-2">
           <button
             type="button"
             onClick={() => go({ name: 'recap' })}
-            className="w-full flex items-center gap-3.5 px-2.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+            className="w-full min-h-[44px] flex items-center gap-4 px-2 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
           >
             <BarChart3 className="w-5 h-5 text-[#19EE8A] shrink-0" strokeWidth={1.9} />
             <span className="text-[15px] font-medium text-[#E8FFF3]">Statistik mendengarkan</span>
@@ -179,7 +179,7 @@ export function MobileProfileDrawer({
           <button
             type="button"
             onClick={() => go({ name: 'library' })}
-            className="w-full flex items-center gap-3.5 px-2.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+            className="w-full min-h-[44px] flex items-center gap-4 px-2 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
           >
             <Clock className="w-5 h-5 text-[#E8FFF3]/85 shrink-0" strokeWidth={1.9} />
             <span className="text-[15px] font-medium text-[#E8FFF3]">Baru Diputar &amp; Koleksi</span>
@@ -188,7 +188,7 @@ export function MobileProfileDrawer({
           <button
             type="button"
             onClick={() => go({ name: 'settings', tab: 'appearance' })}
-            className="w-full flex items-center gap-3.5 px-2.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+            className="w-full min-h-[44px] flex items-center gap-4 px-2 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
           >
             <Palette className="w-5 h-5 text-[#19EE8A] shrink-0" strokeWidth={1.9} />
             <span className="text-[15px] font-medium text-[#E8FFF3]">Latar Belakang &amp; Tampilan</span>
@@ -197,7 +197,7 @@ export function MobileProfileDrawer({
           <button
             type="button"
             onClick={() => go({ name: 'settings', tab: 'sound', focusEq: true })}
-            className="w-full flex items-center gap-3.5 px-2.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+            className="w-full min-h-[44px] flex items-center gap-4 px-2 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
           >
             <Sliders className="w-5 h-5 text-[#E8FFF3]/85 shrink-0" strokeWidth={1.9} />
             <span className="text-[15px] font-medium text-[#E8FFF3]">Pengaturan Audio &amp; EQ</span>
@@ -206,7 +206,7 @@ export function MobileProfileDrawer({
           <button
             type="button"
             onClick={() => go({ name: 'shortcuts' })}
-            className="w-full flex items-center gap-3.5 px-2.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+            className="w-full min-h-[44px] flex items-center gap-4 px-2 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
           >
             <Keyboard className="w-5 h-5 text-[#E8FFF3]/85 shrink-0" strokeWidth={1.9} />
             <span className="text-[15px] font-medium text-[#E8FFF3]">Pintasan &amp; Info Terkini</span>
@@ -215,7 +215,7 @@ export function MobileProfileDrawer({
           <button
             type="button"
             onClick={() => go({ name: 'settings', tab: 'general' })}
-            className="w-full flex items-center gap-3.5 px-2.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+            className="w-full min-h-[44px] flex items-center gap-4 px-2 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
           >
             <Settings className="w-5 h-5 text-[#E8FFF3]/85 shrink-0" strokeWidth={1.9} />
             <span className="text-[15px] font-medium text-[#E8FFF3]">Pengaturan dan privasi</span>
@@ -223,13 +223,13 @@ export function MobileProfileDrawer({
         </nav>
 
         {/* Circular Quick Shortcuts (IMG_4282 middle icons section) */}
-        <div className="flex items-start gap-5 px-2 py-5 border-t border-b border-white/[0.08] my-3">
+        <div className="flex items-start gap-6 px-2 py-6 border-t border-b border-white/[0.08] my-4">
           <button
             type="button"
             onClick={() => go({ name: 'liked' })}
-            className="flex flex-col items-center gap-1.5 w-20 text-center group"
+            className="flex flex-col items-center gap-2 w-20 text-center group"
           >
-            <span className="w-13 h-13 rounded-full bg-white/[0.07] border border-white/[0.12] group-hover:border-[#19EE8A]/50 flex items-center justify-center text-[#19EE8A] transition-colors">
+            <span className="w-14 h-14 rounded-full bg-white/[0.07] border border-white/[0.12] group-hover:border-[#19EE8A]/50 flex items-center justify-center text-[#19EE8A] transition-colors">
               <Heart className="w-5 h-5 fill-[#19EE8A]" strokeWidth={1.85} />
             </span>
             <span className="text-xs font-medium text-[#E8FFF3]">Disukai</span>
@@ -239,9 +239,9 @@ export function MobileProfileDrawer({
           <button
             type="button"
             onClick={() => go({ name: 'library' })}
-            className="flex flex-col items-center gap-1.5 w-20 text-center group"
+            className="flex flex-col items-center gap-2 w-20 text-center group"
           >
-            <span className="w-13 h-13 rounded-full bg-white/[0.07] border border-white/[0.12] group-hover:border-[#19EE8A]/50 flex items-center justify-center text-[#E8FFF3] transition-colors">
+            <span className="w-14 h-14 rounded-full bg-white/[0.07] border border-white/[0.12] group-hover:border-[#19EE8A]/50 flex items-center justify-center text-[#E8FFF3] transition-colors">
               <ListMusic className="w-5 h-5 text-[#19EE8A]" strokeWidth={1.85} />
             </span>
             <span className="text-xs font-medium text-[#E8FFF3]">Playlist</span>
@@ -253,13 +253,13 @@ export function MobileProfileDrawer({
         <button
           type="button"
           onClick={() => go({ name: 'settings', tab: 'appearance' })}
-          className="rounded-2xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] p-3.5 text-left transition-colors space-y-1.5"
+          className="rounded-2xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] p-4 text-left transition-colors space-y-2"
         >
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-[#E8FFF3]">Kustomisasi Latar</span>
             <ChevronRight className="w-4 h-4 text-[#B3F7D1]/70" strokeWidth={2} />
           </div>
-          <p className="text-xs text-[#B3F7D1]/70 leading-relaxed">
+          <p className="text-xs text-[#B3F7D1]/70 leading-relaxed max-w-[65ch]">
             Pasang wallpaper atau foto favoritmu secara jernih tanpa blur di layar utama SoundClear.
           </p>
         </button>

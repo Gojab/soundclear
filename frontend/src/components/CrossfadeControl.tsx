@@ -21,13 +21,13 @@ export function CrossfadeControl({ variant = 'general' }: CrossfadeControlProps)
   const isDirectBypassed = Boolean(localProfile.directMode);
 
   return (
-    <div className={variant === 'general' ? 'py-3.5 space-y-3' : 'space-y-3'}>
+    <div className={variant === 'general' ? 'py-4 space-y-4' : 'space-y-4'}>
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <p id={labelId} className="text-sm font-medium text-[#E8FFF3]">
             {variant === 'general' ? 'Crossfade antar lagu' : 'Crossfade Equal-Power'}
           </p>
-          <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+          <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed max-w-[65ch]">
             {variant === 'general'
               ? 'Transisi volume bertahap antar lagu (0–12 detik) agar pergantian lagu terdengar mulus'
               : 'Dua deck audio bergantian dengan kurva equal-power (0–12 detik). Dinonaktifkan otomatis saat Mode Direct aktif.'}
@@ -40,19 +40,23 @@ export function CrossfadeControl({ variant = 'general' }: CrossfadeControlProps)
           aria-checked={isEnabled}
           aria-labelledby={labelId}
           onClick={() => toggleCrossfade()}
-          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#19EE8A] ${
-            isEnabled ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
-          }`}
+          className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-              isEnabled ? 'translate-x-6 bg-[#E8FFF3]' : 'translate-x-1 bg-[#B3F7D1]/70'
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              isEnabled ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
             }`}
-          />
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                isEnabled ? 'translate-x-6 bg-[#E8FFF3]' : 'translate-x-1 bg-[#B3F7D1]/70'
+              }`}
+            />
+          </span>
         </button>
       </div>
 
-      <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] px-3.5 py-3 space-y-2">
+      <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] px-4 py-4 space-y-2">
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="text-[#B3F7D1]/75 font-medium">Durasi transisi</span>
           <span
@@ -80,7 +84,7 @@ export function CrossfadeControl({ variant = 'general' }: CrossfadeControlProps)
           style={{
             background: `linear-gradient(to right, ${isEnabled ? '#19EE8A' : 'rgba(179,247,209,0.35)'} ${pct}%, rgba(179,247,209,0.16) ${pct}%)`,
           }}
-          className="sc-range-visible w-full"
+          className="sc-range-visible w-full min-h-[44px]"
         />
 
         <div className="flex items-center justify-between text-[11px] text-[#B3F7D1]/45 tabular-nums">

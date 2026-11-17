@@ -141,7 +141,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
   return (
     <footer
       aria-label="Pemutar musik"
-      className={`hidden md:grid grid-cols-[minmax(160px,1fr)_minmax(240px,1.35fr)_minmax(180px,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(340px,1.45fr)_minmax(0,1fr)] items-center gap-2 lg:gap-4 h-[84px] shrink-0 px-3 lg:px-4 relative z-30 transition-colors duration-300 ${
+      className={`hidden md:grid grid-cols-[minmax(0,1fr)_auto_auto] lg:grid-cols-[minmax(0,1fr)_minmax(300px,1.2fr)_auto] xl:grid-cols-[minmax(0,1fr)_minmax(380px,1.3fr)_auto] items-center gap-2 lg:gap-4 h-[88px] shrink-0 px-2 lg:px-4 relative z-30 transition-colors duration-300 ${
         glassPanels
           ? 'bg-black/55 backdrop-blur-xl border-t border-[#B3F7D1]/[0.08]'
           : bgActive
@@ -150,24 +150,24 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
       }`}
     >
       {/* Left: Track info */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
         {currentTrack ? (
           <>
             <button
               type="button"
               onClick={() => setFullscreenNowPlaying(true)}
               aria-label="Buka sedang diputar layar penuh"
-              className="shrink-0 rounded-md overflow-hidden focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
+              className="shrink-0 min-w-[44px] min-h-[44px] rounded-md overflow-hidden focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
             >
               <ArtworkImage
                 src={currentTrack.thumbnail}
                 alt={currentTrack.title}
                 type={currentTrack.type}
-                className="w-14 h-14"
+                className="w-12 h-12 lg:w-14 lg:h-14"
                 roundedClass="rounded-md"
               />
             </button>
-            <div className="min-w-0 max-w-[140px] lg:max-w-[200px] xl:max-w-[250px]">
+            <div className="min-w-0 flex-1 max-w-[200px] xl:max-w-[256px]">
               <p className="text-sm font-semibold text-[#E8FFF3] truncate hover:underline cursor-pointer" onClick={() => setFullscreenNowPlaying(true)}>
                 {currentTrack.title}
               </p>
@@ -192,7 +192,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                 ))}
               </div>
               {activeStreamMeta && (
-                <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                <div className="flex items-center gap-2 mt-0.5 min-w-0">
                   <button
                     type="button"
                     onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
@@ -214,53 +214,57 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
               type="button"
               onClick={() => toggleLike(currentTrack)}
               aria-label={liked ? 'Hapus dari lagu disukai' : 'Sukai lagu'}
-              className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors shrink-0 ml-1 ${
-                liked
-                  ? 'bg-[#19EE8A] text-[#0F1F17]'
-                  : 'border border-[#B3F7D1]/40 text-[#B3F7D1]/75 hover:border-[#19EE8A] hover:text-[#E8FFF3]'
-              }`}
+              className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center shrink-0"
             >
-              {liked ? (
-                <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-              ) : (
-                <Plus className="w-3.5 h-3.5" strokeWidth={2.2} />
-              )}
+              <span
+                className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                  liked
+                    ? 'bg-[#19EE8A] text-[#0F1F17]'
+                    : 'border border-[#B3F7D1]/40 text-[#B3F7D1]/75 hover:border-[#19EE8A] hover:text-[#E8FFF3]'
+                }`}
+              >
+                {liked ? (
+                  <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+                ) : (
+                  <Plus className="w-3.5 h-3.5" strokeWidth={2.2} />
+                )}
+              </span>
             </button>
             <button
               type="button"
               onClick={() => onAddToPlaylist(currentTrack)}
               aria-label="Simpan ke playlist"
               title="Simpan ke playlist"
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] transition-colors shrink-0"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] hover:bg-white/[0.06] transition-colors shrink-0"
             >
               <ListPlus className="w-4 h-4" strokeWidth={1.85} />
             </button>
           </>
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <img
               src="/soundclear-logo.png"
               alt="SoundClear"
               className="w-12 h-12 rounded-lg object-contain shrink-0"
             />
-            <div>
-              <p className="text-sm font-semibold text-[#E8FFF3]/80">SoundClear</p>
-              <p className="text-xs text-[#B3F7D1]/50">Pilih lagu untuk diputar</p>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#E8FFF3]/80 truncate">SoundClear</p>
+              <p className="text-xs text-[#B3F7D1]/50 truncate">Pilih lagu untuk diputar</p>
             </div>
           </div>
         )}
       </div>
 
       {/* Center: Playback controls & seek bar */}
-      <div className="flex flex-col items-center gap-1.5 w-full max-w-[600px] mx-auto">
-        <div className="flex items-center gap-2.5">
+      <div className="flex flex-col items-center gap-1 w-full max-w-[600px] mx-auto">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={toggleShuffle}
             aria-label="Acak urutan"
             aria-pressed={shuffle}
             title="Acak (S)"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
               shuffle ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
             }`}
           >
@@ -272,7 +276,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             onClick={prevTrack}
             disabled={!currentTrack}
             aria-label="Lagu sebelumnya"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#E8FFF3]/80 hover:text-[#E8FFF3] disabled:opacity-35 transition-colors"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-[#E8FFF3]/80 hover:text-[#E8FFF3] disabled:opacity-35 transition-colors"
           >
             <SkipBack className="w-4.5 h-4.5 fill-current" strokeWidth={1.75} />
           </button>
@@ -282,7 +286,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             onClick={togglePlayPause}
             disabled={!currentTrack}
             aria-label={isPlaying ? 'Jeda' : 'Putar'}
-            className="w-9 h-9 rounded-full bg-[#E8FFF3] text-[#0F1F17] flex items-center justify-center hover:scale-105 hover:bg-[#19EE8A] active:scale-95 disabled:opacity-40 transition-all"
+            className="w-11 h-11 rounded-full bg-[#E8FFF3] text-[#0F1F17] flex items-center justify-center hover:scale-105 hover:bg-[#19EE8A] active:scale-95 disabled:opacity-40 transition-all"
           >
             {isPlaying ? (
               <Pause className="w-4.5 h-4.5 fill-current" strokeWidth={2} />
@@ -296,7 +300,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             onClick={nextTrack}
             disabled={!currentTrack}
             aria-label="Lagu berikutnya"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#E8FFF3]/80 hover:text-[#E8FFF3] disabled:opacity-35 transition-colors"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-[#E8FFF3]/80 hover:text-[#E8FFF3] disabled:opacity-35 transition-colors"
           >
             <SkipForward className="w-4.5 h-4.5 fill-current" strokeWidth={1.75} />
           </button>
@@ -306,7 +310,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             onClick={cycleRepeat}
             aria-label={`Mode ulang: ${repeat}`}
             title="Ulang (R)"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
               repeat !== 'off' ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
             }`}
           >
@@ -314,7 +318,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           </button>
         </div>
 
-        <div className="w-full flex items-center gap-2.5">
+        <div className="w-full flex items-center gap-2">
           <span className="w-10 text-right text-[11px] text-[#B3F7D1]/60 font-mono-num">
             {formatTime(currentTime)}
           </span>
@@ -339,13 +343,13 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
       </div>
 
       {/* Right: Lyrics/Karaoke, Queue, Panel toggle, Speaker & Volume, PiP, Fullscreen */}
-      <div ref={popoverRef} className="flex items-center justify-end gap-0.5 lg:gap-1 relative">
+      <div ref={popoverRef} className="flex items-center justify-end gap-2 relative">
         <button
           type="button"
           onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
           aria-label="Buka Pengaturan Audio"
           title="Pengaturan Audio & EQ"
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#19EE8A] transition-colors"
+          className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#19EE8A] transition-colors"
         >
           <Sliders className="w-4 h-4" strokeWidth={1.85} />
         </button>
@@ -361,7 +365,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           }}
           aria-label="Buka mode karaoke lirik"
           title="Lirik Karaoke (L)"
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] transition-colors"
+          className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] transition-colors"
         >
           <Mic2 className="w-4 h-4" strokeWidth={1.85} />
         </button>
@@ -377,7 +381,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           }}
           aria-label="Tampilkan antrean"
           title="Antrean"
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+          className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
             rightPanelOpen && rightPanelTab === 'queue'
               ? 'text-[#19EE8A]'
               : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
@@ -391,7 +395,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           onClick={() => setRightPanelOpen(!rightPanelOpen)}
           aria-label={rightPanelOpen ? 'Tutup panel kanan' : 'Buka panel kanan'}
           title={rightPanelOpen ? 'Tutup panel sedang diputar' : 'Buka panel sedang diputar'}
-          className={`hidden lg:flex w-8 h-8 rounded-full items-center justify-center transition-colors ${
+          className={`hidden lg:flex w-11 h-11 rounded-full items-center justify-center transition-colors ${
             rightPanelOpen ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/65 hover:text-[#E8FFF3]'
           }`}
         >
@@ -403,14 +407,14 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
         </button>
 
         {/* Speaker Quick Controls + Inline Volume Slider */}
-        <div className="flex items-center gap-1.5 pl-0.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setSpeakerOpen((v) => !v)}
             aria-label="Kontrol suara cepat"
             aria-expanded={speakerOpen}
             title="Kontrol Suara (Volume, Kecepatan, Sleep Timer, EQ)"
-            className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+            className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
               speakerOpen || sleepTimerMode !== 'off' || playbackRate !== 1
                 ? 'text-[#19EE8A]'
                 : 'text-[#B3F7D1]/70 hover:text-[#E8FFF3]'
@@ -422,7 +426,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
               <Volume2 className="w-4 h-4" strokeWidth={1.85} />
             )}
             {remainingSleepMin && (
-              <span className="absolute -top-0.5 -right-0.5 text-[9px] font-semibold bg-[#19EE8A] text-[#0F1F17] px-1 rounded font-mono-num">
+              <span className="absolute top-1 right-1 text-[9px] font-semibold bg-[#19EE8A] text-[#0F1F17] px-1 rounded font-mono-num">
                 {remainingSleepMin}
               </span>
             )}
@@ -438,7 +442,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             style={{
               background: `linear-gradient(to right, #19EE8A ${(effectiveVolume / maxVolumeCap) * 100}%, rgba(179,247,209,0.22) ${(effectiveVolume / maxVolumeCap) * 100}%)`,
             }}
-            className="sc-range w-14 lg:w-20 xl:w-24 h-1 rounded-full"
+            className="sc-range hidden lg:block lg:w-20 xl:w-24 h-1 rounded-full"
           />
         </div>
 
@@ -495,7 +499,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
               ? 'Keluarkan Pemutar Mini ke Luar Web (Khusus Windows)'
               : 'Pemutar Mini Eksternal (Khusus Windows)'
           }
-          className={`hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors disabled:opacity-35 ${
+          className={`hidden md:flex w-11 h-11 rounded-full items-center justify-center transition-colors disabled:opacity-35 ${
             externalNotchOpen || desktopNotchVisible
               ? 'text-[#19EE8A]'
               : windowsSupport.allowed
@@ -512,7 +516,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           disabled={!currentTrack}
           aria-label="Sedang diputar layar penuh"
           title="Layar Penuh"
-          className="hidden xl:flex w-8 h-8 rounded-full items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] disabled:opacity-35 transition-colors"
+          className="hidden xl:flex w-11 h-11 rounded-full items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] disabled:opacity-35 transition-colors"
         >
           <Maximize2 className="w-4 h-4" strokeWidth={1.85} />
         </button>
@@ -522,11 +526,11 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
           <div
             role="dialog"
             aria-label="Kontrol suara cepat"
-            className="absolute right-0 bottom-16 z-50 w-72 rounded-xl p-4 bg-[#0B0F0D]/85 backdrop-blur-2xl border border-white/[0.14] shadow-2xl space-y-3 text-xs"
+            className="absolute right-0 bottom-16 z-50 w-72 rounded-xl p-4 bg-[#0B0F0D]/85 backdrop-blur-2xl border border-white/[0.14] shadow-2xl space-y-4 text-xs"
           >
             {/* Volume & Mute */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-[#E8FFF3]">Volume</span>
                 <div className="flex items-center gap-2">
                   <span className="text-[#19EE8A] font-mono-num">{effectiveVolume}%</span>
@@ -534,7 +538,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                     type="button"
                     onClick={toggleMute}
                     aria-pressed={isMuted}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                    className={`inline-flex items-center gap-1 min-h-[36px] px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
                       isMuted
                         ? 'bg-[#19EE8A] text-[#0F1F17]'
                         : 'bg-white/[0.08] border border-white/[0.1] text-[#E8FFF3]/85 hover:bg-white/[0.14] hover:text-[#E8FFF3]'
@@ -566,18 +570,18 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             </div>
 
             {/* Playback Speed */}
-            <div className="space-y-1.5 pt-2.5 border-t border-[#B3F7D1]/[0.1]">
+            <div className="space-y-2 pt-4 border-t border-[#B3F7D1]/[0.1]">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-[#E8FFF3]">Kecepatan Putar</span>
                 <span className="text-[#19EE8A] font-mono-num">{playbackRate}x</span>
               </div>
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-4 gap-2">
                 {PLAYBACK_RATE_OPTIONS.map((rate) => (
                   <button
                     key={rate}
                     type="button"
                     onClick={() => setPlaybackRate(rate)}
-                    className={`py-1 rounded-lg text-[11px] font-medium font-mono-num transition-colors ${
+                    className={`min-h-[36px] py-1 rounded-lg text-[11px] font-medium font-mono-num transition-colors ${
                       playbackRate === rate
                         ? 'bg-[#19EE8A] text-[#0F1F17] font-semibold'
                         : 'bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.08] text-[#B3F7D1]/80 hover:text-[#E8FFF3]'
@@ -590,9 +594,9 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             </div>
 
             {/* Sleep Timer */}
-            <div className="space-y-1.5 pt-2.5 border-t border-[#B3F7D1]/[0.1]">
+            <div className="space-y-2 pt-4 border-t border-[#B3F7D1]/[0.1]">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-[#E8FFF3] inline-flex items-center gap-1.5">
+                <span className="font-semibold text-[#E8FFF3] inline-flex items-center gap-2">
                   <Moon className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.8} />
                   Sleep Timer
                 </span>
@@ -604,11 +608,11 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                       : 'Mati'}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setSleepTimer('off')}
-                  className={`py-1 rounded-lg text-[11px] font-medium ${
+                  className={`min-h-[36px] py-1 rounded-lg text-[11px] font-medium ${
                     sleepTimerMode === 'off'
                       ? 'bg-[#19EE8A] text-[#0F1F17] font-semibold'
                       : 'bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.08] text-[#B3F7D1]/80 hover:text-[#E8FFF3]'
@@ -624,7 +628,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                       type="button"
                       onClick={() => setSleepTimer('minutes', min)}
                       aria-pressed={active}
-                      className={`py-1 rounded-lg text-[11px] font-medium font-mono-num ${
+                      className={`min-h-[36px] py-1 rounded-lg text-[11px] font-medium font-mono-num ${
                         active
                           ? 'bg-[#19EE8A] text-[#0F1F17] font-semibold'
                           : 'bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.08] text-[#B3F7D1]/80 hover:text-[#E8FFF3]'
@@ -637,7 +641,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                 <button
                   type="button"
                   onClick={() => setSleepTimer('end_of_track')}
-                  className={`py-1 rounded-lg text-[11px] font-medium ${
+                  className={`min-h-[36px] py-1 rounded-lg text-[11px] font-medium ${
                     sleepTimerMode === 'end_of_track'
                       ? 'bg-[#19EE8A] text-[#0F1F17] font-semibold'
                       : 'bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.08] text-[#B3F7D1]/80 hover:text-[#E8FFF3]'
@@ -649,7 +653,7 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
             </div>
 
             {/* Pengaturan Audio & EQ button (always accessible) */}
-            <div className="pt-2.5 border-t border-[#B3F7D1]/[0.1] space-y-1.5">
+            <div className="pt-4 border-t border-[#B3F7D1]/[0.1] space-y-2">
               {activeStreamMeta && (
                 <div className="flex items-center justify-between text-[11px] text-[#B3F7D1]/70">
                   <span>Stream aktif</span>
@@ -664,13 +668,13 @@ export function PlayerBar({ onAddToPlaylist }: PlayerBarProps) {
                   setSpeakerOpen(false);
                   navigate({ name: 'settings', tab: 'sound', focusEq: false });
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-full bg-sc-gradient text-[#0F1F17] font-semibold hover:brightness-105 transition-all"
+                className="w-full min-h-[44px] flex items-center justify-center gap-2 py-2 px-4 rounded-full bg-sc-gradient text-[#0F1F17] font-semibold hover:brightness-105 transition-all"
               >
                 <Sliders className="w-3.5 h-3.5" strokeWidth={2} />
                 <span>Pengaturan Audio &amp; EQ</span>
               </button>
               {webAudioWarning && (
-                <p className="text-[11px] text-[#19EE8A]/90 text-center leading-snug">
+                <p className="text-[11px] text-[#19EE8A]/90 text-center leading-relaxed max-w-[65ch]">
                   {webAudioWarning}
                 </p>
               )}

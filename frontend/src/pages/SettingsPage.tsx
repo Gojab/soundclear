@@ -463,18 +463,18 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
     switch (categoryId) {
       case 'content':
         return (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <BackgroundSettingsSection />
 
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-1">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-2">
               <h2 className="text-base font-bold text-[#E8FFF3] pb-2">Tampilan &amp; Filter Konten</h2>
               <div className="divide-y divide-[#B3F7D1]/[0.08]">
-                <div className="flex items-center justify-between gap-4 py-3.5">
+                <div className="flex items-center justify-between gap-4 py-3">
                   <div className="min-w-0">
                     <p id="lbl-hide-explicit" className="text-sm font-medium text-[#E8FFF3]">
                       Sembunyikan konten eksplisit
                     </p>
-                    <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                    <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                       Saring lagu yang ditandai eksplisit di beranda dan pencarian
                     </p>
                   </div>
@@ -484,26 +484,31 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     aria-checked={hideExplicit}
                     aria-labelledby="lbl-hide-explicit"
                     onClick={() => updateSetting('hideExplicit', !hideExplicit)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#19EE8A] ${
-                      hideExplicit ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
-                    }`}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-                        hideExplicit
-                          ? 'translate-x-6 bg-[#E8FFF3]'
-                          : 'translate-x-1 bg-[#B3F7D1]/70'
+                      aria-hidden="true"
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        hideExplicit ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
                       }`}
-                    />
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                          hideExplicit
+                            ? 'translate-x-6 bg-[#E8FFF3]'
+                            : 'translate-x-1 bg-[#B3F7D1]/70'
+                        }`}
+                      />
+                    </span>
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 pt-3.5 pb-1">
+                <div className="flex items-center justify-between gap-4 pt-3 pb-1">
                   <div className="min-w-0">
                     <p id="lbl-right-panel-content" className="text-sm font-medium text-[#E8FFF3]">
                       Tampilkan panel kanan &ldquo;Sedang diputar&rdquo;
                     </p>
-                    <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                    <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                       Tampilkan pemutar, antrean, lirik, dan kredit lagu di sisi kanan
                     </p>
                   </div>
@@ -513,58 +518,63 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     aria-checked={showRightPanel}
                     aria-labelledby="lbl-right-panel-content"
                     onClick={() => setRightPanelOpen(!showRightPanel)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#19EE8A] ${
-                      showRightPanel ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
-                    }`}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-                        showRightPanel
-                          ? 'translate-x-6 bg-[#E8FFF3]'
-                          : 'translate-x-1 bg-[#B3F7D1]/70'
+                      aria-hidden="true"
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        showRightPanel ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
                       }`}
-                    />
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                          showRightPanel
+                            ? 'translate-x-6 bg-[#E8FFF3]'
+                            : 'translate-x-1 bg-[#B3F7D1]/70'
+                        }`}
+                      />
+                    </span>
                   </button>
                 </div>
               </div>
             </section>
 
             {/* Urutan Bagian Beranda */}
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-3">
-              <div className="flex items-center justify-between gap-3">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-4">
+              <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold text-[#E8FFF3]">Urutan Bagian Beranda</h2>
-                  <p className="text-xs text-[#B3F7D1]/55">
+                  <p className="text-xs text-[#B3F7D1]/55 mt-1 leading-relaxed max-w-[65ch]">
                     Atur prioritas tampilan rak di halaman Beranda
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={resetHomeSectionOrder}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#E8FFF3]/85"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs text-[#E8FFF3]/85 shrink-0"
                 >
                   <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
                   Reset
                 </button>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {homeSectionOrder.map((secId, idx) => (
                   <div
                     key={secId}
-                    className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08]"
+                    className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] min-h-[48px]"
                   >
                     <span className="text-xs sm:text-sm text-[#E8FFF3]/90">
                       <span className="text-[#B3F7D1]/45 tabular-nums mr-2">{idx + 1}.</span>
                       {SECTION_LABELS[secId as HomeSectionId] || secId}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         disabled={idx === 0}
                         onClick={() => moveHomeSection(secId as HomeSectionId, 'up')}
                         aria-label={`Naikkan ${secId}`}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1] disabled:opacity-25"
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1] disabled:opacity-25"
                       >
                         <ArrowUp className="w-3.5 h-3.5" strokeWidth={1.75} />
                       </button>
@@ -573,7 +583,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                         disabled={idx === homeSectionOrder.length - 1}
                         onClick={() => moveHomeSection(secId as HomeSectionId, 'down')}
                         aria-label={`Turunkan ${secId}`}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1] disabled:opacity-25"
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1] disabled:opacity-25"
                       >
                         <ArrowDown className="w-3.5 h-3.5" strokeWidth={1.75} />
                       </button>
@@ -585,21 +595,21 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
             {/* Lagu Disembunyikan */}
             {hiddenTrackIds.length > 0 && (
-              <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-3">
+              <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-4">
                 <h2 className="text-base font-semibold text-[#E8FFF3]">
                   Lagu Disembunyikan ({hiddenTrackIds.length})
                 </h2>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {hiddenTrackIds.map((id) => (
                     <div
                       key={id}
-                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08]"
+                      className="flex items-center justify-between gap-4 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] min-h-[48px]"
                     >
-                      <span className="text-xs text-[#E8FFF3]/80 font-mono">{id}</span>
+                      <span className="text-xs text-[#E8FFF3]/80 font-mono truncate">{id}</span>
                       <button
                         type="button"
                         onClick={() => unhideTrack(id)}
-                        className="inline-flex items-center gap-1 text-xs text-[#19EE8A] hover:underline"
+                        className="inline-flex items-center gap-2 min-h-[44px] px-2 text-xs text-[#19EE8A] hover:underline shrink-0"
                       >
                         <Eye className="w-3.5 h-3.5" strokeWidth={1.75} />
                         Tampilkan kembali
@@ -614,16 +624,16 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
       case 'playback':
         return (
-          <div className="space-y-5">
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-1">
+          <div className="space-y-6">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-2">
               <h2 className="text-base font-bold text-[#E8FFF3] pb-2">Kontrol Playback</h2>
               <div className="divide-y divide-[#B3F7D1]/[0.08]">
-                <div className="flex items-center justify-between gap-4 py-3.5">
+                <div className="flex items-center justify-between gap-4 py-3">
                   <div className="min-w-0">
                     <p id="lbl-autoplay" className="text-sm font-medium text-[#E8FFF3]">
                       Putar otomatis (Autoplay radio)
                     </p>
-                    <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                    <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                       Lanjutkan otomatis dengan lagu terkait saat antrean habis
                     </p>
                   </div>
@@ -633,26 +643,31 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     aria-checked={autoplay}
                     aria-labelledby="lbl-autoplay"
                     onClick={() => updateSetting('autoplay', !autoplay)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#19EE8A] ${
-                      autoplay ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
-                    }`}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-                        autoplay ? 'translate-x-6 bg-[#E8FFF3]' : 'translate-x-1 bg-[#B3F7D1]/70'
+                      aria-hidden="true"
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        autoplay ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
                       }`}
-                    />
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                          autoplay ? 'translate-x-6 bg-[#E8FFF3]' : 'translate-x-1 bg-[#B3F7D1]/70'
+                        }`}
+                      />
+                    </span>
                   </button>
                 </div>
 
                 <CrossfadeControl variant="general" />
 
-                <div className="flex items-center justify-between gap-4 pt-3.5 pb-1">
+                <div className="flex items-center justify-between gap-4 pt-3 pb-1">
                   <div className="min-w-0">
                     <p id="lbl-right-panel" className="text-sm font-medium text-[#E8FFF3]">
                       Tampilkan panel kanan &ldquo;Sedang diputar&rdquo;
                     </p>
-                    <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                    <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                       Tampilkan pemutar, antrean, lirik, dan kredit lagu di sisi kanan
                     </p>
                   </div>
@@ -662,33 +677,38 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     aria-checked={showRightPanel}
                     aria-labelledby="lbl-right-panel"
                     onClick={() => setRightPanelOpen(!showRightPanel)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#19EE8A] ${
-                      showRightPanel ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
-                    }`}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-                        showRightPanel
-                          ? 'translate-x-6 bg-[#E8FFF3]'
-                          : 'translate-x-1 bg-[#B3F7D1]/70'
+                      aria-hidden="true"
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        showRightPanel ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
                       }`}
-                    />
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                          showRightPanel
+                            ? 'translate-x-6 bg-[#E8FFF3]'
+                            : 'translate-x-1 bg-[#B3F7D1]/70'
+                        }`}
+                      />
+                    </span>
                   </button>
                 </div>
               </div>
             </section>
 
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-sm font-bold text-[#E8FFF3]">Equalizer 10-Band &amp; DSP Lanjutan</h3>
-                <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                   Atur kurva EQ, preamp, bass boost, normalisasi LUFS, dan kecepatan pemutaran
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => openCategory('audio')}
-                className="px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 shrink-0 self-start sm:self-auto"
+                className="min-h-[44px] px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 shrink-0 self-start sm:self-auto"
               >
                 Buka EQ &amp; DSP
               </button>
@@ -705,15 +725,15 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
       case 'offline':
         return (
-          <div className="space-y-5">
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-1">
+          <div className="space-y-6">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-2">
               <h2 className="text-base font-bold text-[#E8FFF3] pb-2">Hemat Data</h2>
               <div className="flex items-center justify-between gap-4 py-3">
                 <div className="min-w-0">
                   <p id="lbl-datasaver" className="text-sm font-medium text-[#E8FFF3]">
                     Mode hemat data
                   </p>
-                  <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                  <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                     Muat thumbnail beresolusi lebih kecil untuk menghemat kuota jaringan seluler
                   </p>
                 </div>
@@ -723,24 +743,29 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   aria-checked={dataSaver}
                   aria-labelledby="lbl-datasaver"
                   onClick={() => updateSetting('dataSaver', !dataSaver)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#19EE8A] ${
-                    dataSaver ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
-                  }`}
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-                      dataSaver ? 'translate-x-6 bg-[#E8FFF3]' : 'translate-x-1 bg-[#B3F7D1]/70'
+                    aria-hidden="true"
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      dataSaver ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
                     }`}
-                  />
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                        dataSaver ? 'translate-x-6 bg-[#E8FFF3]' : 'translate-x-1 bg-[#B3F7D1]/70'
+                      }`}
+                    />
+                  </span>
                 </button>
               </div>
             </section>
 
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-3">
-              <div className="flex items-center justify-between gap-3">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-4">
+              <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-bold text-[#E8FFF3]">Cache &amp; Unduhan Offline</h2>
-                  <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                  <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                     {offlineDownloads.length > 0
                       ? `${offlineDownloads.length} lagu siap diputar tanpa koneksi internet.`
                       : 'Belum ada lagu yang diunduh ke penyimpanan offline browser.'}
@@ -755,14 +780,14 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                 <button
                   type="button"
                   onClick={() => openCategory('audio')}
-                  className="px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
+                  className="min-h-[44px] px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
                 >
                   Atur Kualitas Streaming &amp; Unduhan
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate({ name: 'library' })}
-                  className="px-4 py-2 rounded-full bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
+                  className="min-h-[44px] px-4 py-2 rounded-full bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
                 >
                   Buka Koleksi Offline
                 </button>
@@ -773,30 +798,30 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
       case 'devices':
         return (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <PWAInstallButton variant="card" />
 
             {/* Pemutar Mini Eksternal (Khusus Windows) */}
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-4">
-              <div className="flex items-start justify-between gap-3">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-4">
+              <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <h2 className="text-base font-bold text-[#E8FFF3]">Pemutar Mini Eksternal</h2>
-                  <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                  <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                     Pemutar mini tidak tampil di dalam web — hanya dapat dikeluarkan ke jendela terpisah khusus Windows
                   </p>
                 </div>
-                <span className="px-2.5 py-1 rounded-lg bg-[#19EE8A]/15 border border-[#19EE8A]/30 text-[11px] font-semibold text-[#19EE8A] shrink-0 whitespace-nowrap">
+                <span className="px-3 py-1 rounded-lg bg-[#19EE8A]/15 border border-[#19EE8A]/30 text-[11px] font-semibold text-[#19EE8A] shrink-0 whitespace-nowrap">
                   Khusus Windows
                 </span>
               </div>
 
               <div className="space-y-4 pt-1 border-t border-[#B3F7D1]/[0.08]">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-[#E8FFF3]">
                       Jendela Eksternal di Luar Web (Windows)
                     </p>
-                    <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                    <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                       {windowsExternalSupport.mode === 'desktop-ipc'
                         ? 'Aktif otomatis di jendela desktop Windows (tanpa bingkai, selalu di atas, area transparan tembus klik).'
                         : windowsExternalSupport.mode === 'document-pip' ||
@@ -829,7 +854,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                           });
                         }
                       }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 disabled:opacity-40 ${
+                      className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 disabled:opacity-40 ${
                         externalPipOpen
                           ? 'bg-white/[0.08] border border-white/[0.12] text-[#E8FFF3] hover:bg-white/[0.14]'
                           : 'bg-sc-gradient text-[#0F1F17] hover:brightness-105'
@@ -842,7 +867,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                           : 'Putar Lagu Terlebih Dahulu'}
                     </button>
                   ) : (
-                    <span className="px-3 py-1.5 rounded-xl bg-white/[0.08] border border-white/[0.1] text-xs font-medium text-[#B3F7D1]/70 shrink-0">
+                    <span className="px-3 py-2 rounded-xl bg-white/[0.08] border border-white/[0.1] text-xs font-medium text-[#B3F7D1]/70 shrink-0">
                       {windowsExternalSupport.mode === 'desktop-ipc'
                         ? 'Mode Desktop Aktif'
                         : 'Khusus Windows'}
@@ -850,19 +875,19 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#B3F7D1]/[0.08]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-[#B3F7D1]/[0.08]">
                   <div className="min-w-0">
                     <p id="lbl-notch-mode" className="text-sm font-medium text-[#E8FFF3]">
                       Tampilkan notch (Windows Desktop)
                     </p>
-                    <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                    <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                       Pilih kapan notch melayang tampil saat dijalankan di aplikasi Desktop Windows
                     </p>
                   </div>
                   <div
                     role="radiogroup"
                     aria-labelledby="lbl-notch-mode"
-                    className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/[0.045] backdrop-blur-xl border border-white/[0.1] shrink-0 self-start sm:self-auto"
+                    className="inline-flex flex-wrap items-center gap-2 p-1 rounded-xl bg-white/[0.045] backdrop-blur-xl border border-white/[0.1] shrink-0 self-start sm:self-auto"
                   >
                     {(
                       [
@@ -877,7 +902,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                         role="radio"
                         aria-checked={notchDisplayMode === opt.value}
                         onClick={() => updateSetting('notchDisplayMode', opt.value)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                        className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                           notchDisplayMode === opt.value
                             ? 'bg-sc-gradient text-[#0F1F17] font-semibold'
                             : 'text-[#B3F7D1]/70 hover:text-[#E8FFF3]'
@@ -889,7 +914,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#B3F7D1]/[0.08]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-[#B3F7D1]/[0.08]">
                   <div className="min-w-0">
                     <label
                       htmlFor="select-notch-monitor"
@@ -897,7 +922,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     >
                       Pilihan monitor (Windows Desktop)
                     </label>
-                    <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                    <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                       Monitor target tempat notch melayang saat dijalankan di pembungkus Desktop Windows
                     </p>
                   </div>
@@ -905,7 +930,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     id="select-notch-monitor"
                     value={notchMonitor}
                     onChange={(e) => updateSetting('notchMonitor', e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-xs text-[#E8FFF3] focus:outline-none focus:ring-2 focus:ring-[#19EE8A] shrink-0"
+                    className="h-11 px-4 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-xs text-[#E8FFF3] focus:outline-none focus:ring-2 focus:ring-[#19EE8A] shrink-0"
                   >
                     {monitorOptions.map((opt) => (
                       <option key={opt.id} value={opt.id} className="bg-[#0B0F0D] text-[#E8FFF3]">
@@ -917,14 +942,14 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
               </div>
             </section>
 
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-white/[0.07] border border-white/[0.1] flex items-center justify-center shrink-0 text-[#19EE8A]">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-white/[0.07] border border-white/[0.1] flex items-center justify-center shrink-0 text-[#19EE8A]">
                   <Keyboard className="w-5 h-5" strokeWidth={1.8} />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-bold text-[#E8FFF3]">Pintasan Keyboard</h3>
-                  <p className="text-xs text-[#B3F7D1]/60 truncate">
+                  <p className="text-xs text-[#B3F7D1]/60 truncate mt-1">
                     Lihat daftar lengkap tombol cepat untuk pemutar dan navigasi
                   </p>
                 </div>
@@ -932,7 +957,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
               <button
                 type="button"
                 onClick={() => navigate({ name: 'shortcuts' })}
-                className="px-4 py-2 rounded-full bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-semibold text-[#E8FFF3] shrink-0"
+                className="min-h-[44px] px-4 py-2 rounded-full bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-semibold text-[#E8FFF3] shrink-0"
               >
                 Buka
               </button>
@@ -942,16 +967,16 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
 
       case 'account':
         return (
-          <div className="space-y-5">
+          <div className="space-y-6">
             {/* Firebase Auth & Cloud Firestore Sync */}
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h2 className="text-base font-bold text-[#E8FFF3] flex items-center gap-2">
                     <Cloud className="w-4 h-4 text-[#19EE8A]" strokeWidth={2} />
                     Akun Google &amp; Cloud Firestore
                   </h2>
-                  <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+                  <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed">
                     Proyek Firebase: <span className="font-mono text-[#E8FFF3]/90">{firebaseProjectInfo.projectId}</span>
                   </p>
                 </div>
@@ -1005,12 +1030,12 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2.5">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       disabled={firestoreSyncing}
                       onClick={() => void handleManualFirestoreSync()}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 disabled:opacity-50"
                     >
                       <RefreshCw
                         className={`w-3.5 h-3.5 ${firestoreSyncing ? 'animate-spin' : ''}`}
@@ -1022,7 +1047,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     <button
                       type="button"
                       onClick={() => void signOutUser()}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.07] border border-white/[0.1] hover:bg-red-500/20 hover:border-red-400/30 text-xs font-medium text-[#E8FFF3]/90 hover:text-red-200 transition-colors"
+                      className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] border border-white/[0.1] hover:bg-red-500/20 hover:border-red-400/30 text-xs font-medium text-[#E8FFF3]/90 hover:text-red-200 transition-colors"
                     >
                       <LogOut className="w-3.5 h-3.5" strokeWidth={2} />
                       Keluar dari Google
@@ -1030,8 +1055,8 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3 pt-1">
-                  <p className="text-xs text-[#B3F7D1]/70 leading-relaxed">
+                <div className="space-y-4 pt-1">
+                  <p className="text-xs text-[#B3F7D1]/70 leading-relaxed max-w-[65ch]">
                     Masuk dengan akun Google untuk menyimpan dan menyinkronkan lagu disukai, playlist, folder,
                     progres podcast, riwayat putar, preferensi tampilan, dan profil Equalizer 10-band Anda
                     ke Cloud Firestore. File audio lokal &amp; wallpaper kustom tetap tersimpan aman di perangkat.
@@ -1040,7 +1065,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     type="button"
                     disabled={signingIn}
                     onClick={() => void signInWithGoogle()}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 disabled:opacity-50"
                   >
                     <LogIn className="w-4 h-4" strokeWidth={2.2} />
                     {signingIn ? 'Menghubungkan Google...' : 'Masuk dengan Google'}
@@ -1050,9 +1075,9 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
             </section>
 
             {/* Mode Katalog & Pustaka */}
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-3">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-4">
               <h2 className="text-base font-semibold text-[#E8FFF3]">Mode Katalog &amp; Pustaka</h2>
-              <p className="text-xs text-[#B3F7D1]/65">
+              <p className="text-xs text-[#B3F7D1]/65 leading-relaxed max-w-[65ch]">
                 {accountStatusQuery.data?.message ||
                   'Mode tanpa login aktif. Katalog musik tersedia langsung tanpa memerlukan masuk akun.'}
               </p>
@@ -1061,7 +1086,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   type="button"
                   disabled={syncing}
                   onClick={() => void handleSyncAccount()}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 disabled:opacity-50"
                 >
                   <RefreshCw
                     className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`}
@@ -1073,12 +1098,12 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
             </section>
 
             {/* Server Backend (APK / Mobile) */}
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-3">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-4">
               <div>
                 <h2 className="text-base font-semibold text-[#E8FFF3]">
                   URL Server Backend {isAndroidApk ? '(Wajib untuk APK)' : '(Opsional)'}
                 </h2>
-                <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+                <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed max-w-[65ch]">
                   Atur alamat server SoundClear (misalnya URL publik https://...) agar aplikasi Android
                   dapat mengambil katalog lagu, lirik, dan aliran audio.
                 </p>
@@ -1090,7 +1115,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                   onChange={(e) => setApiUrlInput(e.target.value)}
                   placeholder="https://soundclear-anda.run.app"
                   aria-label="URL Server Backend SoundClear"
-                  className="flex-1 h-10 px-3 rounded-xl bg-white/[0.06] border border-white/[0.12] text-xs text-[#E8FFF3] placeholder-[#B3F7D1]/40 focus:outline-none focus:ring-2 focus:ring-[#19EE8A]"
+                  className="flex-1 h-11 px-4 rounded-xl bg-white/[0.06] border border-white/[0.12] text-xs text-[#E8FFF3] placeholder-[#B3F7D1]/40 focus:outline-none focus:ring-2 focus:ring-[#19EE8A]"
                 />
                 <div className="flex gap-2">
                   <button
@@ -1110,7 +1135,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                           : 'URL server dikembalikan ke bawaan',
                       );
                     }}
-                    className="px-4 h-10 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 whitespace-nowrap"
+                    className="px-4 h-11 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 whitespace-nowrap"
                   >
                     Simpan URL
                   </button>
@@ -1123,7 +1148,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                         void queryClient.invalidateQueries();
                         showToast('URL server direset ke bawaan');
                       }}
-                      className="px-3 h-10 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
+                      className="px-4 h-11 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
                     >
                       Reset
                     </button>
@@ -1133,18 +1158,18 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
             </section>
 
             {/* Ekspor / Impor & Hapus Riwayat */}
-            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-5 space-y-4">
+            <section className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] p-4 sm:p-6 space-y-4">
               <div>
                 <h2 className="text-base font-semibold text-[#E8FFF3]">Data Lokal &amp; Cadangan</h2>
-                <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+                <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                   Cadangkan playlist, pengaturan EQ, dan preferensi tampilan ke file JSON
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2.5">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => void handleExportJson()}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
                 >
                   <Download className="w-4 h-4" strokeWidth={2} />
                   Ekspor Data JSON
@@ -1153,7 +1178,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
                 >
                   <Upload className="w-4 h-4" strokeWidth={1.75} />
                   Impor Data JSON
@@ -1176,7 +1201,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     await clearPlayHistory();
                     showToast('Riwayat putar berhasil dihapus');
                   }}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.07] border border-white/[0.1] hover:bg-red-500/20 hover:border-red-400/30 text-xs font-medium text-[#E8FFF3]/85 hover:text-red-200 transition-colors"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] border border-white/[0.1] hover:bg-red-500/20 hover:border-red-400/30 text-xs font-medium text-[#E8FFF3]/85 hover:text-red-200 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                   Hapus Riwayat Putar
@@ -1188,7 +1213,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     clearRecentSearches();
                     showToast('Riwayat pencarian dihapus');
                   }}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.07] border border-white/[0.1] hover:bg-red-500/20 hover:border-red-400/30 text-xs font-medium text-[#E8FFF3]/85 hover:text-red-200 transition-colors"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] border border-white/[0.1] hover:bg-red-500/20 hover:border-red-400/30 text-xs font-medium text-[#E8FFF3]/85 hover:text-red-200 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                   Hapus Pencarian Terakhir
@@ -1201,14 +1226,14 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
   };
 
   return (
-    <div className="space-y-5 max-w-6xl">
+    <div className="space-y-6 max-w-6xl">
       {/* IMG_4281-inspired Header: < Back | Centered Pengaturan | Search */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-4">
         <button
           type="button"
           onClick={handleHeaderBack}
           aria-label={mobileSubView !== null ? 'Kembali ke daftar pengaturan' : 'Kembali'}
-          className="w-10 h-10 rounded-full bg-white/[0.06] backdrop-blur-xl border border-white/[0.11] hover:bg-white/[0.12] flex items-center justify-center text-[#E8FFF3] transition-colors shrink-0"
+          className="w-11 h-11 rounded-full bg-white/[0.06] backdrop-blur-xl border border-white/[0.11] hover:bg-white/[0.12] flex items-center justify-center text-[#E8FFF3] transition-colors shrink-0"
         >
           <ChevronLeft className="w-5 h-5" strokeWidth={2} />
         </button>
@@ -1235,7 +1260,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
             }
           }}
           aria-label={searchOpen ? 'Tutup pencarian pengaturan' : 'Cari pengaturan'}
-          className={`w-10 h-10 rounded-full backdrop-blur-xl border flex items-center justify-center transition-colors shrink-0 ${
+          className={`w-11 h-11 rounded-full backdrop-blur-xl border flex items-center justify-center transition-colors shrink-0 ${
             searchOpen
               ? 'bg-sc-gradient text-[#0F1F17] border-transparent'
               : 'bg-white/[0.06] border-white/[0.11] hover:bg-white/[0.12] text-[#E8FFF3]'
@@ -1249,7 +1274,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
       {searchOpen && (
         <div className="relative">
           <Search
-            className="w-4 h-4 text-[#B3F7D1]/60 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+            className="w-4 h-4 text-[#B3F7D1]/60 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
             strokeWidth={1.9}
           />
           <input
@@ -1259,14 +1284,14 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Cari pengaturan (mis. Equalizer, Latar, Crossfade, JSON)..."
             aria-label="Cari kategori pengaturan"
-            className="w-full h-11 pl-10 pr-10 rounded-full bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-sm text-[#E8FFF3] placeholder-[#B3F7D1]/45 focus:outline-none focus:ring-2 focus:ring-[#19EE8A]"
+            className="w-full h-11 pl-11 pr-12 rounded-full bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-sm text-[#E8FFF3] placeholder-[#B3F7D1]/45 focus:outline-none focus:ring-2 focus:ring-[#19EE8A]"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
               aria-label="Bersihkan pencarian pengaturan"
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.1] absolute right-2 top-1/2 -translate-y-1/2"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.1] absolute right-0 top-1/2 -translate-y-1/2"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1278,18 +1303,18 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
       <div className="flex flex-col @[720px]:flex-row @[720px]:items-start gap-6">
         {/* HUB COLUMN (visible on wide @[720px]+, or on narrow panes when mobileSubView === null) */}
         <div
-          className={`w-full @[720px]:w-[272px] @[900px]:w-[320px] @[1060px]:w-[372px] shrink-0 space-y-5 @[720px]:sticky @[720px]:top-4 @[720px]:self-start ${
+          className={`w-full @[720px]:w-[272px] @[900px]:w-[320px] @[1060px]:w-[372px] shrink-0 space-y-6 @[720px]:sticky @[720px]:top-4 @[720px]:self-start ${
             mobileSubView !== null ? 'hidden @[720px]:block' : 'block'
           }`}
         >
           {/* 2-Column Quick Toggle Cards (IMG_4281 top grid) */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
               role="switch"
               aria-checked={dataSaver}
               onClick={() => updateSetting('dataSaver', !dataSaver)}
-              className={`rounded-2xl backdrop-blur-xl border px-3 py-4 flex flex-col items-center justify-center text-center gap-1.5 transition-all ${
+              className={`rounded-2xl backdrop-blur-xl border p-4 min-h-[48px] flex flex-col items-center justify-center text-center gap-2 transition-all ${
                 dataSaver
                   ? 'bg-white/[0.09] border-[#19EE8A]/45'
                   : 'bg-white/[0.055] border-white/[0.11] hover:bg-white/[0.085]'
@@ -1316,7 +1341,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
               role="switch"
               aria-checked={autoplay}
               onClick={() => updateSetting('autoplay', !autoplay)}
-              className={`rounded-2xl backdrop-blur-xl border px-3 py-4 flex flex-col items-center justify-center text-center gap-1.5 transition-all ${
+              className={`rounded-2xl backdrop-blur-xl border p-4 min-h-[48px] flex flex-col items-center justify-center text-center gap-2 transition-all ${
                 autoplay
                   ? 'bg-white/[0.09] border-[#19EE8A]/45'
                   : 'bg-white/[0.055] border-white/[0.11] hover:bg-white/[0.085]'
@@ -1340,12 +1365,12 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
           </div>
 
           {/* Status & Quick Equalizer CTA Row (IMG_4281 status strip) */}
-          <div className="flex items-center justify-between gap-3 px-1">
+          <div className="flex items-center justify-between gap-4 px-1">
             <div className="min-w-0">
               <p className="text-sm font-bold text-[#E8FFF3] truncate">
                 {authUser ? 'Firestore Cloud Aktif' : 'Mode Streaming Audio'}
               </p>
-              <p className="text-xs text-[#B3F7D1]/60 truncate">
+              <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5">
                 {authUser
                   ? `${authUser.displayName || authUser.email} · Pustaka tersinkron`
                   : accountStatusQuery.data?.authenticated
@@ -1356,7 +1381,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
             <button
               type="button"
               onClick={() => openCategory('audio')}
-              className="px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 transition-all shrink-0 whitespace-nowrap"
+              className="min-h-[44px] px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 transition-all shrink-0 whitespace-nowrap"
             >
               Atur Equalizer
             </button>
@@ -1369,7 +1394,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                 <p className="text-sm font-semibold text-[#E8FFF3]">
                   Tidak ada pengaturan yang cocok
                 </p>
-                <p className="text-xs text-[#B3F7D1]/60">
+                <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch] mx-auto">
                   Coba kata kunci lain seperti Equalizer, Latar, Crossfade, atau JSON.
                 </p>
               </div>
@@ -1381,7 +1406,7 @@ export function SettingsPage({ initialTab = 'general', focusEq = false }: Settin
                     key={cat.id}
                     type="button"
                     onClick={() => openCategory(cat.id)}
-                    className={`w-full flex items-center gap-3.5 px-4 py-3.5 text-left transition-colors ${
+                    className={`w-full flex items-center gap-4 px-4 py-3 min-h-[48px] text-left transition-colors ${
                       isSelected
                         ? '@[720px]:bg-white/[0.08] hover:bg-white/[0.09]'
                         : 'hover:bg-white/[0.06]'

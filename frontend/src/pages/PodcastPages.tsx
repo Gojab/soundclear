@@ -107,7 +107,7 @@ export function PodcastDetailPage({
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col sm:flex-row sm:items-end gap-5">
+      <header className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6">
         <ArtworkImage
           src={podcast.thumbnail}
           alt={podcast.title}
@@ -116,7 +116,7 @@ export function PodcastDetailPage({
           roundedClass="rounded-2xl"
         />
         <div className="space-y-2 min-w-0 flex-1">
-          <p className="text-xs text-[#B3F7D1]/60 inline-flex items-center gap-1.5">
+          <p className="text-xs text-[#B3F7D1]/60 inline-flex items-center gap-2">
             <Podcast className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.75} />
             Podcast
           </p>
@@ -125,9 +125,11 @@ export function PodcastDetailPage({
           </h1>
           {podcast.author && <p className="text-xs text-[#B3F7D1]/70">{podcast.author}</p>}
           {podcast.description && (
-            <p className="text-xs text-[#B3F7D1]/60 max-w-2xl line-clamp-3">{podcast.description}</p>
+            <p className="text-xs leading-relaxed text-[#B3F7D1]/60 max-w-[65ch] line-clamp-3">
+              {podcast.description}
+            </p>
           )}
-          <div className="flex flex-wrap items-center gap-2.5 pt-2">
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             {podcast.episodes.length > 0 && (
               <button
                 type="button"
@@ -140,7 +142,7 @@ export function PodcastDetailPage({
                     sourceLabel: podcast.title,
                   });
                 }}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
+                className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Episode Terbaru
@@ -150,7 +152,7 @@ export function PodcastDetailPage({
               type="button"
               onClick={handleToggleFollow}
               aria-pressed={followed}
-              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+              className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
                 followed
                   ? 'bg-white/[0.1] backdrop-blur-xl text-[#19EE8A] border border-[#19EE8A]/35'
                   : 'bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] text-[#E8FFF3] border border-white/[0.11]'
@@ -172,15 +174,17 @@ export function PodcastDetailPage({
         </div>
       </header>
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <h2 className="text-lg font-semibold text-[#E8FFF3]">
           Daftar Episode <span className="text-sm text-[#B3F7D1]/50 tabular-nums">({podcast.episodes.length})</span>
         </h2>
 
         {podcast.episodes.length === 0 ? (
-          <p className="text-xs text-[#B3F7D1]/55">Belum ada episode tersedia.</p>
+          <p className="text-xs leading-relaxed max-w-[65ch] text-[#B3F7D1]/55">
+            Belum ada episode tersedia.
+          </p>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-4">
             {podcast.episodes.map((ep) => {
               const prog = episodeProgress[ep.videoId];
               const pct =
@@ -191,14 +195,14 @@ export function PodcastDetailPage({
               return (
                 <div
                   key={ep.id}
-                  className="glass-card rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center gap-3.5"
+                  className="glass-card rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-4"
                 >
                   <button
                     type="button"
                     onClick={() =>
                       navigate({ name: 'episode', id: ep.videoId, fallbackQuery: ep.title })
                     }
-                    className="flex items-start gap-3.5 min-w-0 flex-1 text-left"
+                    className="flex items-start gap-4 min-w-0 min-h-[44px] flex-1 text-left"
                   >
                     <ArtworkImage
                       src={ep.thumbnail}
@@ -218,7 +222,9 @@ export function PodcastDetailPage({
                         )}
                       </div>
                       {ep.description && (
-                        <p className="text-xs text-[#B3F7D1]/60 line-clamp-2">{ep.description}</p>
+                        <p className="text-xs leading-relaxed max-w-[65ch] text-[#B3F7D1]/60 line-clamp-2">
+                          {ep.description}
+                        </p>
                       )}
                       {prog && !prog.completed && prog.positionSeconds > 5 && (
                         <div className="pt-1 max-w-xs flex items-center gap-2">
@@ -236,7 +242,7 @@ export function PodcastDetailPage({
                     </div>
                   </button>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <select
                       aria-label={`Kecepatan putar episode ${ep.title}`}
                       value={
@@ -252,7 +258,7 @@ export function PodcastDetailPage({
                           setPlaybackRate(nextRate ?? defaultRate);
                         }
                       }}
-                      className="h-9 px-2 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-[11px] text-[#E8FFF3] tabular-nums focus:outline-none focus:border-[#19EE8A]"
+                      className="h-11 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-[11px] text-[#E8FFF3] tabular-nums focus:outline-none focus:border-[#19EE8A]"
                     >
                       <option value="default" className="bg-[#0B0F0D] text-[#E8FFF3]">Default ({defaultRate}x)</option>
                       {PLAYBACK_RATE_OPTIONS.map((r) => (
@@ -269,7 +275,7 @@ export function PodcastDetailPage({
                       }
                       aria-label={prog?.completed ? 'Tandai belum selesai' : 'Tandai selesai'}
                       title={prog?.completed ? 'Sudah selesai' : 'Tandai selesai'}
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
                         prog?.completed
                           ? 'text-[#19EE8A] bg-[#19EE8A]/12'
                           : 'text-[#B3F7D1]/55 hover:text-[#E8FFF3] bg-white/[0.055] hover:bg-white/[0.1] border border-white/[0.1]'
@@ -291,7 +297,7 @@ export function PodcastDetailPage({
                           sourceLabel: podcast.title,
                         })
                       }
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
+                      className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
                       {prog && !prog.completed && prog.positionSeconds > 5 ? 'Lanjutkan' : 'Putar'}
@@ -373,7 +379,7 @@ export function EpisodeDetailPage({
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <header className="flex flex-col sm:flex-row sm:items-end gap-5">
+      <header className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6">
         <ArtworkImage
           src={ep.thumbnail}
           alt={ep.title}
@@ -400,7 +406,7 @@ export function EpisodeDetailPage({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 pt-2">
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             <button
               type="button"
               onClick={() =>
@@ -410,7 +416,7 @@ export function EpisodeDetailPage({
                   sourceLabel: ep.podcastTitle || 'Podcast',
                 })
               }
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
+              className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
             >
               <Play className="w-4 h-4 fill-current" strokeWidth={2} />
               {prog && !prog.completed && prog.positionSeconds > 5 ? 'Lanjutkan Putar' : 'Putar Episode'}
@@ -419,7 +425,7 @@ export function EpisodeDetailPage({
             <button
               type="button"
               onClick={() => markEpisodeCompleted(ep.videoId, ep.podcastId, !prog?.completed)}
-              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-medium ${
+              className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl text-xs font-medium ${
                 prog?.completed
                   ? 'bg-[#19EE8A]/15 text-[#19EE8A] border border-[#19EE8A]/35'
                   : 'bg-white/[0.055] backdrop-blur-xl text-[#E8FFF3]/85 hover:bg-white/[0.1] border border-white/[0.11]'
@@ -449,7 +455,7 @@ export function EpisodeDetailPage({
                   setPlaybackRate(nextRate ?? defaultRate);
                 }
               }}
-              className="h-10 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-xs text-[#E8FFF3] tabular-nums focus:outline-none focus:border-[#19EE8A]"
+              className="h-11 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-xs text-[#E8FFF3] tabular-nums focus:outline-none focus:border-[#19EE8A]"
             >
               <option value="default" className="bg-[#0B0F0D] text-[#E8FFF3]">Kecepatan: Default ({defaultRate}x)</option>
               {PLAYBACK_RATE_OPTIONS.map((r) => (
@@ -469,7 +475,7 @@ export function EpisodeDetailPage({
                     fallbackQuery: ep.podcastTitle || undefined,
                   })
                 }
-                className="px-4 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-xs font-medium text-[#E8FFF3]"
+                className="min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-xs font-medium text-[#E8FFF3]"
               >
                 Lihat Semua Episode
               </button>
@@ -479,9 +485,9 @@ export function EpisodeDetailPage({
       </header>
 
       {ep.description && (
-        <section className="glass-card rounded-2xl p-5 space-y-2">
+        <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-2">
           <h2 className="text-sm font-semibold text-[#E8FFF3]">Deskripsi Episode</h2>
-          <p className="text-xs text-[#B3F7D1]/70 leading-relaxed whitespace-pre-line">
+          <p className="text-xs text-[#B3F7D1]/70 leading-relaxed whitespace-pre-line max-w-[65ch]">
             {ep.description}
           </p>
         </section>

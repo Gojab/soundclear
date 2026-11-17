@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
+import {
+  getRealDocumentHidden,
+  subscribeRealVisibilityChange,
+} from './backgroundAudioLogic';
 import { isDesktopNotchHost } from './notchDesktopBridge';
 import { isWindowsPlatform, shouldShowNotchMiniPlayer } from './notchPlayer';
 
@@ -18,31 +22,15 @@ export function useNotchVisibility(): {
   const externalNotchOpen = usePlayerStore((s) => s.externalNotchOpen);
   const notchDisplayMode = useSettingsStore((s) => s.notchDisplayMode);
 
-  const [isAppInBackground, setIsAppInBackground] = useState<boolean>(() => {
-    if (typeof document === 'undefined') return false;
-    return document.hidden;
-  });
+  const [isAppInBackground, setIsAppInBackground] = useState<boolean>(() =>
+    getRealDocumentHidden(),
+  );
 
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
-
-    const syncBackgroundState = () => {
-      const hidden = document.hidden || !document.hasFocus();
+    return subscribeRealVisibilityChange((_vis, hidden) => {
       setIsAppInBackground(hidden);
-    };
-
-    const onFocus = () => setIsAppInBackground(document.hidden);
-    const onBlur = () => setIsAppInBackground(true);
-
-    document.addEventListener('visibilitychange', syncBackgroundState);
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('blur', onBlur);
-
-    return () => {
-      document.removeEventListener('visibilitychange', syncBackgroundState);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('blur', onBlur);
-    };
+    });
   }, []);
 
   const isWin = isWindowsPlatform();

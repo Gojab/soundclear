@@ -24,11 +24,11 @@ export function RecapPage() {
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight">
             Rekap Mendengar
           </h1>
-          <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+          <p className="text-xs leading-relaxed max-w-[65ch] text-[#B3F7D1]/60 mt-1">
             Ringkasan statistik lokal dari riwayat putar Anda
           </p>
         </div>
@@ -36,7 +36,7 @@ export function RecapPage() {
         <div
           role="tablist"
           aria-label="Rentang waktu rekap"
-          className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] self-start"
+          className="inline-flex items-center gap-2 p-1 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] self-start"
         >
           {RANGE_OPTIONS.map((opt) => (
             <button
@@ -45,7 +45,7 @@ export function RecapPage() {
               role="tab"
               aria-selected={range === opt.id}
               onClick={() => setRange(opt.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+              className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                 range === opt.id
                   ? 'bg-sc-gradient text-[#0F1F17] font-semibold'
                   : 'text-[#B3F7D1]/70 hover:text-[#E8FFF3]'
@@ -58,35 +58,35 @@ export function RecapPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="glass-card rounded-2xl p-4 space-y-1">
-          <div className="flex items-center justify-between text-[#B3F7D1]/60">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="glass-card rounded-2xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2 text-[#B3F7D1]/60">
             <span className="text-xs">Total Menit</span>
-            <Clock className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.75} />
+            <Clock className="w-4 h-4 text-[#19EE8A] shrink-0" strokeWidth={1.75} />
           </div>
           <p className="text-2xl font-bold text-[#E8FFF3] tabular-nums">{stats.totalMinutes}</p>
         </div>
 
-        <div className="glass-card rounded-2xl p-4 space-y-1">
-          <div className="flex items-center justify-between text-[#B3F7D1]/60">
+        <div className="glass-card rounded-2xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2 text-[#B3F7D1]/60">
             <span className="text-xs">Total Pemutaran</span>
-            <Play className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.75} />
+            <Play className="w-4 h-4 text-[#19EE8A] shrink-0" strokeWidth={1.75} />
           </div>
           <p className="text-2xl font-bold text-[#E8FFF3] tabular-nums">{stats.totalPlays}</p>
         </div>
 
-        <div className="glass-card rounded-2xl p-4 space-y-1">
-          <div className="flex items-center justify-between text-[#B3F7D1]/60">
+        <div className="glass-card rounded-2xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2 text-[#B3F7D1]/60">
             <span className="text-xs">Artis Unik</span>
-            <Users className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.75} />
+            <Users className="w-4 h-4 text-[#19EE8A] shrink-0" strokeWidth={1.75} />
           </div>
           <p className="text-2xl font-bold text-[#E8FFF3] tabular-nums">{stats.uniqueArtists}</p>
         </div>
 
-        <div className="glass-card rounded-2xl p-4 space-y-1">
-          <div className="flex items-center justify-between text-[#B3F7D1]/60">
+        <div className="glass-card rounded-2xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2 text-[#B3F7D1]/60">
             <span className="text-xs">Lagu Unik</span>
-            <Disc3 className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.75} />
+            <Disc3 className="w-4 h-4 text-[#19EE8A] shrink-0" strokeWidth={1.75} />
           </div>
           <p className="text-2xl font-bold text-[#E8FFF3] tabular-nums">{stats.uniqueTracks}</p>
         </div>
@@ -96,7 +96,7 @@ export function RecapPage() {
         <div className="glass-card rounded-2xl p-8 text-center space-y-2">
           <BarChart3 className="w-8 h-8 text-[#B3F7D1]/40 mx-auto" strokeWidth={1.75} />
           <p className="text-sm font-medium text-[#E8FFF3]/85">Belum ada data mendengarkan di rentang ini</p>
-          <p className="text-xs text-[#B3F7D1]/55">
+          <p className="text-xs leading-relaxed max-w-[65ch] mx-auto text-[#B3F7D1]/55">
             Putar lagu minimal 15 detik agar statistik mulai tercatat otomatis.
           </p>
         </div>
@@ -104,9 +104,9 @@ export function RecapPage() {
         <div className="space-y-8">
           {/* Monthly Bar Chart */}
           {stats.monthlyBreakdown.length > 0 && (
-            <section className="glass-card rounded-2xl p-5 space-y-4">
+            <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
               <h2 className="text-base font-semibold text-[#E8FFF3]">Menit Mendengar per Bulan</h2>
-              <div className="flex items-end gap-3 h-40 pt-4">
+              <div className="flex items-end gap-2 sm:gap-4 h-40 pt-4">
                 {stats.monthlyBreakdown.map((m) => {
                   const pct = Math.max(8, Math.round((m.minutes / maxMonthMinutes) * 100));
                   return (
@@ -130,8 +130,8 @@ export function RecapPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Top Songs */}
-            <section className="glass-card rounded-2xl p-5 space-y-3">
-              <div className="flex items-center justify-between">
+            <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
+              <div className="flex items-center justify-between gap-2">
                 <h2 className="text-base font-semibold text-[#E8FFF3]">Lagu Teratas</h2>
                 {stats.topTracks.length > 0 && (
                   <button
@@ -143,7 +143,7 @@ export function RecapPage() {
                         'Rekap Lagu Teratas',
                       )
                     }
-                    className="text-xs font-medium text-[#19EE8A] hover:underline"
+                    className="inline-flex items-center min-h-[44px] px-2 text-xs font-medium text-[#19EE8A] hover:underline"
                   >
                     Putar semua
                   </button>
@@ -161,7 +161,7 @@ export function RecapPage() {
                         'Rekap Lagu Teratas',
                       )
                     }
-                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/[0.09] text-left transition-colors"
+                    className="w-full min-h-[48px] flex items-center gap-4 p-2 rounded-xl hover:bg-white/[0.09] text-left transition-colors"
                   >
                     <span className="w-5 text-xs text-[#B3F7D1]/50 tabular-nums text-center">
                       {idx + 1}
@@ -188,7 +188,7 @@ export function RecapPage() {
 
             {/* Top Artists & Top Genres */}
             <div className="space-y-6">
-              <section className="glass-card rounded-2xl p-5 space-y-3">
+              <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
                 <h2 className="text-base font-semibold text-[#E8FFF3]">Artis Teratas</h2>
                 <div className="space-y-2">
                   {stats.topArtists.map((art, idx) => (
@@ -201,9 +201,9 @@ export function RecapPage() {
                           navigate({ name: 'artist', id: art.item.id, fallbackQuery: art.item.name });
                         }
                       }}
-                      className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.045] hover:bg-white/[0.095] disabled:hover:bg-white/[0.045] border border-white/[0.08] text-left transition-colors"
+                      className="w-full min-h-[48px] flex items-center justify-between gap-4 px-4 py-2 rounded-xl bg-white/[0.045] hover:bg-white/[0.095] disabled:hover:bg-white/[0.045] border border-white/[0.08] text-left transition-colors"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-4 min-w-0">
                         <span className="w-5 text-xs text-[#B3F7D1]/50 tabular-nums">{idx + 1}</span>
                         <span className="text-sm font-medium text-[#E8FFF3] truncate">{art.item.name}</span>
                       </div>
@@ -216,9 +216,9 @@ export function RecapPage() {
               </section>
 
               {stats.topGenres.length > 0 && (
-                <section className="glass-card rounded-2xl p-5 space-y-3">
+                <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
                   <h2 className="text-base font-semibold text-[#E8FFF3]">Kategori / Genre Teratas</h2>
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {stats.topGenres.map((g) => {
                       const pct = Math.min(
                         100,
@@ -226,9 +226,9 @@ export function RecapPage() {
                       );
                       return (
                         <div key={g.key} className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-[#E8FFF3]/85 font-medium">{g.item.name}</span>
-                            <span className="text-[#B3F7D1]/55 tabular-nums">{g.plays} putar</span>
+                          <div className="flex justify-between gap-2 text-xs">
+                            <span className="text-[#E8FFF3]/85 font-medium truncate">{g.item.name}</span>
+                            <span className="text-[#B3F7D1]/55 tabular-nums shrink-0">{g.plays} putar</span>
                           </div>
                           <div className="h-1.5 rounded-full bg-white/[0.1] overflow-hidden">
                             <div className="h-full bg-sc-gradient" style={{ width: `${pct}%` }} />

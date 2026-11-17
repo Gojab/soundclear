@@ -17,15 +17,15 @@ const SHORTCUTS: Array<{ keys: string; description: string }> = [
 export function ShortcutsPage() {
   return (
     <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-[#19EE8A]/15 border border-[#19EE8A]/30 flex items-center justify-center text-[#19EE8A]">
+      <div className="flex items-center gap-4">
+        <div className="w-11 h-11 rounded-xl bg-[#19EE8A]/15 border border-[#19EE8A]/30 flex items-center justify-center text-[#19EE8A] shrink-0">
           <Keyboard className="w-5 h-5" strokeWidth={1.75} />
         </div>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight">
             Pintasan Keyboard
           </h1>
-          <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+          <p className="text-xs leading-relaxed max-w-[65ch] text-[#B3F7D1]/60 mt-1">
             Kontrol pemutaran cepat tanpa menyentuh mouse
           </p>
         </div>
@@ -35,10 +35,12 @@ export function ShortcutsPage() {
         {SHORTCUTS.map((item) => (
           <div
             key={item.keys}
-            className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
+            className="min-h-[48px] flex items-center justify-between gap-4 px-4 py-3 text-sm"
           >
-            <span className="text-[#E8FFF3]/85">{item.description}</span>
-            <kbd className="px-2.5 py-1 rounded-lg bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-xs font-mono text-[#19EE8A] shrink-0">
+            <span className="leading-relaxed max-w-[65ch] text-[#E8FFF3]/85">
+              {item.description}
+            </span>
+            <kbd className="px-2 py-1 rounded-lg bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-xs font-mono text-[#19EE8A] shrink-0">
               {item.keys}
             </kbd>
           </div>

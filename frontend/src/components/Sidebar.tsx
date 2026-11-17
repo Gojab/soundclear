@@ -122,8 +122,8 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
       }}
       className={`hidden md:flex flex-col shrink-0 rounded-lg overflow-hidden will-change-[width] transition-[width,background-color,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] border ${
         isExpanded
-          ? 'w-[228px] lg:w-[252px] xl:w-[288px] border-white/[0.14] shadow-[8px_0_30px_rgba(0,0,0,0.38)]'
-          : 'w-[82px] border-white/[0.08]'
+          ? 'w-[248px] lg:w-[272px] xl:w-[304px] border-white/[0.14] shadow-[8px_0_30px_rgba(0,0,0,0.38)]'
+          : 'w-[80px] border-white/[0.08]'
       } ${
         glassPanels
           ? 'bg-black/35'
@@ -134,15 +134,15 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
     >
       {/* Top Koleksi Kamu Header */}
       <div
-        className={`pt-3.5 pb-2.5 flex items-center justify-between transition-[padding,gap] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-          isExpanded ? 'px-3 xl:px-4 gap-1.5' : 'px-4 gap-0'
+        className={`pt-4 pb-2 flex items-center justify-between transition-[padding,gap] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          isExpanded ? 'px-4 gap-2' : 'px-4 gap-0'
         }`}
       >
         <button
           type="button"
           onClick={() => navigate({ name: 'library' })}
           title="Koleksi Kamu"
-          className="flex items-center text-[#B3F7D1]/80 hover:text-[#E8FFF3] transition-colors min-w-0"
+          className="flex items-center min-h-[44px] text-[#B3F7D1]/80 hover:text-[#E8FFF3] transition-colors min-w-0"
         >
           <span
             className={`flex items-center justify-center shrink-0 transition-[width,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
@@ -163,9 +163,9 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
         </button>
 
         <div
-          className={`flex items-center gap-0.5 xl:gap-1 shrink-0 overflow-hidden transition-[opacity,max-width,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          className={`flex items-center gap-2 shrink-0 overflow-hidden transition-[opacity,max-width,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
             isExpanded
-              ? 'opacity-100 max-w-[120px] translate-x-0'
+              ? 'opacity-100 max-w-[160px] translate-x-0'
               : 'opacity-0 max-w-0 translate-x-1 pointer-events-none'
           }`}
         >
@@ -175,7 +175,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
             aria-label="Buat mix baru"
             title="Buat mix baru"
             tabIndex={isExpanded ? 0 : -1}
-            className={`w-7 h-7 xl:w-8 xl:h-8 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-10 h-10 xl:w-11 xl:h-11 rounded-full flex items-center justify-center transition-colors ${
               currentRoute.name === 'create-mix'
                 ? 'bg-[#19EE8A]/20 text-[#19EE8A]'
                 : 'text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09]'
@@ -189,7 +189,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
             aria-label="Buat playlist baru"
             title="Buat playlist baru"
             tabIndex={isExpanded ? 0 : -1}
-            className="w-7 h-7 xl:w-8 xl:h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
+            className="w-10 h-10 xl:w-11 xl:h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
           >
             <Plus className="w-4 h-4 xl:w-4.5 xl:h-4.5" strokeWidth={2} />
           </button>
@@ -199,7 +199,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
             aria-label="Buka seluruh koleksi"
             title="Lihat semua koleksi"
             tabIndex={isExpanded ? 0 : -1}
-            className="w-7 h-7 xl:w-8 xl:h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
+            className="w-10 h-10 xl:w-11 xl:h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
           >
             <Maximize2 className="w-3.5 h-3.5" strokeWidth={2} />
           </button>
@@ -214,7 +214,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
       >
         <div className="overflow-hidden min-h-0">
           {/* Interactive Filter Tabs */}
-          <div className="px-2.5 xl:px-3 pb-2 flex items-center gap-1 xl:gap-1.5 overflow-x-auto scrollbar-none">
+          <div className="px-4 pb-2 flex items-center gap-2 overflow-x-auto scrollbar-none">
             {filterOptions.map((opt) => {
               const active = filter === opt.id;
               return (
@@ -223,7 +223,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
                   type="button"
                   tabIndex={isExpanded ? 0 : -1}
                   onClick={() => setFilter(active && opt.id !== 'all' ? 'all' : opt.id)}
-                  className={`px-2.5 xl:px-3 py-1 xl:py-1.5 rounded-full text-[11px] xl:text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                  className={`min-h-[36px] px-4 py-1 rounded-full text-[11px] xl:text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                     active
                       ? 'bg-[#19EE8A] text-[#0F1F17] font-semibold'
                       : 'bg-white/[0.06] text-[#E8FFF3]/85 hover:bg-white/[0.11]'
@@ -236,9 +236,9 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
           </div>
 
           {/* Inline Search & Sort Row */}
-          <div className="px-3 pb-2 flex items-center justify-between gap-2">
+          <div className="px-4 pb-2 flex items-center justify-between gap-2">
             {searchOpen ? (
-              <div className="flex-1 flex items-center gap-1.5 bg-white/[0.06] backdrop-blur-md border border-white/[0.12] rounded-md px-2.5 py-1.5">
+              <div className="flex-1 min-h-[44px] flex items-center gap-2 bg-white/[0.06] backdrop-blur-md border border-white/[0.12] rounded-md px-2 py-1">
                 <Search className="w-3.5 h-3.5 text-[#B3F7D1]/65 shrink-0" strokeWidth={2} />
                 <input
                   type="text"
@@ -255,7 +255,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
                     setSearchOpen(false);
                   }}
                   aria-label="Tutup cari koleksi"
-                  className="text-[#B3F7D1]/55 hover:text-[#E8FFF3]"
+                  className="w-8 h-8 flex items-center justify-center text-[#B3F7D1]/55 hover:text-[#E8FFF3]"
                 >
                   <X className="w-3.5 h-3.5" strokeWidth={2} />
                 </button>
@@ -266,7 +266,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
                 tabIndex={isExpanded ? 0 : -1}
                 onClick={() => setSearchOpen(true)}
                 aria-label="Cari di koleksi"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
+                className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09] transition-colors"
               >
                 <Search className="w-4 h-4" strokeWidth={1.9} />
               </button>
@@ -276,7 +276,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               type="button"
               tabIndex={isExpanded ? 0 : -1}
               onClick={() => setSortBy((s) => (s === 'recent' ? 'alpha' : 'recent'))}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#B3F7D1]/70 hover:text-[#E8FFF3] px-2 py-1 rounded-md transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-2 min-h-[44px] text-xs font-medium text-[#B3F7D1]/70 hover:text-[#E8FFF3] px-2 py-1 rounded-md transition-colors whitespace-nowrap shrink-0"
             >
               <span>{sortBy === 'recent' ? 'Baru diputar' : 'Abjad A–Z'}</span>
               <ArrowUpDown className="w-3.5 h-3.5" strokeWidth={1.8} />
@@ -286,14 +286,14 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
       </div>
 
       {/* Scrollable Collection Items */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3 space-y-0.5 scrollbar-none">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 space-y-1 scrollbar-none">
         {showLiked && (
           <button
             type="button"
             title="Lagu yang Disukai"
             onClick={() => navigate({ name: 'liked' })}
             className={`w-full flex items-center p-2 rounded-lg text-left transition-[gap,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-              isExpanded ? 'gap-3' : 'gap-0'
+              isExpanded ? 'gap-4' : 'gap-0'
             } ${currentRoute.name === 'liked' ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'}`}
           >
             <div className="w-12 h-12 rounded-md bg-gradient-to-br from-[#19EE8A] via-[#0AD36C] to-[#01BA53] flex items-center justify-center shrink-0">
@@ -522,17 +522,17 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
               }`}
             >
               <div className="overflow-hidden min-h-0">
-                <div className="p-3.5 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] space-y-2">
+                <div className="p-4 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] space-y-2">
                   <p className="text-xs font-semibold text-[#E8FFF3]">Buat playlist pertamamu</p>
-                  <p className="text-xs text-[#B3F7D1]/65 leading-relaxed">
+                  <p className="text-xs text-[#B3F7D1]/65 leading-relaxed max-w-[65ch]">
                     Simpan lagu favorit, album, dan artis agar selalu siap diputar.
                   </p>
-                  <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                  <div className="flex flex-wrap items-center gap-2 pt-2">
                     <button
                       type="button"
                       tabIndex={isExpanded ? 0 : -1}
                       onClick={onOpenCreatePlaylist}
-                      className="px-3.5 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-transform"
+                      className="min-h-[40px] px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-transform"
                     >
                       Buat playlist
                     </button>
@@ -540,7 +540,7 @@ export function Sidebar({ onOpenCreatePlaylist }: SidebarProps) {
                       type="button"
                       tabIndex={isExpanded ? 0 : -1}
                       onClick={() => navigate({ name: 'create-mix' })}
-                      className="px-3 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-[#E8FFF3] text-xs font-semibold transition-colors"
+                      className="min-h-[40px] px-4 py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-[#E8FFF3] text-xs font-semibold transition-colors"
                     >
                       Buat Mix
                     </button>

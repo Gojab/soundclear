@@ -263,23 +263,23 @@ export function Footer() {
     <>
       <footer
         aria-label="Footer SoundClear"
-        className="mt-12 pt-10 pb-8 px-4 sm:px-6 text-[#E8FFF3]"
+        className="mt-12 pt-8 pb-8 px-4 sm:px-6 text-[#E8FFF3]"
       >
         {/* Top Columns + Social Icons */}
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-10 pb-10">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8 pb-8">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-8 flex-1 max-w-4xl">
             {columns.map((col) => (
-              <div key={col.heading} className="space-y-3">
+              <div key={col.heading} className="space-y-4">
                 <h3 className="text-[15px] font-bold text-[#E8FFF3] tracking-tight">
                   {col.heading}
                 </h3>
-                <ul className="space-y-2.5">
+                <ul className="space-y-2">
                   {col.links.map((item) => (
                     <li key={item.label}>
                       <button
                         type="button"
                         onClick={item.onClick}
-                        className="text-left text-sm font-normal text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline transition-colors leading-snug"
+                        className="text-left text-sm font-normal text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline transition-colors leading-relaxed py-1 min-h-[36px]"
                       >
                         {item.label}
                       </button>
@@ -303,7 +303,7 @@ export function Footer() {
               }
               aria-label="Instagram zhafx.corp"
               title="Instagram"
-              className="w-10 h-10 rounded-full bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.12] border border-white/[0.1] text-[#E8FFF3] flex items-center justify-center transition-colors"
+              className="w-11 h-11 rounded-full bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.12] border border-white/[0.1] text-[#E8FFF3] flex items-center justify-center transition-colors"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -330,7 +330,7 @@ export function Footer() {
               }
               aria-label="X zhafx.corp"
               title="X"
-              className="w-10 h-10 rounded-full bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.12] border border-white/[0.1] text-[#E8FFF3] flex items-center justify-center transition-colors"
+              className="w-11 h-11 rounded-full bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.12] border border-white/[0.1] text-[#E8FFF3] flex items-center justify-center transition-colors"
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -348,7 +348,7 @@ export function Footer() {
               }
               aria-label="Facebook zhafx.corp"
               title="Facebook"
-              className="w-10 h-10 rounded-full bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.12] border border-white/[0.1] text-[#E8FFF3] flex items-center justify-center transition-colors"
+              className="w-11 h-11 rounded-full bg-white/[0.06] backdrop-blur-xl hover:bg-white/[0.12] border border-white/[0.1] text-[#E8FFF3] flex items-center justify-center transition-colors"
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -359,13 +359,13 @@ export function Footer() {
 
         {/* Hairline Divider + Bottom Legal & Copyright */}
         <div className="border-t border-[#B3F7D1]/12 pt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {legalLinks.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={() => openInfo(item.title, 'zhafx.corp · SoundClear', item.body)}
-                className="text-[13px] font-normal text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline transition-colors"
+                className="text-[13px] font-normal text-[#B3F7D1]/70 hover:text-[#E8FFF3] hover:underline transition-colors min-h-[44px] inline-flex items-center"
               >
                 {item.label}
               </button>
@@ -388,29 +388,29 @@ export function Footer() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl bg-[#0B0F0D]/85 backdrop-blur-2xl border border-white/[0.14] p-5 shadow-2xl space-y-4"
+            className="w-full max-w-md rounded-2xl bg-[#0B0F0D]/85 backdrop-blur-2xl border border-white/[0.14] p-6 shadow-2xl space-y-4"
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-medium text-[#19EE8A]">{infoModal.subtitle}</p>
-                <h2 className="text-base font-bold text-[#E8FFF3] mt-0.5">{infoModal.title}</h2>
+                <h2 className="text-base font-bold text-[#E8FFF3] mt-1">{infoModal.title}</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setInfoModal(null)}
                 aria-label="Tutup dialog"
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09]"
+                className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.09] shrink-0"
               >
                 <X className="w-4 h-4" strokeWidth={1.85} />
               </button>
             </div>
-            <p className="text-xs text-[#B3F7D1]/80 leading-relaxed">{infoModal.body}</p>
-            <div className="flex items-center justify-end gap-2 pt-1">
+            <p className="text-xs text-[#B3F7D1]/80 leading-relaxed max-w-[65ch]">{infoModal.body}</p>
+            <div className="flex items-center justify-end gap-2 pt-2">
               {infoModal.ctaLabel && infoModal.onCta && (
                 <button
                   type="button"
                   onClick={infoModal.onCta}
-                  className="px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105"
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105"
                 >
                   {infoModal.ctaLabel}
                 </button>
@@ -418,7 +418,7 @@ export function Footer() {
               <button
                 type="button"
                 onClick={() => setInfoModal(null)}
-                className="px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
+                className="min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
               >
                 Tutup
               </button>

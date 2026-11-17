@@ -12,7 +12,13 @@ import {
   estimateFallbackBpm,
   type DjTransitionFrame,
 } from '../utils/djMixLogic';
-import { clampSeekTarget, computeAudioChainNodes } from '../utils/backgroundAudioLogic';
+import {
+  clampSeekTarget,
+  computeAudioChainNodes,
+  getRealDocumentVisibilityState,
+  isUserPaused,
+  subscribeRealVisibilityChange,
+} from '../utils/backgroundAudioLogic';
 
 export type TestToneMode = 'sweep' | 'pink';
 
@@ -81,7 +87,7 @@ let sharedGraph: SharedAudioGraph | null = null;
 let backgroundHandoffInProgress = false;
 let foregroundRestoreInProgress = false;
 let keepaliveAudio: HTMLAudioElement | null = null;
-let keepaliveBlobUrl: string | null = null;
+let keepaliveDataUri: string | null = null;
 let testToneMode: TestToneMode | null = null;
 let testToneOsc: OscillatorNode | null = null;
 let testToneSweepTimer: number | null = null;
@@ -213,13 +219,13 @@ function getSinkIdSupport(graph: SharedAudioGraph | null): {
   return { supported: false, method: 'none' };
 }
 
-function createSilentWavBlobUrl(): string {
-  if (keepaliveBlobUrl) return keepaliveBlobUrl;
+function createSilentWavDataUri(): string {
+  if (keepaliveDataUri) return keepaliveDataUri;
   const sampleRate = 8000;
-  const numSamples = 4000; // 0.5s tiny valid PCM WAV
+  const numSamples = 1600; // 0.2s compact PCM WAV data URI
   const dataSize = numSamples;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
+  const bytes = new Uint8Array(44 + dataSize);
+  const view = new DataView(bytes.buffer);
   const writeStr = (offset: number, s: string) => {
     for (let i = 0; i < s.length; i += 1) {
       view.setUint8(offset + i, s.charCodeAt(i));
@@ -241,18 +247,21 @@ function createSilentWavBlobUrl(): string {
   for (let i = 0; i < numSamples; i += 1) {
     view.setUint8(44 + i, 128);
   }
-  const blob = new Blob([buffer], { type: 'audio/wav' });
-  keepaliveBlobUrl = URL.createObjectURL(blob);
-  return keepaliveBlobUrl;
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    bin += String.fromCharCode(bytes[i]);
+  }
+  keepaliveDataUri = `data:audio/wav;base64,${btoa(bin)}`;
+  return keepaliveDataUri;
 }
 
 function ensureKeepaliveAudioElement(): HTMLAudioElement | null {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
   if (keepaliveAudio) return keepaliveAudio;
-  const el = new Audio(createSilentWavBlobUrl());
+  const el = new Audio(createSilentWavDataUri());
   el.loop = true;
   el.preload = 'auto';
-  el.volume = 0.005;
+  el.volume = 0.002;
   (el as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
   keepaliveAudio = el;
   return el;
@@ -288,7 +297,7 @@ function primeAudioElementOnGesture(el: HTMLAudioElement): void {
     return;
   }
 
-  const silentUrl = createSilentWavBlobUrl();
+  const silentUrl = createSilentWavDataUri();
   el.dataset.scPriming = '1';
   el.muted = true;
   el.src = silentUrl;
@@ -339,8 +348,9 @@ export function startSilentKeepaliveAudio(): void {
   }
 }
 
-export function stopSilentKeepaliveAudio(): void {
+export function stopSilentKeepaliveAudio(force = false): void {
   if (!keepaliveAudio) return;
+  if (!force && !isUserPaused()) return;
   if (!keepaliveAudio.paused) {
     keepaliveAudio.pause();
   }
@@ -362,6 +372,9 @@ export function unlockPlaybackOnUserGesture(): void {
     if (standalone) {
       primeAudioElementOnGesture(standalone);
     }
+  }
+  if (!isUserPaused()) {
+    startSilentKeepaliveAudio();
   }
 }
 
@@ -637,14 +650,14 @@ export function ensureAudioGraph(): SharedAudioGraph | null {
         g.backgroundDirectActive ||
         testToneMode !== null;
       if (hasDeckActivity) {
+        const realVis = getRealDocumentVisibilityState();
         if (
-          typeof document !== 'undefined' &&
-          document.visibilityState === 'hidden' &&
+          realVis === 'hidden' &&
           !g.backgroundDirectActive &&
           !backgroundHandoffInProgress
         ) {
           notifyContextInterruptedListeners();
-        } else if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        } else if (realVis === 'visible') {
           void g.ctx
             .resume()
             .then(() => {
@@ -914,6 +927,9 @@ function installFirstGestureResume(): void {
   gestureHooked = true;
   const onGesture = () => {
     ensurePlaybackAudioSession();
+    if (!isUserPaused()) {
+      startSilentKeepaliveAudio();
+    }
     const graph = sharedGraph;
     if (!graph) return;
     if (graph.ctx.state === 'suspended' || (graph.ctx.state as string) === 'interrupted') {
@@ -923,10 +939,10 @@ function installFirstGestureResume(): void {
     primeAudioElementOnGesture(graph.decks[1]);
     primeAudioElementOnGesture(graph.directDeck);
   };
-  ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((evt) => {
+  ['pointerdown', 'touchstart', 'touchend', 'keydown', 'click'].forEach((evt) => {
     window.addEventListener(evt, onGesture, { passive: true, capture: true });
   });
-  document.addEventListener('visibilitychange', () => {
+  subscribeRealVisibilityChange((vis) => {
     const graph = sharedGraph;
     if (
       graph &&
@@ -935,7 +951,7 @@ function installFirstGestureResume(): void {
         graph.backgroundDirectActive ||
         testToneMode !== null)
     ) {
-      if (document.visibilityState === 'visible') {
+      if (vis === 'visible') {
         void graph.ctx.resume().then(notifyDiagnosticsListeners).catch(() => {});
       } else if (!graph.backgroundDirectActive && !backgroundHandoffInProgress) {
         notifyContextInterruptedListeners();
@@ -989,29 +1005,36 @@ export function applyAudioProfileToGraph(params: {
 
   const now = graph.ctx.currentTime;
   const direct = Boolean(profile.directMode);
+  const applyParam = (param: AudioParam, value: number, timeConstant = 0.015) => {
+    param.cancelScheduledValues(now);
+    if (graph.ctx.state !== 'running') {
+      param.value = value;
+    }
+    param.setTargetAtTime(value, now, timeConstant);
+  };
 
   // Switch cleanly between DSP chain and Direct bypass path
-  graph.dspPathGain.gain.setTargetAtTime(direct ? 0 : 1, now, 0.015);
-  graph.directBypassGain.gain.setTargetAtTime(direct ? 1 : 0, now, 0.015);
+  applyParam(graph.dspPathGain.gain, direct ? 0 : 1, 0.015);
+  applyParam(graph.directBypassGain.gain, direct ? 1 : 0, 0.015);
 
   // Preamp & 10-band EQ
   const preampLin = !direct && profile.eqEnabled ? preampDbToLinear(profile.preampDb) : 1;
-  graph.preampNode.gain.setTargetAtTime(preampLin, now, 0.015);
+  applyParam(graph.preampNode.gain, preampLin, 0.015);
 
   graph.eqNodes.forEach((node, idx) => {
     const dbGain = !direct && profile.eqEnabled ? (profile.bands[idx] ?? 0) : 0;
-    node.gain.setTargetAtTime(dbGain, now, 0.015);
+    applyParam(node.gain, dbGain, 0.01);
   });
 
   // Bass boost
   const bassDb = direct ? 0 : bassBoostLevelToDb(profile.bassBoostEnabled, profile.bassBoostLevel);
-  graph.bassBoostNode.gain.setTargetAtTime(bassDb, now, 0.02);
+  applyParam(graph.bassBoostNode.gain, bassDb, 0.015);
 
   // Stereo Widener M/S side gain
   const sideGain = direct
     ? 1
     : stereoWidenerLevelToSideGain(profile.stereoWidenerEnabled, profile.stereoWidenerLevel);
-  graph.widenerSideGain.gain.setTargetAtTime(sideGain, now, 0.02);
+  applyParam(graph.widenerSideGain.gain, sideGain, 0.015);
 
   // Normalization (ReplayGain preferred if enabled, otherwise dynamic/estimated LUFS)
   let normGain = 1;
@@ -1029,15 +1052,15 @@ export function applyAudioProfileToGraph(params: {
     );
   }
   lastEffectiveNormGain = normGain;
-  graph.normNode.gain.setTargetAtTime(normGain, now, 0.03);
+  applyParam(graph.normNode.gain, normGain, 0.03);
 
   // Anti-clipping limiter
   if (!direct && profile.limiterEnabled) {
-    graph.limiterNode.threshold.setTargetAtTime(-1, now, 0.02);
-    graph.limiterNode.ratio.setTargetAtTime(20, now, 0.02);
+    applyParam(graph.limiterNode.threshold, -1, 0.02);
+    applyParam(graph.limiterNode.ratio, 20, 0.02);
   } else {
-    graph.limiterNode.threshold.setTargetAtTime(0, now, 0.02);
-    graph.limiterNode.ratio.setTargetAtTime(1, now, 0.02);
+    applyParam(graph.limiterNode.threshold, 0, 0.02);
+    applyParam(graph.limiterNode.ratio, 1, 0.02);
   }
 
   // Mono Audio & L/R Balance & Master Gain still operate at output stage cleanly
@@ -1049,14 +1072,10 @@ export function applyAudioProfileToGraph(params: {
     graph.monoMergeNode.channelCountMode = 'max';
   }
 
-  graph.pannerNode.pan.setTargetAtTime(
-    Math.max(-1, Math.min(1, profile.balance)),
-    now,
-    0.015,
-  );
+  applyParam(graph.pannerNode.pan, Math.max(-1, Math.min(1, profile.balance)), 0.015);
 
   const linearVol = isMuted ? 0 : Math.max(0, Math.min(1, volume0to100 / 100));
-  graph.masterGain.gain.setTargetAtTime(linearVol, now, 0.02);
+  applyParam(graph.masterGain.gain, linearVol, 0.015);
 
   notifyDiagnosticsListeners();
 }

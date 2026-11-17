@@ -253,23 +253,23 @@ export default function App() {
       {firestoreError && (
         <div
           role="alert"
-          className="relative z-40 flex items-center justify-between gap-3 px-4 py-2 bg-amber-950/90 border-b border-amber-400/30 text-xs text-amber-100 backdrop-blur-md"
+          className="relative z-40 flex items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] bg-amber-950/90 border-b border-amber-400/30 text-xs leading-relaxed text-amber-100 backdrop-blur-md"
         >
-          <span className="truncate">{firestoreError}</span>
+          <span className="truncate max-w-[65ch]">{firestoreError}</span>
           <button
             type="button"
             onClick={() => setFirestoreError(null)}
             aria-label="Tutup pemberitahuan Firestore"
-            className="w-6 h-6 rounded-full flex items-center justify-center text-amber-200/80 hover:text-white hover:bg-white/10 shrink-0"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-amber-200/80 hover:text-white hover:bg-white/10 shrink-0"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {/* Desktop Top Bar */}
       <header
-        className={`relative hidden md:flex items-center justify-between gap-2.5 lg:gap-4 px-3 h-15 shrink-0 z-20 transition-[background-color,padding,height] duration-300 ${
+        className={`relative hidden md:flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 h-16 shrink-0 z-20 transition-[background-color,padding,height] duration-300 ${
           glassPanels
             ? 'bg-black/30 border-b border-white/[0.08]'
             : bgActive
@@ -283,25 +283,25 @@ export default function App() {
             type="button"
             onClick={() => navigate({ name: 'home' })}
             aria-label="SoundClear Beranda"
-            className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-full hover:bg-white/[0.08] transition-colors"
+            className="flex items-center gap-2 min-h-[44px] px-2 rounded-full hover:bg-white/[0.08] transition-colors"
           >
             <img
               src="/soundclear-logo.png"
               alt="SoundClear"
               className="w-8 h-8 rounded-lg object-contain shrink-0"
             />
-            <span className="text-sm font-bold tracking-tight text-[#E8FFF3] hidden sm:inline whitespace-nowrap">
+            <span className="text-sm font-bold tracking-tight text-[#E8FFF3] hidden lg:inline whitespace-nowrap">
               SoundClear
             </span>
           </button>
 
-          <div className="flex items-center gap-1 ml-1">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={goBack}
               disabled={!canGoBack}
               aria-label="Kembali"
-              className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] backdrop-blur-md disabled:opacity-30 flex items-center justify-center text-[#E8FFF3]/90 transition-colors"
+              className="w-11 h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.11] backdrop-blur-md disabled:opacity-30 flex items-center justify-center text-[#E8FFF3]/90 transition-colors"
             >
               <ChevronLeft className="w-4 h-4" strokeWidth={2} />
             </button>
@@ -310,7 +310,7 @@ export default function App() {
               onClick={goForward}
               disabled={!canGoForward}
               aria-label="Maju"
-              className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] backdrop-blur-md disabled:opacity-30 flex items-center justify-center text-[#E8FFF3]/90 transition-colors"
+              className="w-11 h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.11] backdrop-blur-md disabled:opacity-30 flex items-center justify-center text-[#E8FFF3]/90 transition-colors"
             >
               <ChevronRight className="w-4 h-4" strokeWidth={2} />
             </button>
@@ -318,7 +318,7 @@ export default function App() {
         </div>
 
         {/* Center: Circular Home + Pill Search Bar with Moods Browse */}
-        <div className="flex items-center gap-2 flex-1 min-w-0 max-w-[540px] mx-auto">
+        <div className="flex items-center gap-2 flex-1 min-w-0 max-w-[544px] mx-auto">
           <button
             type="button"
             onClick={() => navigate({ name: 'home' })}
@@ -333,12 +333,12 @@ export default function App() {
             <Home className="w-5 h-5" strokeWidth={2} />
           </button>
 
-          <div ref={topSearchWrapperRef} className="relative flex-1">
+          <div ref={topSearchWrapperRef} className="relative flex-1 min-w-0">
             <form
               onSubmit={handleTopSearchSubmit}
-              className="flex items-center h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.09] focus-within:bg-white/[0.1] backdrop-blur-xl border border-white/[0.1] focus-within:ring-2 focus-within:ring-[#19EE8A]/70 px-3.5 gap-2.5 transition-colors"
+              className="flex items-center h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.09] focus-within:bg-white/[0.1] backdrop-blur-xl border border-white/[0.1] focus-within:ring-2 focus-within:ring-[#19EE8A]/70 pl-4 pr-1 gap-2 transition-colors"
             >
-              <Search className="w-4.5 h-4.5 text-[#B3F7D1]/70 shrink-0" strokeWidth={2} />
+              <Search className="w-4 h-4 text-[#B3F7D1]/70 shrink-0" strokeWidth={2} />
               <input
                 type="text"
                 enterKeyHint="search"
@@ -363,7 +363,7 @@ export default function App() {
                     }
                   }}
                   aria-label="Hapus pencarian"
-                  className="text-[#B3F7D1]/60 hover:text-[#E8FFF3] transition-colors shrink-0"
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] transition-colors shrink-0"
                 >
                   <X className="w-4 h-4" strokeWidth={2} />
                 </button>
@@ -377,13 +377,13 @@ export default function App() {
                 }}
                 aria-label="Jelajahi Mood & Genre"
                 title="Jelajahi Mood & Genre"
-                className={`p-1 rounded-md transition-colors shrink-0 ${
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors shrink-0 ${
                   currentRoute.name === 'moods' || currentRoute.name === 'mood-detail'
                     ? 'text-[#19EE8A]'
                     : 'text-[#B3F7D1]/75 hover:text-[#E8FFF3]'
                 }`}
               >
-                <Compass className="w-4.5 h-4.5" strokeWidth={1.9} />
+                <Compass className="w-4 h-4" strokeWidth={1.9} />
               </button>
             </form>
 
@@ -394,10 +394,10 @@ export default function App() {
                 <div
                   role="listbox"
                   aria-label="Saran dan follow-up pencarian"
-                  className="absolute left-0 right-0 top-12 z-50 rounded-2xl bg-[#0B0F0D]/88 border border-white/[0.14] shadow-2xl p-2 space-y-1.5 backdrop-blur-2xl"
+                  className="absolute left-0 right-0 top-12 z-50 rounded-2xl bg-[#0B0F0D]/88 border border-white/[0.14] shadow-2xl p-2 space-y-2 backdrop-blur-2xl"
                 >
                   {topSuggestions.length > 0 && (
-                    <div className="space-y-0.5">
+                    <div className="space-y-1">
                       {topSuggestions.map((suggestion) => (
                         <button
                           key={`top-sug-${suggestion}`}
@@ -405,7 +405,7 @@ export default function App() {
                           role="option"
                           aria-selected={false}
                           onClick={() => submitTopSearch(suggestion)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs sm:text-sm text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
+                          className="w-full min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl text-left text-xs sm:text-sm text-[#E8FFF3]/90 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
                         >
                           <Search className="w-3.5 h-3.5 text-[#B3F7D1]/55 shrink-0" strokeWidth={1.8} />
                           <span className="truncate">{suggestion}</span>
@@ -415,14 +415,14 @@ export default function App() {
                   )}
 
                   {topSearchInput.trim().length >= 2 && !isExcludedRegionalText(topSearchInput) && (
-                    <div className="pt-1 border-t border-white/[0.1] flex flex-wrap items-center gap-1.5 px-1.5 pb-0.5">
-                      <span className="text-[10px] uppercase tracking-wider text-[#B3F7D1]/50 mr-0.5">
+                    <div className="pt-2 border-t border-white/[0.1] flex flex-wrap items-center gap-2 px-2 pb-1">
+                      <span className="text-[10px] uppercase tracking-wider text-[#B3F7D1]/50">
                         Follow-up:
                       </span>
                       <button
                         type="button"
                         onClick={() => submitTopSearch(topSearchInput, 'songs')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.08] hover:bg-[#0AD36C]/25 text-[11px] text-[#E8FFF3] transition-colors"
+                        className="inline-flex items-center gap-1 min-h-[36px] px-3 py-1 rounded-full bg-white/[0.08] hover:bg-[#0AD36C]/25 text-[11px] text-[#E8FFF3] transition-colors"
                       >
                         <CornerDownRight className="w-3 h-3 text-[#19EE8A]" strokeWidth={2} />
                         Lagu &ldquo;{topSearchInput.trim()}&rdquo;
@@ -430,7 +430,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => submitTopSearch(topSearchInput, 'albums')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.08] hover:bg-[#0AD36C]/25 text-[11px] text-[#E8FFF3] transition-colors"
+                        className="inline-flex items-center gap-1 min-h-[36px] px-3 py-1 rounded-full bg-white/[0.08] hover:bg-[#0AD36C]/25 text-[11px] text-[#E8FFF3] transition-colors"
                       >
                         <CornerDownRight className="w-3 h-3 text-[#19EE8A]" strokeWidth={2} />
                         Album
@@ -438,7 +438,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => submitTopSearch(topSearchInput, 'playlists')}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.08] hover:bg-[#0AD36C]/25 text-[11px] text-[#E8FFF3] transition-colors"
+                        className="inline-flex items-center gap-1 min-h-[36px] px-3 py-1 rounded-full bg-white/[0.08] hover:bg-[#0AD36C]/25 text-[11px] text-[#E8FFF3] transition-colors"
                       >
                         <CornerDownRight className="w-3 h-3 text-[#19EE8A]" strokeWidth={2} />
                         Playlist
@@ -447,8 +447,8 @@ export default function App() {
                   )}
 
                   {topSearchInput.trim().length < 2 && recentSearches.length > 0 && (
-                    <div className="space-y-0.5">
-                      <p className="px-3 py-1 text-[11px] font-medium text-[#B3F7D1]/55">
+                    <div className="space-y-1">
+                      <p className="px-4 py-1 text-[11px] font-medium text-[#B3F7D1]/55">
                         Pencarian Terakhir
                       </p>
                       {recentSearches
@@ -461,7 +461,7 @@ export default function App() {
                             role="option"
                             aria-selected={false}
                             onClick={() => submitTopSearch(entry.query)}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs sm:text-sm text-[#E8FFF3]/85 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
+                            className="w-full min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl text-left text-xs sm:text-sm text-[#E8FFF3]/85 hover:bg-white/[0.09] hover:text-[#E8FFF3] transition-colors"
                           >
                             <Clock className="w-3.5 h-3.5 text-[#B3F7D1]/50 shrink-0" strokeWidth={1.8} />
                             <span className="truncate">{entry.query}</span>
@@ -475,7 +475,7 @@ export default function App() {
         </div>
 
         {/* Right: Real SoundClear utility controls + PWA Install */}
-        <div className="flex items-center gap-1 lg:gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <PWAInstallButton variant="compact" />
 
           <button
@@ -483,7 +483,7 @@ export default function App() {
             onClick={() => navigate({ name: 'recap' })}
             aria-label="Rekap Dengar"
             title="Rekap Dengar"
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap backdrop-blur-md border border-white/[0.09] ${
+            className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full text-xs font-semibold transition-colors whitespace-nowrap backdrop-blur-md border border-white/[0.09] ${
               currentRoute.name === 'recap'
                 ? 'bg-[#19EE8A] text-[#0F1F17] border-transparent'
                 : 'bg-white/[0.06] text-[#E8FFF3]/90 hover:bg-white/[0.11] hover:text-[#E8FFF3]'
@@ -498,7 +498,7 @@ export default function App() {
             onClick={() => navigate({ name: 'shortcuts' })}
             aria-label="Pintasan Keyboard"
             title="Pintasan Keyboard (?)"
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
               currentRoute.name === 'shortcuts'
                 ? 'bg-[#19EE8A] text-[#0F1F17]'
                 : 'text-[#B3F7D1]/75 hover:text-[#E8FFF3] hover:bg-white/[0.08]'
@@ -512,7 +512,7 @@ export default function App() {
             onClick={() => navigate({ name: 'settings' })}
             aria-label="Pengaturan"
             title="Pengaturan"
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
               currentRoute.name === 'settings'
                 ? 'bg-[#19EE8A] text-[#0F1F17]'
                 : 'text-[#B3F7D1]/75 hover:text-[#E8FFF3] hover:bg-white/[0.08]'
@@ -527,7 +527,7 @@ export default function App() {
               onClick={() => setRightPanelOpen(true)}
               aria-label="Buka panel sedang diputar"
               title="Buka panel sedang diputar"
-              className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.11] backdrop-blur-md border border-white/[0.09] text-xs font-semibold text-[#E8FFF3]/90 hover:text-[#E8FFF3] transition-colors whitespace-nowrap"
+              className="hidden lg:inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.11] backdrop-blur-md border border-white/[0.09] text-xs font-semibold text-[#E8FFF3]/90 hover:text-[#E8FFF3] transition-colors whitespace-nowrap"
             >
               <PanelRightOpen className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={2} />
               <span>Diputar</span>
@@ -539,12 +539,12 @@ export default function App() {
       </header>
 
       {/* Main 3-pane desktop area */}
-      <div className="relative z-10 flex-1 min-h-0 flex md:gap-2 md:px-2">
+      <div className="relative z-10 flex-1 min-h-0 flex md:gap-2 md:px-4 lg:px-6">
         <Sidebar onOpenCreatePlaylist={openCreatePlaylistModal} />
 
         <main
           ref={mainScrollRef}
-          className={`@container flex-1 min-w-0 md:rounded-lg overflow-y-auto flex flex-col relative transition-colors duration-300 border-0 md:border md:border-white/[0.08] ${
+          className={`@container flex-1 min-w-0 md:rounded-lg overflow-y-auto overflow-x-hidden flex flex-col relative transition-colors duration-300 border-0 md:border md:border-white/[0.08] ${
             glassPanels
               ? 'bg-black/25'
               : bgActive
@@ -566,8 +566,8 @@ export default function App() {
             currentRoute.name !== 'settings' &&
             currentRoute.name !== 'search' && (
             <header
-              style={{ top: 'env(safe-area-inset-top, 0px)' }}
-              className={`md:hidden sticky z-20 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.09] shrink-0 ${
+              style={{ top: 0 }}
+              className={`md:hidden sticky z-20 flex items-center justify-between gap-2 px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 border-b border-white/[0.09] shrink-0 ${
                 glassPanels ? 'bg-black/40' : bgActive ? 'bg-black/65' : 'bg-black/70 backdrop-blur-2xl'
               }`}
             >
@@ -576,7 +576,7 @@ export default function App() {
                   type="button"
                   onClick={() => setMobileDrawerOpen(true)}
                   aria-label="Buka menu profil"
-                  className="w-8 h-8 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0 overflow-hidden"
+                  className="w-11 h-11 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-extrabold flex items-center justify-center shrink-0 overflow-hidden"
                 >
                   {authUser?.photoURL ? (
                     <img
@@ -594,7 +594,7 @@ export default function App() {
                   onClick={goBack}
                   disabled={!canGoBack}
                   aria-label="Kembali"
-                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] disabled:opacity-30 flex items-center justify-center text-[#E8FFF3]"
+                  className="w-11 h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.11] disabled:opacity-30 flex items-center justify-center text-[#E8FFF3] shrink-0"
                 >
                   <ChevronLeft className="w-4 h-4" strokeWidth={1.75} />
                 </button>
@@ -603,13 +603,13 @@ export default function App() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <PWAInstallButton variant="compact" />
                 <button
                   type="button"
                   onClick={() => navigate({ name: 'search' })}
                   aria-label="Cari"
-                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
+                  className="w-11 h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
                 >
                   <Search className="w-4 h-4" strokeWidth={1.75} />
                 </button>
@@ -617,7 +617,7 @@ export default function App() {
                   type="button"
                   onClick={() => navigate({ name: 'settings' })}
                   aria-label="Pengaturan"
-                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
+                  className="w-11 h-11 rounded-full bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.08] flex items-center justify-center text-[#B3F7D1]"
                 >
                   <Settings className="w-4 h-4" strokeWidth={1.75} />
                 </button>
@@ -626,7 +626,15 @@ export default function App() {
           )}
 
           {/* Scrollable page body */}
-          <div className="relative z-10 flex-1 px-4 sm:px-6 py-4 pb-4 md:pb-6">
+          <div
+            className={`relative z-10 flex-1 px-4 sm:px-6 lg:px-8 pb-4 sm:pb-6 ${
+              currentRoute.name === 'home' ||
+              currentRoute.name === 'settings' ||
+              currentRoute.name === 'search'
+                ? 'pt-[max(1rem,env(safe-area-inset-top))] md:pt-6'
+                : 'pt-4 sm:pt-6'
+            }`}
+          >
             {currentRoute.name === 'home' && (
               <HomePage
                 onAddToPlaylist={openAddToPlaylistModal}
@@ -760,19 +768,19 @@ export default function App() {
         <div
           role="region"
           aria-label="Lanjutkan pemutaran terakhir"
-          className="fixed bottom-32 md:bottom-24 left-1/2 -translate-x-1/2 z-[90] w-[calc(100%-2rem)] max-w-md rounded-full bg-[#0B0F0D]/85 border border-[#19EE8A]/45 px-3.5 py-2 shadow-2xl backdrop-blur-2xl flex items-center justify-between gap-3"
+          className="fixed bottom-[calc(144px+env(safe-area-inset-bottom,0px))] md:bottom-24 left-1/2 -translate-x-1/2 z-[90] w-[calc(100%-2rem)] max-w-md rounded-full bg-[#0B0F0D]/85 border border-[#19EE8A]/45 px-4 py-2 shadow-2xl backdrop-blur-2xl flex items-center justify-between gap-4"
         >
           <div className="min-w-0">
             <p className="text-xs font-semibold text-[#E8FFF3] truncate">{currentTrack.title}</p>
-            <p className="text-[11px] text-[#B3F7D1]/70 truncate">
+            <p className="text-[11px] leading-relaxed text-[#B3F7D1]/70 truncate max-w-[65ch]">
               Sesi terakhir siap dilanjutkan
             </p>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={resumeBlockedPlayback}
-              className="inline-flex items-center gap-1.5 rounded-full bg-sc-gradient px-3.5 py-1.5 text-xs font-bold text-[#0F1F17] hover:brightness-105 transition cursor-pointer"
+              className="inline-flex items-center gap-2 min-h-[44px] rounded-full bg-sc-gradient px-4 py-2 text-xs font-bold text-[#0F1F17] hover:brightness-105 transition cursor-pointer"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               Lanjutkan
@@ -781,9 +789,9 @@ export default function App() {
               type="button"
               onClick={() => setAutoplayBlockedPendingResume(false)}
               aria-label="Tutup pengingat lanjutkan"
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>

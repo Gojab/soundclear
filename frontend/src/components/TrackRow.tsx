@@ -101,8 +101,8 @@ export function TrackRow({
         onDropIndex?.(index);
       }}
       onContextMenu={handleContextMenu}
-      className={`track-row group flex items-center gap-3 px-3 ${
-        compact ? 'py-1.5' : 'py-2'
+      className={`track-row group flex items-center gap-2 sm:gap-4 px-2 sm:px-4 ${
+        compact ? 'py-2' : 'py-2'
       } rounded-xl ${isCurrent ? 'bg-white/[0.09] border border-[#19EE8A]/20' : ''} ${isHidden ? 'opacity-45' : ''}`}
     >
       {draggable && (
@@ -168,7 +168,7 @@ export function TrackRow({
       )}
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={handlePrimaryClick}
@@ -229,7 +229,7 @@ export function TrackRow({
         </div>
       )}
 
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         <button
           type="button"
           onClick={() => {
@@ -252,7 +252,7 @@ export function TrackRow({
           }}
           aria-label={isOffline ? `Hapus ${track.title} dari offline` : `Unduh ${track.title} offline`}
           title={isOffline ? 'Tersimpan offline' : 'Unduh offline'}
-          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+          className={`w-11 h-11 rounded-lg flex items-center justify-center transition-colors ${
             isOffline
               ? 'text-[#19EE8A]'
               : 'text-[#B3F7D1]/45 md:hidden md:group-hover:flex hover:text-[#E8FFF3] hover:bg-white/[0.1]'
@@ -269,7 +269,7 @@ export function TrackRow({
           type="button"
           onClick={() => toggleLike(track)}
           aria-label={liked ? `Hapus ${track.title} dari lagu disukai` : `Sukai ${track.title}`}
-          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+          className={`w-11 h-11 rounded-lg flex items-center justify-center transition-colors ${
             liked
               ? 'text-[#19EE8A]'
               : 'text-[#B3F7D1]/45 md:hidden md:group-hover:flex hover:text-[#E8FFF3]'
@@ -290,7 +290,7 @@ export function TrackRow({
           }}
           aria-label={`Tambahkan ${track.title} ke antrean`}
           title="Tambahkan ke antrean"
-          className="hidden sm:group-hover:flex w-8 h-8 rounded-lg items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
+          className="hidden sm:group-hover:flex w-11 h-11 rounded-lg items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
         >
           <ListEnd className="w-4 h-4" strokeWidth={1.75} />
         </button>
@@ -301,7 +301,7 @@ export function TrackRow({
             onClick={() => onAddToPlaylist(track)}
             aria-label={`Simpan ${track.title} ke playlist`}
             title="Simpan ke playlist"
-            className="hidden sm:group-hover:flex w-8 h-8 rounded-lg items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
+            className="hidden sm:group-hover:flex w-11 h-11 rounded-lg items-center justify-center text-[#B3F7D1]/60 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
           >
             <ListPlus className="w-4 h-4" strokeWidth={1.75} />
           </button>
@@ -313,7 +313,7 @@ export function TrackRow({
             onClick={onRemove}
             aria-label={`Hapus ${track.title} dari daftar`}
             title="Hapus"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-red-400 hover:bg-white/[0.1] transition-colors"
+            className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-red-400 hover:bg-white/[0.1] transition-colors"
           >
             <Trash2 className="w-4 h-4" strokeWidth={1.75} />
           </button>
@@ -330,7 +330,7 @@ export function TrackRow({
           }}
           aria-label={`Opsi lainnya untuk ${track.title}`}
           title="Opsi lainnya"
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
+          className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors"
         >
           <MoreHorizontal className="w-4 h-4" strokeWidth={1.75} />
         </button>

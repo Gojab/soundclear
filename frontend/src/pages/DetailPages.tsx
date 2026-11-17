@@ -101,7 +101,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col sm:flex-row sm:items-end gap-5">
+      <header className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6">
         <ArtworkImage
           src={artist.thumbnail}
           alt={artist.name}
@@ -119,12 +119,12 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
             {artist.subscribers && artist.views && <span aria-hidden="true">·</span>}
             {artist.views && <span>{artist.views}</span>}
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 pt-2">
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             {artist.songs.length > 0 && (
               <button
                 type="button"
                 onClick={() => playTrackList(artist.songs, 0, artist.name)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
+                className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Lagu Populer
@@ -134,7 +134,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
               type="button"
               onClick={handleToggleFollow}
               aria-pressed={followed}
-              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+              className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
                 followed
                   ? 'bg-white/[0.1] backdrop-blur-xl text-[#19EE8A] border border-[#19EE8A]/35'
                   : 'bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] text-[#E8FFF3] border border-white/[0.11]'
@@ -157,9 +157,9 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       </header>
 
       {artist.songs.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Populer</h2>
-          <div className="space-y-1">
+          <div className="space-y-2">
             {artist.songs.map((song, idx) => (
               <TrackRow
                 key={`${song.id}-${idx}`}
@@ -174,7 +174,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       )}
 
       {artist.albums.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Album</h2>
           <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.albums.map((alb) => (
@@ -185,7 +185,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       )}
 
       {artist.singles.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Singel & EP</h2>
           <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.singles.map((s) => (
@@ -196,7 +196,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       )}
 
       {artist.compilations.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Kompilasi</h2>
           <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.compilations.map((c) => (
@@ -207,7 +207,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       )}
 
       {artist.appearsOn.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Muncul di</h2>
           <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.appearsOn.map((ap) => (
@@ -218,7 +218,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       )}
 
       {artist.videos.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Video Musik</h2>
           <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.videos.slice(0, 10).map((v) => (
@@ -229,7 +229,7 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       )}
 
       {artist.related.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Artis Serupa</h2>
           <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {artist.related.map((rel) => (
@@ -240,9 +240,9 @@ export function ArtistDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailP
       )}
 
       {artist.description && (
-        <section className="glass-card rounded-2xl p-4 space-y-1.5">
+        <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-2">
           <h2 className="text-sm font-semibold text-[#E8FFF3]">Tentang {artist.name}</h2>
-          <p className="text-xs text-[#B3F7D1]/65 leading-relaxed whitespace-pre-line max-w-3xl">
+          <p className="text-xs text-[#B3F7D1]/65 leading-relaxed whitespace-pre-line max-w-[65ch]">
             {artist.description}
           </p>
         </section>
@@ -330,7 +330,7 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col sm:flex-row sm:items-end gap-5">
+      <header className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6">
         <ArtworkImage
           src={album.thumbnail}
           alt={album.title}
@@ -357,7 +357,7 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
                         fallbackQuery: artist.name,
                       })
                     }
-                    className="font-medium text-[#E8FFF3] hover:underline"
+                    className="inline-flex items-center py-1 font-medium text-[#E8FFF3] hover:underline"
                   >
                     {artist.name}
                   </button>
@@ -385,12 +385,12 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
               </>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 pt-2">
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             {album.tracks.length > 0 && (
               <button
                 type="button"
                 onClick={() => playTrackList(album.tracks, 0, album.title)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
+                className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Album
@@ -400,7 +400,7 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
               type="button"
               onClick={handleToggleSave}
               aria-pressed={saved}
-              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+              className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
                 saved
                   ? 'bg-white/[0.1] backdrop-blur-xl text-[#19EE8A] border border-[#19EE8A]/35'
                   : 'bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] text-[#E8FFF3] border border-white/[0.11]'
@@ -438,7 +438,7 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
                       showToast(`Gagal menyimpan lagu dari "${album.title}" untuk offline`);
                     });
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-xs font-semibold text-[#E8FFF3] transition-colors"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-xs font-semibold text-[#E8FFF3] transition-colors"
               >
                 <Download className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.75} />
                 Unduh Offline
@@ -448,7 +448,7 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
         </div>
       </header>
 
-      <div className="space-y-1">
+      <div className="space-y-2">
         {album.tracks.map((track, idx) => (
           <TrackRow
             key={`${track.id}-${idx}`}
@@ -462,13 +462,13 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
       </div>
 
       {album.credits.length > 0 && (
-        <section className="glass-card rounded-2xl p-4 space-y-2.5">
+        <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
           <h2 className="text-sm font-semibold text-[#E8FFF3]">Kredit Album</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             {album.credits.map((c) => (
               <div key={c.role}>
                 <p className="text-[#B3F7D1]/50">{c.role}</p>
-                <p className="text-[#E8FFF3]/85 mt-0.5">{c.names.join(', ')}</p>
+                <p className="leading-relaxed text-[#E8FFF3]/85 mt-1">{c.names.join(', ')}</p>
               </div>
             ))}
           </div>
@@ -476,7 +476,7 @@ export function AlbumDetailPage({ id, fallbackQuery, onAddToPlaylist }: DetailPr
       )}
 
       {album.moreFromArtist.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="text-lg font-semibold text-[#E8FFF3]">Lainnya dari Artis Ini</h2>
           <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
             {album.moreFromArtist.map((item) => (
@@ -561,7 +561,7 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-end gap-5">
+      <header className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6">
         <ArtworkImage
           src={pl.thumbnail}
           alt={pl.title}
@@ -573,7 +573,9 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
           <p className="text-xs text-[#B3F7D1]/60">Playlist</p>
           <h1 className="text-2xl sm:text-3xl font-bold text-[#E8FFF3] tracking-tight">{pl.title}</h1>
           {pl.description && (
-            <p className="text-xs text-[#B3F7D1]/65 max-w-2xl line-clamp-2">{pl.description}</p>
+            <p className="text-xs leading-relaxed text-[#B3F7D1]/65 max-w-[65ch] line-clamp-2">
+              {pl.description}
+            </p>
           )}
           <div className="flex flex-wrap items-center gap-2 text-xs text-[#B3F7D1]/60">
             {pl.author && <span>{pl.author}</span>}
@@ -587,7 +589,7 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
             )}
           </div>
           {pl.tracks.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2.5 pt-2">
+            <div className="flex flex-wrap items-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={() =>
@@ -598,7 +600,7 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
                     mixSettings.enabled ? { mixConfig: mixSettings } : undefined,
                   )
                 }
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
+                className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Playlist
@@ -607,7 +609,7 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
                 type="button"
                 aria-pressed={mixSettings.enabled}
                 onClick={() => handlePatchMix({ enabled: !mixSettings.enabled })}
-                className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
                   mixSettings.enabled
                     ? 'bg-[#19EE8A]/15 text-[#19EE8A] border border-[#19EE8A]/40'
                     : 'bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-[#E8FFF3]'
@@ -633,7 +635,7 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
                       showToast(`Gagal mengunduh lagu dari "${pl.title}"`);
                     });
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-xs font-semibold text-[#E8FFF3] transition-colors"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.1] border border-white/[0.11] text-xs font-semibold text-[#E8FFF3] transition-colors"
               >
                 <Download className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.75} />
                 Unduh Offline
@@ -655,7 +657,7 @@ export function PlaylistDetailPage({ id, fallbackQuery, onAddToPlaylist }: Detai
         />
       )}
 
-      <div className="space-y-1">
+      <div className="space-y-2">
         {pl.tracks.map((track, idx) => (
           <TrackRow
             key={`${track.id}-${idx}`}

@@ -101,12 +101,16 @@ import {
 } from '../utils/streamProbeCache';
 import {
   clampSeekTarget,
+  getRealDocumentVisibilityState,
   isMobileAudioEnvironment,
+  isUserPaused,
   shouldEngageDirectDeckOnHide,
   shouldFallbackSuspendedDspToDirect,
   shouldLoadTrackDirectlyOnDirectDeck,
   shouldRestoreDspOnForeground,
   shouldSyncExternalPause,
+  subscribeRealPageHide,
+  subscribeRealVisibilityChange,
 } from '../utils/backgroundAudioLogic';
 import { resolveEffectiveMediaSessionPlaybackState } from '../utils/mediaSessionLogic';
 
@@ -227,6 +231,7 @@ export function LocalAudioEngine() {
   const transitionStateRef = useRef<ActiveTransitionState | null>(null);
   const lastHandledManualMixRef = useRef<number>(0);
   const pauseTimerRef = useRef<number | null>(null);
+  const autoResumeTimerRef = useRef<number | null>(null);
   const stallTimerRef = useRef<number | null>(null);
   const silenceAccumMsRef = useRef(0);
   const suspendedCtxAccumMsRef = useRef(0);
@@ -247,6 +252,10 @@ export function LocalAudioEngine() {
       if (pauseTimerRef.current !== null) {
         window.clearTimeout(pauseTimerRef.current);
         pauseTimerRef.current = null;
+      }
+      if (autoResumeTimerRef.current !== null) {
+        window.clearTimeout(autoResumeTimerRef.current);
+        autoResumeTimerRef.current = null;
       }
       if (standaloneObjectUrlRef.current) {
         URL.revokeObjectURL(standaloneObjectUrlRef.current);
@@ -315,7 +324,7 @@ export function LocalAudioEngine() {
       (currentMeta.sourceMode === 'webaudio' || currentMeta.sourceMode === 'direct')
     ) {
       const nextMode =
-        localProfile.directMode || isMobileAudioEnvironment() || graph?.backgroundDirectActive
+        localProfile.directMode || Boolean(graph?.backgroundDirectActive)
           ? 'direct'
           : 'webaudio';
       if (currentMeta.sourceMode !== nextMode) {
@@ -357,12 +366,17 @@ export function LocalAudioEngine() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     let fallbackCheckTimer: number | null = null;
+    let visAutoResumeTimer: number | null = null;
     const isMobile = isMobileAudioEnvironment();
 
     const clearFallbackTimer = () => {
       if (fallbackCheckTimer !== null) {
         window.clearTimeout(fallbackCheckTimer);
         fallbackCheckTimer = null;
+      }
+      if (visAutoResumeTimer !== null) {
+        window.clearTimeout(visAutoResumeTimer);
+        visAutoResumeTimer = null;
       }
     };
 
@@ -395,6 +409,31 @@ export function LocalAudioEngine() {
       }
     };
 
+    const scheduleAutoResumeOnVisibility = () => {
+      if (visAutoResumeTimer !== null) {
+        window.clearTimeout(visAutoResumeTimer);
+      }
+      visAutoResumeTimer = window.setTimeout(() => {
+        visAutoResumeTimer = null;
+        const latest = usePlayerStore.getState();
+        if (!latest.isPlaying || isUserPaused() || isYoutubeIframeActive(latest.activeStreamMeta)) {
+          return;
+        }
+        const g = ensureAudioGraph();
+        const activeEl = g ? getActivePlaybackElement(g) : ensureStandaloneDirectDeck();
+        if (
+          activeEl &&
+          activeEl.src &&
+          activeEl.paused &&
+          !activeEl.ended &&
+          activeEl.dataset.scPriming !== '1'
+        ) {
+          void resumeAudioContext();
+          void activeEl.play().catch(() => {});
+        }
+      }, 300);
+    };
+
     const keepAliveOrFallbackForBackground = () => {
       if (isCapacitorNativeStreamActive()) return;
       const graph = ensureAudioGraph();
@@ -402,23 +441,24 @@ export function LocalAudioEngine() {
       if (!graph || !state.isPlaying || isYoutubeIframeActive(state.activeStreamMeta)) return;
 
       ensurePlaybackAudioSession();
-
-      // Bridge gap ONLY if async stream resolution/load is still in progress
-      if (isLoadingAudioRef.current && !graph.backgroundDirectActive) {
+      if (!isUserPaused()) {
         startSilentKeepaliveAudio();
       }
 
       // On iOS/Android or when AudioContext is already suspended/interrupted,
-      // hand off synchronously within the visibilitychange / pagehide grace window.
+      // hand off cleanly within the real visibilitychange / pagehide grace window.
       tryEngageDirectDeck();
+      scheduleAutoResumeOnVisibility();
 
-      // Desktop safety timer in case AudioContext suspends shortly after tab hide
+      // Safety timer in case AudioContext suspends shortly after tab hide
       clearFallbackTimer();
       fallbackCheckTimer = window.setTimeout(() => {
         fallbackCheckTimer = null;
-        if (document.visibilityState !== 'hidden') return;
+        if (getRealDocumentVisibilityState() !== 'hidden') return;
         const latest = usePlayerStore.getState();
-        if (!latest.isPlaying || isYoutubeIframeActive(latest.activeStreamMeta)) return;
+        if (!latest.isPlaying || isUserPaused() || isYoutubeIframeActive(latest.activeStreamMeta)) {
+          return;
+        }
 
         const g = ensureAudioGraph();
         if (!g || g.backgroundDirectActive) return;
@@ -432,11 +472,11 @@ export function LocalAudioEngine() {
             void engageBackgroundDirectDeck(getEffectiveVol(latest), latest.isMuted);
           });
         }
-      }, 180);
+      }, 300);
     };
 
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
+    const onVisibility = (vis: string) => {
+      if (vis === 'hidden') {
         keepAliveOrFallbackForBackground();
         return;
       }
@@ -452,19 +492,19 @@ export function LocalAudioEngine() {
           backgroundDirectActive: graph.backgroundDirectActive,
           isMobile,
           directMode,
-          visibilityState: document.visibilityState,
+          visibilityState: vis,
         })
       ) {
         void restoreDspDeckFromBackground();
-      } else if (graph && state.isPlaying && !isYoutubeIframeActive(state.activeStreamMeta)) {
+      } else if (graph && state.isPlaying && !isUserPaused() && !isYoutubeIframeActive(state.activeStreamMeta)) {
         if (!graph.backgroundDirectActive) {
           void resumeAudioContext();
         }
         const activeEl = getActivePlaybackElement(graph);
         if (activeEl.src && activeEl.paused && !activeEl.ended && activeEl.dataset.scPriming !== '1') {
-          void activeEl.play().catch(() => {});
+          scheduleAutoResumeOnVisibility();
         }
-      } else if (!graph && state.isPlaying && !isYoutubeIframeActive(state.activeStreamMeta)) {
+      } else if (!graph && state.isPlaying && !isUserPaused() && !isYoutubeIframeActive(state.activeStreamMeta)) {
         const standalone = ensureStandaloneDirectDeck();
         if (
           standalone &&
@@ -473,7 +513,7 @@ export function LocalAudioEngine() {
           !standalone.ended &&
           standalone.dataset.scPriming !== '1'
         ) {
-          void standalone.play().catch(() => {});
+          scheduleAutoResumeOnVisibility();
         }
       }
     };
@@ -483,7 +523,7 @@ export function LocalAudioEngine() {
       const latest = usePlayerStore.getState();
       const g = ensureAudioGraph();
       if (!g) return;
-      if (document.visibilityState === 'hidden') {
+      if (getRealDocumentVisibilityState() === 'hidden') {
         tryEngageDirectDeck();
         return;
       }
@@ -499,15 +539,16 @@ export function LocalAudioEngine() {
       }
     });
 
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', keepAliveOrFallbackForBackground);
-    window.addEventListener('pageshow', onVisibility);
+    const onPageShow = () => onVisibility(getRealDocumentVisibilityState());
+    const unsubscribeVisibility = subscribeRealVisibilityChange((vis) => onVisibility(vis));
+    const unsubscribePageHide = subscribeRealPageHide(keepAliveOrFallbackForBackground);
+    window.addEventListener('pageshow', onPageShow);
     return () => {
       clearFallbackTimer();
       unsubscribeInterrupt();
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', keepAliveOrFallbackForBackground);
-      window.removeEventListener('pageshow', onVisibility);
+      unsubscribeVisibility();
+      unsubscribePageHide();
+      window.removeEventListener('pageshow', onPageShow);
     };
   }, []);
 
@@ -642,7 +683,7 @@ export function LocalAudioEngine() {
           st.handleTrackEnded();
         };
 
-    // Sync OS-level audio interruptions (phone call, headphone unplug, audio focus loss)
+    // Auto-resume after 300ms when paused unintentionally while userPaused === false
     const onDeckExternalPause = (el: HTMLAudioElement) => () => {
       const g = ensureAudioGraph();
       const activeEl = g ? getActivePlaybackElement(g) : ensureStandaloneDirectDeck();
@@ -658,15 +699,49 @@ export function LocalAudioEngine() {
         isTransitioning: transitionInProgressRef.current,
         isBackgroundHandoff: isBackgroundHandoffActive(),
       });
-      if (shouldSync) {
-        st.setIsPlaying(false);
-        syncMediaSessionPlaybackState('paused');
-        syncMediaSessionPosition({
-          duration: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : st.duration,
-          currentTime: Number.isFinite(el.currentTime) ? el.currentTime : st.currentTime,
-          playbackRate: st.playbackRate,
-        });
+      if (!shouldSync) return;
+
+      if (!isUserPaused()) {
+        if (autoResumeTimerRef.current !== null) {
+          window.clearTimeout(autoResumeTimerRef.current);
+        }
+        autoResumeTimerRef.current = window.setTimeout(() => {
+          autoResumeTimerRef.current = null;
+          const latest = usePlayerStore.getState();
+          if (
+            !latest.isPlaying ||
+            isUserPaused() ||
+            el.ended ||
+            !el.src ||
+            !el.paused ||
+            el.dataset.scPriming === '1'
+          ) {
+            return;
+          }
+          void resumeAudioContext();
+          void el.play().catch((err: unknown) => {
+            if (
+              err instanceof DOMException &&
+              err.name === 'NotAllowedError' &&
+              getRealDocumentVisibilityState() === 'visible'
+            ) {
+              const curr = usePlayerStore.getState();
+              curr.setIsPlaying(false, { userInitiated: false });
+              curr.setAutoplayBlockedPendingResume(true);
+              syncMediaSessionPlaybackState('paused');
+            }
+          });
+        }, 300);
+        return;
       }
+
+      st.setIsPlaying(false, { userInitiated: false });
+      syncMediaSessionPlaybackState('paused');
+      syncMediaSessionPosition({
+        duration: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : st.duration,
+        currentTime: Number.isFinite(el.currentTime) ? el.currentTime : st.currentTime,
+        playbackRate: st.playbackRate,
+      });
     };
 
     const onDeckSeeked = (el: HTMLAudioElement) => () => {
@@ -864,8 +939,7 @@ export function LocalAudioEngine() {
       const useDirectTarget =
         !graph ||
         shouldLoadTrackDirectlyOnDirectDeck({
-          visibilityState:
-            typeof document !== 'undefined' ? document.visibilityState : 'visible',
+          visibilityState: getRealDocumentVisibilityState(),
           backgroundDirectActive: graph.backgroundDirectActive,
           isMobile: isMobileAudioEnvironment(),
           contextState: graph.ctx.state,
@@ -873,11 +947,7 @@ export function LocalAudioEngine() {
         });
 
       const storeAtStart = usePlayerStore.getState();
-      if (
-        storeAtStart.isPlaying &&
-        typeof document !== 'undefined' &&
-        document.visibilityState === 'hidden'
-      ) {
+      if (storeAtStart.isPlaying && getRealDocumentVisibilityState() === 'hidden') {
         // Hold background audio session alive across async network probe/load gap
         startSilentKeepaliveAudio();
       }
@@ -932,7 +1002,7 @@ export function LocalAudioEngine() {
           usePlayerStore
             .getState()
             .setPlayerError('File audio lokal tidak ditemukan di penyimpanan browser.');
-          usePlayerStore.getState().setIsPlaying(false);
+          usePlayerStore.getState().setIsPlaying(false, { userInitiated: false });
           return;
         }
         if (!graph) {
@@ -1515,7 +1585,7 @@ export function LocalAudioEngine() {
                     backgroundDirectActive: g.backgroundDirectActive,
                     contextState: g.ctx.state,
                   }) ||
-                  (document.visibilityState === 'hidden' &&
+                  (getRealDocumentVisibilityState() === 'hidden' &&
                     shouldEngageDirectDeckOnHide({
                       isPlaying: latest.isPlaying,
                       isYoutubeIframe: false,
@@ -1544,7 +1614,7 @@ export function LocalAudioEngine() {
                     }
                   } else if (g.ctx.state !== 'running') {
                     pauseAudioElementProgrammatically(audio);
-                    latest.setIsPlaying(false);
+                    latest.setIsPlaying(false, { userInitiated: false });
                     latest.setAutoplayBlockedPendingResume(true);
                     syncMediaSessionPlaybackState('paused');
                   }
@@ -1556,7 +1626,7 @@ export function LocalAudioEngine() {
               if (err instanceof DOMException && err.name === 'AbortError') return;
               if (err instanceof DOMException && err.name === 'NotAllowedError') {
                 const latest = usePlayerStore.getState();
-                latest.setIsPlaying(false);
+                latest.setIsPlaying(false, { userInitiated: false });
                 latest.setAutoplayBlockedPendingResume(true);
                 latest.setIsBuffering(false);
                 stopSilentKeepaliveAudio();
@@ -1734,7 +1804,7 @@ export function LocalAudioEngine() {
           return;
         }
         usePlayerStore.getState().setIsBuffering(false);
-        usePlayerStore.getState().setIsPlaying(false);
+        usePlayerStore.getState().setIsPlaying(false, { userInitiated: false });
         stopSilentKeepaliveAudio();
         syncMediaSessionPlaybackState('paused');
         usePlayerStore
@@ -1843,8 +1913,7 @@ export function LocalAudioEngine() {
         backgroundDirectActive: graph.backgroundDirectActive,
         isMobile: isMobileAudioEnvironment(),
         directMode: false,
-        visibilityState:
-          typeof document !== 'undefined' ? document.visibilityState : 'visible',
+        visibilityState: getRealDocumentVisibilityState(),
       })
     ) {
       void restoreDspDeckFromBackground();
@@ -1950,7 +2019,7 @@ export function LocalAudioEngine() {
               const st = usePlayerStore.getState();
               stopSilentKeepaliveAudio();
               syncMediaSessionPlaybackState('paused');
-              st.setIsPlaying(false);
+              st.setIsPlaying(false, { userInitiated: false });
               if (err instanceof DOMException && err.name === 'NotAllowedError') {
                 st.setAutoplayBlockedPendingResume(true);
               } else {
@@ -1958,7 +2027,7 @@ export function LocalAudioEngine() {
               }
             });
         }
-      } else if (document.visibilityState === 'hidden' && isLoadingAudioRef.current) {
+      } else if (getRealDocumentVisibilityState() === 'hidden' && isLoadingAudioRef.current) {
         startSilentKeepaliveAudio();
       }
     } else if (!activeAudio.paused) {
@@ -2426,8 +2495,7 @@ export function LocalAudioEngine() {
           backgroundDirectActive: graph.backgroundDirectActive,
           isMobile: isMobileAudioEnvironment(),
           directMode: profile.directMode,
-          visibilityState:
-            typeof document !== 'undefined' ? document.visibilityState : 'visible',
+          visibilityState: getRealDocumentVisibilityState(),
         })
       ) {
         suspendedCtxAccumMsRef.current = 0;
@@ -2444,11 +2512,13 @@ export function LocalAudioEngine() {
           contextState: graph.ctx.state,
         })
       ) {
-        if (document.visibilityState === 'visible') {
+        const realVis = getRealDocumentVisibilityState();
+        if (realVis === 'visible') {
           void resumeAudioContext();
         }
         suspendedCtxAccumMsRef.current += deltaMs > 0 ? deltaMs : 100;
-        if (suspendedCtxAccumMsRef.current >= 300) {
+        const thresholdMs = realVis === 'visible' ? 1500 : 300;
+        if (suspendedCtxAccumMsRef.current >= thresholdMs) {
           suspendedCtxAccumMsRef.current = 0;
           const effVol = localActive
             ? store.volume

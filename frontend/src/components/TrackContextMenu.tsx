@@ -125,9 +125,9 @@ export function GlobalTrackContextMenu({
           role="menu"
           aria-label={`Menu untuk ${track.title}`}
           style={{ left: menuLeft, top: menuTop }}
-          className="fixed z-50 w-56 rounded-xl p-1.5 bg-[#0B0F0D]/88 backdrop-blur-2xl shadow-2xl border border-white/[0.14] text-xs"
+          className="fixed z-50 w-56 rounded-xl p-2 bg-[#0B0F0D]/88 backdrop-blur-2xl shadow-2xl border border-white/[0.14] text-xs space-y-1"
         >
-          <div className="px-2.5 py-2 border-b border-[#B3F7D1]/[0.1] mb-1">
+          <div className="px-2 py-2 border-b border-[#B3F7D1]/[0.1] mb-1">
             <p className="font-semibold text-[#E8FFF3] truncate">{track.title}</p>
             <p className="text-[11px] text-[#B3F7D1]/60 truncate">{formatArtists(track.artists)}</p>
           </div>
@@ -142,7 +142,7 @@ export function GlobalTrackContextMenu({
                   showToast('Ditambahkan ke putar berikutnya');
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
+                className="w-full min-h-[44px] flex items-center gap-2 px-3 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
                 <ListStart className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                 <span>Putar berikutnya</span>
@@ -156,7 +156,7 @@ export function GlobalTrackContextMenu({
                   showToast('Ditambahkan ke antrean');
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
+                className="w-full min-h-[44px] flex items-center gap-2 px-3 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
                 <ListEnd className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
                 <span>Tambah ke antrean</span>
@@ -175,7 +175,7 @@ export function GlobalTrackContextMenu({
               }
               closeMenu();
             }}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
+            className="w-full min-h-[44px] flex items-center gap-2 px-3 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
           >
             <ListPlus className="w-3.5 h-3.5 text-[#B3F7D1]/65" strokeWidth={1.75} />
             <span>Tambah ke playlist</span>
@@ -192,7 +192,7 @@ export function GlobalTrackContextMenu({
                   showToast(liked ? 'Dihapus dari Lagu Disukai' : 'Ditambahkan ke Lagu Disukai');
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
+                className="w-full min-h-[44px] flex items-center gap-2 px-3 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
                 <Heart
                   className={`w-3.5 h-3.5 ${liked ? 'text-[#19EE8A] fill-[#19EE8A]' : 'text-[#B3F7D1]/65'}`}
@@ -223,7 +223,7 @@ export function GlobalTrackContextMenu({
                   }
                   closeMenu();
                 }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
+                className="w-full min-h-[44px] flex items-center gap-2 px-3 py-2 rounded-lg text-[#E8FFF3]/90 hover:text-[#E8FFF3] hover:bg-white/[0.1] text-left transition-colors"
               >
                 {downloadedOffline ? (
                   <Check className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={2} />
@@ -386,7 +386,7 @@ export function GlobalTrackContextMenu({
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-24 md:bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#0B0F0D]/88 backdrop-blur-2xl border border-[#19EE8A]/35 text-xs font-medium text-[#E8FFF3] shadow-xl"
+          className="fixed bottom-[calc(88px+env(safe-area-inset-bottom,0px))] md:bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] px-4 py-2 rounded-xl bg-[#0B0F0D]/88 backdrop-blur-2xl border border-[#19EE8A]/35 text-xs font-medium text-[#E8FFF3] shadow-xl text-center"
         >
           {toastMessage}
         </div>
@@ -427,43 +427,43 @@ function SongCreditsModal({
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
     >
-      <div className="w-full max-w-md rounded-2xl p-5 bg-[#0B0F0D]/88 backdrop-blur-2xl border border-white/[0.14] shadow-2xl space-y-4">
+      <div className="w-full max-w-md rounded-2xl p-6 bg-[#0B0F0D]/88 backdrop-blur-2xl border border-white/[0.14] shadow-2xl space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs text-[#B3F7D1]/60">Kredit Lagu</p>
-            <h2 className="text-base font-semibold text-[#E8FFF3] truncate mt-0.5">{track.title}</h2>
+            <h2 className="text-base font-semibold text-[#E8FFF3] truncate mt-1">{track.title}</h2>
             <p className="text-xs text-[#B3F7D1]/70 truncate">{formatArtists(track.artists)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Tutup kredit lagu"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1]"
+            className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1] shrink-0"
           >
             <X className="w-4 h-4" strokeWidth={1.75} />
           </button>
         </div>
 
         {query.isLoading ? (
-          <div className="space-y-2.5 animate-pulse py-2">
+          <div className="space-y-2 animate-pulse py-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-10 rounded-xl bg-white/[0.06]" />
             ))}
           </div>
         ) : query.data && query.data.credits.length > 0 ? (
-          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+          <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
             {query.data.credits.map((credit) => (
               <div
                 key={credit.role}
-                className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] px-3.5 py-2.5"
+                className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] px-4 py-2"
               >
                 <p className="text-[11px] font-medium text-[#B3F7D1]/60">{credit.role}</p>
-                <p className="text-sm text-[#E8FFF3] mt-0.5">{credit.names.join(', ')}</p>
+                <p className="text-sm text-[#E8FFF3] mt-1 leading-relaxed">{credit.names.join(', ')}</p>
               </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] p-4 space-y-2 text-xs text-[#B3F7D1]/75">
+          <div className="rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] p-4 space-y-2 text-xs text-[#B3F7D1]/75 leading-relaxed max-w-[65ch]">
             <p>Kredit terperinci tidak disediakan oleh sumber untuk lagu ini.</p>
             <p className="text-[#E8FFF3]">Artis: {formatArtists(track.artists)}</p>
             {track.album?.name && <p className="text-[#E8FFF3]">Album: {track.album.name}</p>}

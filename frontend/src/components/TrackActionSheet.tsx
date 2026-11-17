@@ -197,12 +197,12 @@ export function TrackActionSheet({
 
       <div className="relative z-10 w-full md:max-w-md max-h-[88vh] flex flex-col rounded-t-3xl md:rounded-2xl bg-[#121614] border-t md:border border-white/[0.12] shadow-2xl overflow-hidden">
         {/* Drag handle */}
-        <div className="pt-2.5 pb-1 flex justify-center shrink-0">
+        <div className="pt-2 pb-1 flex justify-center shrink-0">
           <div className="w-10 h-1 rounded-full bg-white/25" />
         </div>
 
         {/* Track header */}
-        <div className="px-5 py-3 flex items-center gap-3.5 border-b border-white/[0.09] shrink-0">
+        <div className="px-4 py-4 flex items-center gap-4 border-b border-white/[0.09] shrink-0">
           <ArtworkImage
             src={track.thumbnail}
             alt={track.title}
@@ -212,7 +212,7 @@ export function TrackActionSheet({
           />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-[#E8FFF3] truncate">{track.title}</p>
-            <p className="text-xs text-[#B3F7D1]/65 truncate mt-0.5">
+            <p className="text-xs text-[#B3F7D1]/65 truncate mt-1">
               {formatArtists(track.artists)}
               {track.album?.name ? ` • ${track.album.name}` : ''}
             </p>
@@ -221,24 +221,24 @@ export function TrackActionSheet({
             type="button"
             onClick={onClose}
             aria-label="Tutup"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.08]"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.08] shrink-0"
           >
-            <X className="w-4 h-4" strokeWidth={2} />
+            <X className="w-5 h-5" strokeWidth={2} />
           </button>
         </div>
 
         {subView === 'sleep' ? (
-          <div className="p-4 space-y-3 overflow-y-auto">
+          <div className="p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] space-y-4 overflow-y-auto">
             <button
               type="button"
               onClick={() => setSubView('main')}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#19EE8A] hover:underline"
+              className="inline-flex items-center gap-2 min-h-[44px] text-xs font-semibold text-[#19EE8A] hover:underline"
             >
               <ChevronLeft className="w-4 h-4" />
               Kembali ke opsi lagu
             </button>
             <h3 className="text-base font-bold text-[#E8FFF3]">Pengatur waktu tidur</h3>
-            <div className="space-y-1">
+            <div className="space-y-2">
               {[
                 { label: 'Matikan pengatur waktu', mode: 'off' as const, min: undefined },
                 { label: '15 menit', mode: 'minutes' as const, min: 15 },
@@ -268,7 +268,7 @@ export function TrackActionSheet({
                       );
                       onClose();
                     }}
-                    className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-colors ${
+                    className={`w-full min-h-[44px] flex items-center justify-between px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
                       active
                         ? 'bg-[#19EE8A]/15 text-[#19EE8A]'
                         : 'text-[#E8FFF3]/90 hover:bg-white/[0.06]'
@@ -282,17 +282,17 @@ export function TrackActionSheet({
             </div>
           </div>
         ) : subView === 'code' ? (
-          <div className="p-5 space-y-4 overflow-y-auto">
+          <div className="p-4 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] space-y-4 overflow-y-auto">
             <button
               type="button"
               onClick={() => setSubView('main')}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#19EE8A] hover:underline"
+              className="inline-flex items-center gap-2 min-h-[44px] text-xs font-semibold text-[#19EE8A] hover:underline"
             >
               <ChevronLeft className="w-4 h-4" />
               Kembali ke opsi lagu
             </button>
 
-            <div className="rounded-2xl bg-[#0A0E0C] border border-white/[0.12] p-5 flex flex-col items-center text-center gap-4">
+            <div className="rounded-2xl bg-[#0A0E0C] border border-white/[0.12] p-6 flex flex-col items-center text-center gap-4">
               <ArtworkImage
                 src={track.thumbnail}
                 alt={track.title}
@@ -325,7 +325,7 @@ export function TrackActionSheet({
                       .writeText(shareUrl)
                       .then(() => showToast('Tautan Kode SoundClear disalin'));
                   }}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-[#E8FFF3]"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-[#E8FFF3]"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   Salin Tautan Lagu
@@ -334,12 +334,12 @@ export function TrackActionSheet({
             </div>
           </div>
         ) : (
-          <div className="py-2 px-2 overflow-y-auto space-y-0.5 pb-6">
+          <div className="py-2 px-2 overflow-y-auto space-y-1 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             {/* 1. Bagikan */}
             <button
               type="button"
               onClick={() => void handleShare()}
-              className="w-full flex items-center gap-3.5 px-3.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+              className="w-full min-h-[44px] flex items-center gap-4 px-4 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
             >
               <Share className="w-5 h-5 text-[#B3F7D1]/80 shrink-0" strokeWidth={1.85} />
               <span className="text-sm font-medium text-[#E8FFF3]">Bagikan</span>
@@ -572,9 +572,9 @@ export function TrackActionSheet({
             <button
               type="button"
               onClick={() => setSubView('sleep')}
-              className="w-full flex items-center justify-between gap-3.5 px-3.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+              className="w-full min-h-[44px] flex items-center justify-between gap-4 px-4 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
             >
-              <span className="flex items-center gap-3.5">
+              <span className="flex items-center gap-4">
                 <Timer className="w-5 h-5 text-[#B3F7D1]/80 shrink-0" strokeWidth={1.85} />
                 <span className="text-sm font-medium text-[#E8FFF3]">Pengatur waktu tidur</span>
               </span>
@@ -589,9 +589,9 @@ export function TrackActionSheet({
             <button
               type="button"
               onClick={() => setSubView('code')}
-              className="w-full flex items-center justify-between gap-3.5 px-3.5 py-3 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
+              className="w-full min-h-[44px] flex items-center justify-between gap-4 px-4 py-2 rounded-xl hover:bg-white/[0.07] text-left transition-colors"
             >
-              <span className="flex items-center gap-3.5">
+              <span className="flex items-center gap-4">
                 <AudioLines className="w-5 h-5 text-[#B3F7D1]/80 shrink-0" strokeWidth={1.85} />
                 <span className="text-sm font-medium text-[#E8FFF3]">Tampilkan Kode SoundClear</span>
               </span>

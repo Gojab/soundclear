@@ -1,3 +1,72 @@
+declare global {
+  interface Window {
+    __scGetRealHidden?: () => boolean;
+    __scGetRealVisibilityState?: () => string;
+    __scSubscribeRealVisibility?: (
+      fn: (visibilityState: string, hidden: boolean) => void,
+    ) => () => void;
+    __scSubscribeRealPageHide?: (fn: (event: PageTransitionEvent) => void) => () => void;
+  }
+}
+
+let userPausedState = false;
+
+export function isUserPaused(): boolean {
+  return userPausedState;
+}
+
+export function setUserPaused(paused: boolean): void {
+  userPausedState = Boolean(paused);
+}
+
+export function getRealDocumentHidden(): boolean {
+  if (typeof window !== 'undefined' && typeof window.__scGetRealHidden === 'function') {
+    return window.__scGetRealHidden();
+  }
+  if (typeof document !== 'undefined') {
+    return Boolean(document.hidden);
+  }
+  return false;
+}
+
+export function getRealDocumentVisibilityState(): string {
+  if (typeof window !== 'undefined' && typeof window.__scGetRealVisibilityState === 'function') {
+    return window.__scGetRealVisibilityState();
+  }
+  if (typeof document !== 'undefined') {
+    return document.visibilityState;
+  }
+  return 'visible';
+}
+
+export function subscribeRealVisibilityChange(
+  listener: (visibilityState: string, hidden: boolean) => void,
+): () => void {
+  if (typeof window !== 'undefined' && typeof window.__scSubscribeRealVisibility === 'function') {
+    return window.__scSubscribeRealVisibility(listener);
+  }
+  if (typeof document === 'undefined') return () => {};
+  const handler = () => {
+    listener(document.visibilityState, Boolean(document.hidden));
+  };
+  document.addEventListener('visibilitychange', handler);
+  return () => {
+    document.removeEventListener('visibilitychange', handler);
+  };
+}
+
+export function subscribeRealPageHide(listener: (event: PageTransitionEvent) => void): () => void {
+  if (typeof window !== 'undefined' && typeof window.__scSubscribeRealPageHide === 'function') {
+    return window.__scSubscribeRealPageHide(listener);
+  }
+  if (typeof window === 'undefined') return () => {};
+  const handler = (event: PageTransitionEvent) => listener(event);
+  window.addEventListener('pagehide', handler);
+  return () => {
+    window.removeEventListener('pagehide', handler);
+  };
+}
+
 export interface AudioEnvironmentInput {
   userAgent?: string;
   maxTouchPoints?: number;
@@ -43,7 +112,7 @@ export function shouldEngageDirectDeckOnHide(params: {
   ) {
     return false;
   }
-  return params.isMobile || params.contextState !== 'running';
+  return params.contextState !== 'running';
 }
 
 export function shouldLoadTrackDirectlyOnDirectDeck(params: {
@@ -54,7 +123,6 @@ export function shouldLoadTrackDirectlyOnDirectDeck(params: {
   directMode?: boolean;
 }): boolean {
   if (params.directMode) return true;
-  if (params.isMobile) return true;
   if (params.visibilityState === 'hidden') return true;
   if (params.backgroundDirectActive) return true;
   if (params.contextState === 'interrupted') return true;
@@ -68,7 +136,7 @@ export function shouldRestoreDspOnForeground(params: {
   visibilityState: string;
 }): boolean {
   if (!params.backgroundDirectActive) return false;
-  if (params.isMobile || params.directMode) return false;
+  if (params.directMode) return false;
   return params.visibilityState === 'visible';
 }
 
@@ -187,9 +255,7 @@ export function resolvePlaybackEngineSummary(params: {
 
   const topBannerSummary = directMode
     ? 'Mode Direct aktif — sinyal audio dilewatkan langsung tanpa pemrosesan Web Audio DSP.'
-    : isMobile
-      ? 'Arsitektur web terpadu aktif: streaming dioptimalkan lewat HTML5 Audio langsung agar tahan background & lockscreen mobile (EQ/DSP dilewati saat mode Direct).'
-      : 'Semua kontrol DSP aktif dan diterapkan langsung ke mesin audio tanpa memuat ulang halaman.';
+    : 'Semua kontrol DSP aktif dan diterapkan langsung ke mesin audio tanpa memuat ulang halaman.';
 
   if (sourceMode === 'youtube-iframe') {
     return {

@@ -99,8 +99,8 @@ export function SpectrumAnalyzer() {
             : 'Siaga';
 
   return (
-    <div className="rounded-xl bg-white/[0.045] backdrop-blur-xl border border-white/[0.11] p-3 space-y-2">
-      <div className="flex items-center justify-between text-[11px] text-[#B3F7D1]/65">
+    <div className="rounded-xl bg-white/[0.045] backdrop-blur-xl border border-white/[0.11] p-4 space-y-2">
+      <div className="flex items-center justify-between gap-2 text-[11px] text-[#B3F7D1]/65">
         <span>Analyzer Spektrum Real-Time</span>
         <span className={signalLive ? 'text-[#19EE8A] font-medium' : 'text-[#B3F7D1]/45'}>
           {statusText}

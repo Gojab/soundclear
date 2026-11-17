@@ -285,7 +285,7 @@ export function LibraryOverviewPage({
           <h1 className="text-xl sm:text-2xl font-semibold text-[#E8FFF3] tracking-tight">
             Koleksi Anda
           </h1>
-          <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+          <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
             Playlist, folder, lagu disukai, album, artis, podcast, dan file audio lokal Anda
           </p>
         </div>
@@ -295,7 +295,7 @@ export function LibraryOverviewPage({
             type="button"
             disabled={importingLocal}
             onClick={() => localFileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors"
           >
             <Upload className="w-3.5 h-3.5" strokeWidth={1.75} />
             {importingLocal ? 'Mengimpor...' : 'Impor File Lokal'}
@@ -303,7 +303,7 @@ export function LibraryOverviewPage({
           <button
             type="button"
             onClick={() => setCreatingFolder((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors"
           >
             <FolderPlus className="w-3.5 h-3.5" strokeWidth={1.75} />
             Folder Baru
@@ -311,7 +311,7 @@ export function LibraryOverviewPage({
           <button
             type="button"
             onClick={() => navigate({ name: 'create-mix' })}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors whitespace-nowrap shrink-0"
           >
             <Disc3 className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.9} />
             Buat Mix
@@ -319,7 +319,7 @@ export function LibraryOverviewPage({
           <button
             type="button"
             onClick={onOpenCreatePlaylist}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all whitespace-nowrap shrink-0"
           >
             <Plus className="w-3.5 h-3.5" strokeWidth={2} />
             Buat Playlist
@@ -330,7 +330,7 @@ export function LibraryOverviewPage({
       {creatingFolder && (
         <form
           onSubmit={handleCreateFolder}
-          className="glass-card rounded-xl p-3 flex items-center gap-2 max-w-md"
+          className="glass-card rounded-xl p-4 flex items-center gap-2 max-w-md"
         >
           <input
             type="text"
@@ -338,12 +338,12 @@ export function LibraryOverviewPage({
             onChange={(e) => setFolderName(e.target.value)}
             placeholder="Nama folder playlist..."
             autoFocus
-            className="flex-1 h-9 px-3 rounded-lg bg-white/[0.06] border border-white/[0.12] text-sm text-[#E8FFF3] placeholder:text-[#B3F7D1]/40 focus:outline-none focus:border-[#19EE8A]"
+            className="flex-1 h-11 px-4 rounded-lg bg-white/[0.06] border border-white/[0.12] text-sm text-[#E8FFF3] placeholder:text-[#B3F7D1]/40 focus:outline-none focus:border-[#19EE8A]"
           />
           <button
             type="submit"
             disabled={!folderName.trim()}
-            className="px-3.5 h-9 rounded-lg bg-sc-gradient text-[#0F1F17] text-xs font-semibold disabled:opacity-40"
+            className="px-4 h-11 rounded-lg bg-sc-gradient text-[#0F1F17] text-xs font-semibold disabled:opacity-40"
           >
             Buat
           </button>
@@ -351,8 +351,8 @@ export function LibraryOverviewPage({
       )}
 
       {/* Controls toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
           {filterChips.map((chip) => (
             <button
               key={chip.id}
@@ -361,7 +361,7 @@ export function LibraryOverviewPage({
                 setFilterType(chip.id);
                 setSelectedFolderId('all');
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors whitespace-nowrap ${
+              className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap ${
                 filterType === chip.id && selectedFolderId === 'all'
                   ? 'bg-sc-gradient text-[#0F1F17] font-semibold'
                   : 'bg-white/[0.055] backdrop-blur-xl border border-white/[0.1] text-[#B3F7D1]/75 hover:text-[#E8FFF3] hover:bg-white/[0.11]'
@@ -377,14 +377,14 @@ export function LibraryOverviewPage({
             aria-label="Urutkan koleksi"
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as LibrarySortMode)}
-            className="h-9 px-2.5 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-xs text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
+            className="h-11 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] text-xs text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
           >
             <option value="newest" className="bg-[#0B0F0D] text-[#E8FFF3]">Terbaru</option>
             <option value="alpha" className="bg-[#0B0F0D] text-[#E8FFF3]">Abjad (A–Z)</option>
             <option value="last_played" className="bg-[#0B0F0D] text-[#E8FFF3]">Terakhir diputar</option>
           </select>
 
-          <div className="flex items-center gap-0.5 p-1 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11]">
+          <div className="flex items-center gap-2 p-1 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11]">
             {(
               [
                 { id: 'list', icon: List, label: 'Tampilan daftar' },
@@ -400,13 +400,13 @@ export function LibraryOverviewPage({
                   onClick={() => setViewMode(mode.id)}
                   aria-label={mode.label}
                   aria-pressed={viewMode === mode.id}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                  className={`w-11 h-11 rounded-lg flex items-center justify-center transition-colors ${
                     viewMode === mode.id
                       ? 'bg-white/[0.14] text-[#19EE8A]'
                       : 'text-[#B3F7D1]/60 hover:text-[#E8FFF3]'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <Icon className="w-4 h-4" strokeWidth={1.75} />
                 </button>
               );
             })}
@@ -417,15 +417,15 @@ export function LibraryOverviewPage({
       {/* Offline Downloads Section */}
       {filterType === 'offline' ? (
         <section className="space-y-4">
-          <div className="glass-card rounded-2xl p-5 border border-[#B3F7D1]/[0.1]">
+          <div className="glass-card rounded-2xl p-4 sm:p-6 border border-[#B3F7D1]/[0.1]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
+              <div className="flex items-start gap-4">
                 <div className="w-11 h-11 rounded-xl bg-[#19EE8A]/15 border border-[#19EE8A]/30 flex items-center justify-center text-[#19EE8A] shrink-0">
                   <Download className="w-5 h-5" strokeWidth={1.75} />
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-[#E8FFF3]">Unduhan Offline</h2>
-                  <p className="text-xs text-[#B3F7D1]/60 mt-0.5 max-w-xl">
+                  <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                     Semua lagu yang Anda simpan untuk akses offline (file audio lokal tersimpan utuh dan lagu katalog terindeks di penyimpanan browser).
                   </p>
                 </div>
@@ -441,7 +441,7 @@ export function LibraryOverviewPage({
                       'Unduhan Offline',
                     )
                   }
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 shrink-0"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 shrink-0"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
                   Putar Semua ({offlineDownloads.length})
@@ -451,21 +451,21 @@ export function LibraryOverviewPage({
           </div>
 
           {offlineDownloads.length === 0 ? (
-            <div className="glass-card rounded-2xl p-8 text-center space-y-3">
+            <div className="glass-card rounded-2xl p-8 text-center space-y-4">
               <p className="text-sm text-[#E8FFF3]/85">Belum ada lagu yang disimpan offline.</p>
-              <p className="text-xs text-[#B3F7D1]/55">
+              <p className="text-xs text-[#B3F7D1]/55 leading-relaxed max-w-[65ch] mx-auto">
                 Tekan tombol Unduh di baris lagu atau di menu Pengaturan Audio untuk menyimpan lagu apa saja.
               </p>
               <button
                 type="button"
                 onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
               >
                 Buka Pengaturan Audio
               </button>
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {offlineDownloads.map((rec, idx) => (
                 <TrackRow
                   key={rec.id}
@@ -494,20 +494,20 @@ export function LibraryOverviewPage({
       ) : filterType === 'local' ? (
         <section className="space-y-4">
           <div
-            className={`glass-card rounded-2xl p-5 border transition-colors ${
+            className={`glass-card rounded-2xl p-4 sm:p-6 border transition-colors ${
               isDraggingAudio
                 ? 'border-[#19EE8A] bg-[#19EE8A]/10'
                 : 'border-[#B3F7D1]/[0.1]'
             }`}
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
+              <div className="flex items-start gap-4">
                 <div className="w-11 h-11 rounded-xl bg-[#19EE8A]/15 border border-[#19EE8A]/30 flex items-center justify-center text-[#19EE8A] shrink-0">
                   <HardDrive className="w-5 h-5" strokeWidth={1.75} />
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-[#E8FFF3]">File Lokal</h2>
-                  <p className="text-xs text-[#B3F7D1]/60 mt-0.5 max-w-xl">
+                  <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
                     Seret &amp; lepas file audio (MP3, M4A, FLAC, OGG, WAV) untuk diputar dengan EQ
                     10-band, normalisasi, dan crossfade. Hanya untuk file milik Anda sendiri.
                   </p>
@@ -519,7 +519,7 @@ export function LibraryOverviewPage({
                   <button
                     type="button"
                     onClick={() => playTrackList(localMediaItems, 0, 'File Lokal')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" strokeWidth={2} />
                     Putar Semua
@@ -528,7 +528,7 @@ export function LibraryOverviewPage({
                 <button
                   type="button"
                   onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: true })}
-                  className="px-3.5 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
                 >
                   Atur EQ &amp; Suara
                 </button>
@@ -537,19 +537,19 @@ export function LibraryOverviewPage({
           </div>
 
           {localMediaItems.length === 0 ? (
-            <div className="glass-card rounded-2xl p-8 text-center space-y-3">
+            <div className="glass-card rounded-2xl p-8 text-center space-y-4">
               <p className="text-sm text-[#E8FFF3]/85">Belum ada file audio lokal yang diimpor.</p>
               <button
                 type="button"
                 onClick={() => localFileInputRef.current?.click()}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105"
               >
                 <Upload className="w-4 h-4" strokeWidth={2} />
                 Pilih File Audio
               </button>
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {localMediaItems.map((track, idx) => (
                 <TrackRow
                   key={track.id}
@@ -575,7 +575,7 @@ export function LibraryOverviewPage({
               <button
                 type="button"
                 onClick={() => setSelectedFolderId('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium ${
+                className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-medium ${
                   selectedFolderId === 'all'
                     ? 'bg-white/[0.13] border border-white/[0.14] text-[#E8FFF3]'
                     : 'bg-white/[0.055] border border-white/[0.09] text-[#B3F7D1]/65 hover:text-[#E8FFF3] hover:bg-white/[0.1]'
@@ -586,7 +586,7 @@ export function LibraryOverviewPage({
               {folders.map((fld) => (
                 <div
                   key={fld.id}
-                  className={`inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-xl text-xs ${
+                  className={`inline-flex items-center gap-2 pl-3 pr-1 rounded-xl text-xs min-h-[44px] ${
                     selectedFolderId === fld.id
                       ? 'bg-[#19EE8A]/15 text-[#19EE8A] border border-[#19EE8A]/35'
                       : 'bg-white/[0.055] border border-white/[0.09] text-[#B3F7D1]/80'
@@ -595,7 +595,7 @@ export function LibraryOverviewPage({
                   <button
                     type="button"
                     onClick={() => setSelectedFolderId(fld.id)}
-                    className="inline-flex items-center gap-1.5 py-0.5"
+                    className="inline-flex items-center gap-2 min-h-[44px] py-2"
                   >
                     <Folder className="w-3.5 h-3.5" strokeWidth={1.75} />
                     <span>{fld.name}</span>
@@ -607,9 +607,9 @@ export function LibraryOverviewPage({
                       deleteFolder(fld.id);
                     }}
                     aria-label={`Hapus folder ${fld.name}`}
-                    className="w-5 h-5 rounded flex items-center justify-center text-[#B3F7D1]/45 hover:text-red-300"
+                    className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/45 hover:text-red-300"
                   >
-                    <Trash2 className="w-3 h-3" strokeWidth={1.75} />
+                    <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                   </button>
                 </div>
               ))}
@@ -618,13 +618,13 @@ export function LibraryOverviewPage({
 
           {/* Quick Spotlight Cards in 'Semua' */}
           {selectedFolderId === 'all' && filterType === 'all' && (
-            <div className="grid grid-cols-1 @[660px]:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 @[660px]:grid-cols-3 gap-4">
               <button
                 type="button"
                 onClick={() => navigate({ name: 'liked' })}
-                className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.1] transition-colors"
+                className="w-full glass-card rounded-2xl p-4 min-h-[48px] flex items-center justify-between gap-4 text-left hover:bg-white/[0.1] transition-colors"
               >
-                <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex items-center gap-4 min-w-0">
                   <div className="w-12 h-12 rounded-xl bg-[#19EE8A]/15 border border-[#19EE8A]/30 flex items-center justify-center text-[#19EE8A] shrink-0">
                     <Heart className="w-5 h-5 fill-[#19EE8A]" strokeWidth={1.75} />
                   </div>
@@ -641,9 +641,9 @@ export function LibraryOverviewPage({
               <button
                 type="button"
                 onClick={() => setFilterType('offline')}
-                className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.1] transition-colors"
+                className="w-full glass-card rounded-2xl p-4 min-h-[48px] flex items-center justify-between gap-4 text-left hover:bg-white/[0.1] transition-colors"
               >
-                <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex items-center gap-4 min-w-0">
                   <div className="w-12 h-12 rounded-xl bg-white/[0.06] border border-white/[0.12] flex items-center justify-center text-[#19EE8A] shrink-0">
                     <Download className="w-5 h-5" strokeWidth={1.75} />
                   </div>
@@ -660,9 +660,9 @@ export function LibraryOverviewPage({
               <button
                 type="button"
                 onClick={() => setFilterType('local')}
-                className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.1] transition-colors"
+                className="w-full glass-card rounded-2xl p-4 min-h-[48px] flex items-center justify-between gap-4 text-left hover:bg-white/[0.1] transition-colors"
               >
-                <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex items-center gap-4 min-w-0">
                   <div className="w-12 h-12 rounded-xl bg-white/[0.06] border border-white/[0.12] flex items-center justify-center text-[#19EE8A] shrink-0">
                     <HardDrive className="w-5 h-5" strokeWidth={1.75} />
                   </div>
@@ -682,9 +682,9 @@ export function LibraryOverviewPage({
             <button
               type="button"
               onClick={() => navigate({ name: 'liked' })}
-              className="w-full glass-card rounded-2xl p-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.1] transition-colors"
+              className="w-full glass-card rounded-2xl p-4 min-h-[48px] flex items-center justify-between gap-4 text-left hover:bg-white/[0.1] transition-colors"
             >
-              <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex items-center gap-4 min-w-0">
                 <div className="w-12 h-12 rounded-xl bg-[#19EE8A]/15 border border-[#19EE8A]/30 flex items-center justify-center text-[#19EE8A] shrink-0">
                   <Heart className="w-5 h-5 fill-[#19EE8A]" strokeWidth={1.75} />
                 </div>
@@ -702,14 +702,14 @@ export function LibraryOverviewPage({
           {/* Entries Rendering */}
           {entries.length === 0 ? (
             <div className="glass-card rounded-2xl p-8 text-center">
-              <p className="text-sm text-[#B3F7D1]/80">Belum ada item di filter koleksi ini.</p>
+              <p className="text-sm text-[#B3F7D1]/80 leading-relaxed">Belum ada item di filter koleksi ini.</p>
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 @[540px]:grid-cols-3 @[760px]:grid-cols-4 @[960px]:grid-cols-5 gap-4">
               {entries.map((entry) => (
                 <div
                   key={`${entry.kind}-${entry.id}`}
-                  className="glass-card group rounded-2xl p-3 flex flex-col"
+                  className="glass-card group rounded-2xl p-4 flex flex-col"
                 >
                   <div className="relative aspect-square w-full mb-3 overflow-hidden rounded-xl">
                     <button
@@ -737,32 +737,40 @@ export function LibraryOverviewPage({
                       aria-label={
                         entry.pinned ? `Lepas pin ${entry.title}` : `Pasang pin ${entry.title}`
                       }
-                      className={`absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center backdrop-blur-md transition-opacity ${
+                      className={`absolute top-1 right-1 w-11 h-11 rounded-lg flex items-center justify-center transition-opacity ${
                         entry.pinned
-                          ? 'bg-sc-gradient text-[#0F1F17] opacity-100'
-                          : 'bg-black/65 text-[#E8FFF3]/80 opacity-0 group-hover:opacity-100'
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
                       }`}
                     >
-                      <Pin className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <span
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-md ${
+                          entry.pinned
+                            ? 'bg-sc-gradient text-[#0F1F17]'
+                            : 'bg-black/65 text-[#E8FFF3]/80'
+                        }`}
+                      >
+                        <Pin className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      </span>
                     </button>
                   </div>
                   <button
                     type="button"
                     onClick={() => openEntry(entry)}
-                    className="text-left text-sm font-semibold text-[#E8FFF3] truncate hover:underline"
+                    className="text-left text-sm font-semibold text-[#E8FFF3] truncate hover:underline min-h-[44px] flex items-center"
                   >
-                    {entry.title}
+                    <span className="truncate">{entry.title}</span>
                   </button>
-                  <p className="text-xs text-[#B3F7D1]/60 truncate mt-0.5">{entry.subtitle}</p>
+                  <p className="text-xs text-[#B3F7D1]/60 truncate">{entry.subtitle}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {entries.map((entry) => (
                 <div
                   key={`${entry.kind}-${entry.id}`}
-                  className="track-row group flex items-center gap-3 px-3 py-2 rounded-xl bg-white/[0.045] backdrop-blur-xl border border-white/[0.1]"
+                  className="track-row group flex items-center gap-4 px-4 py-2 min-h-[48px] rounded-xl bg-white/[0.045] backdrop-blur-xl border border-white/[0.1]"
                 >
                   {viewMode === 'list' && (
                     <button
@@ -789,21 +797,21 @@ export function LibraryOverviewPage({
                   <button
                     type="button"
                     onClick={() => openEntry(entry)}
-                    className="min-w-0 flex-1 text-left"
+                    className="min-w-0 flex-1 text-left min-h-[44px] flex flex-col justify-center"
                   >
                     <p className="text-sm font-medium text-[#E8FFF3] truncate">{entry.title}</p>
                     <p className="text-xs text-[#B3F7D1]/55 truncate">{entry.subtitle}</p>
                   </button>
 
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     {entry.playlistObj && onEditPlaylist && (
                       <button
                         type="button"
                         onClick={() => onEditPlaylist(entry.playlistObj!)}
                         aria-label={`Edit ${entry.title}`}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-[#E8FFF3] hover:bg-white/[0.1]"
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/50 hover:text-[#E8FFF3] hover:bg-white/[0.1]"
                       >
-                        <Edit3 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        <Edit3 className="w-4 h-4" strokeWidth={1.75} />
                       </button>
                     )}
                     <button
@@ -812,13 +820,13 @@ export function LibraryOverviewPage({
                       aria-label={
                         entry.pinned ? `Lepas pin ${entry.title}` : `Pasang pin ${entry.title}`
                       }
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                      className={`w-11 h-11 rounded-lg flex items-center justify-center transition-colors ${
                         entry.pinned
                           ? 'text-[#19EE8A]'
                           : 'text-[#B3F7D1]/45 hover:text-[#E8FFF3] hover:bg-white/[0.1]'
                       }`}
                     >
-                      <Pin className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <Pin className="w-4 h-4" strokeWidth={1.75} />
                     </button>
                   </div>
                 </div>
@@ -846,7 +854,7 @@ export function LikedTracksPage({
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-end gap-5">
+      <header className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6">
         <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-[#19EE8A]/15 border border-[#19EE8A]/30 flex items-center justify-center text-[#19EE8A] shrink-0">
           <Heart className="w-12 h-12 fill-[#19EE8A]" strokeWidth={1.75} />
         </div>
@@ -857,11 +865,11 @@ export function LikedTracksPage({
           </h1>
           <p className="text-xs text-[#B3F7D1]/60 tabular-nums">{likedTracks.length} lagu tersimpan</p>
           {likedTracks.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="flex flex-wrap items-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => playTrackList(likedTracks, 0, 'Lagu Disukai')}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
+                className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
               >
                 <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                 Putar Semua
@@ -885,7 +893,7 @@ export function LikedTracksPage({
                       showToast('Gagal menyimpan lagu disukai untuk offline');
                     });
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors"
               >
                 <Download className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.9} />
                 Unduh Offline
@@ -896,21 +904,21 @@ export function LikedTracksPage({
       </header>
 
       {likedTracks.length === 0 ? (
-        <div className="glass-card rounded-2xl p-8 text-center space-y-3 max-w-lg">
+        <div className="glass-card rounded-2xl p-8 text-center space-y-4 max-w-lg">
           <p className="text-sm font-medium text-[#E8FFF3]/85">Belum ada lagu yang disukai</p>
-          <p className="text-xs text-[#B3F7D1]/55">
+          <p className="text-xs text-[#B3F7D1]/55 leading-relaxed max-w-[65ch] mx-auto">
             Tekan ikon hati pada lagu mana saja untuk menyimpannya di sini.
           </p>
           <button
             type="button"
             onClick={() => navigate({ name: 'search' })}
-            className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.1] text-xs font-medium text-[#E8FFF3] transition-colors"
+            className="min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.1] text-xs font-medium text-[#E8FFF3] transition-colors"
           >
             Cari Lagu
           </button>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-2">
           {likedTracks.map((track, idx) => (
             <TrackRow
               key={`${track.id}-${idx}`}
@@ -963,12 +971,12 @@ export function LocalPlaylistPage({
 
   if (!playlist) {
     return (
-      <div className="glass-card rounded-2xl p-8 text-center space-y-3 max-w-lg">
+      <div className="glass-card rounded-2xl p-8 text-center space-y-4 max-w-lg">
         <p className="text-sm font-medium text-[#E8FFF3]">Playlist tidak ditemukan</p>
         <button
           type="button"
           onClick={() => navigate({ name: 'home' })}
-          className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
+          className="min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.1] text-xs font-medium text-[#E8FFF3]"
         >
           Kembali ke Beranda
         </button>
@@ -990,7 +998,7 @@ export function LocalPlaylistPage({
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-end gap-5">
+      <header className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6">
         <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden shrink-0">
           {coverSrc ? (
             <ArtworkImage
@@ -1020,7 +1028,7 @@ export function LocalPlaylistPage({
                 type="button"
                 onClick={() => onEditPlaylist(playlist)}
                 aria-label="Ubah detail playlist"
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#B3F7D1]/55 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors shrink-0"
+                className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/55 hover:text-[#E8FFF3] hover:bg-white/[0.1] transition-colors shrink-0"
               >
                 <Edit3 className="w-4 h-4" strokeWidth={1.75} />
               </button>
@@ -1028,12 +1036,12 @@ export function LocalPlaylistPage({
           </div>
 
           {playlist.description && (
-            <p className="text-xs text-[#B3F7D1]/70 max-w-2xl">{playlist.description}</p>
+            <p className="text-xs text-[#B3F7D1]/70 leading-relaxed max-w-[65ch]">{playlist.description}</p>
           )}
 
           <p className="text-xs text-[#B3F7D1]/60 tabular-nums">{playlist.tracks.length} lagu</p>
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             {playlist.tracks.length > 0 && (
               <>
                 <button
@@ -1047,7 +1055,7 @@ export function LocalPlaylistPage({
                       playlistMix.enabled ? { mixConfig: playlistMix } : undefined,
                     );
                   }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all"
                 >
                   <Play className="w-4 h-4 fill-current" strokeWidth={2} />
                   Putar Semua
@@ -1056,7 +1064,7 @@ export function LocalPlaylistPage({
                   type="button"
                   aria-pressed={playlistMix.enabled}
                   onClick={() => handleUpdateMix({ enabled: !playlistMix.enabled })}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                  className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
                     playlistMix.enabled
                       ? 'bg-[#19EE8A]/15 text-[#19EE8A] border border-[#19EE8A]/40'
                       : 'bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-[#E8FFF3]'
@@ -1084,7 +1092,7 @@ export function LocalPlaylistPage({
                         showToast('Gagal menyimpan lagu di playlist untuk offline');
                       });
                   }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#E8FFF3] transition-colors"
                 >
                   <Download className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.9} />
                   Unduh Offline
@@ -1095,7 +1103,7 @@ export function LocalPlaylistPage({
             <button
               type="button"
               onClick={() => togglePinPlaylist(playlist.id)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl text-xs font-medium transition-colors ${
                 playlist.pinned
                   ? 'bg-[#19EE8A]/15 text-[#19EE8A] border border-[#19EE8A]/35'
                   : 'bg-white/[0.055] backdrop-blur-xl text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.11] border border-white/[0.11]'
@@ -1109,7 +1117,7 @@ export function LocalPlaylistPage({
               <button
                 type="button"
                 onClick={() => removeDuplicatesFromPlaylist(playlist.id)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-500/15 border border-amber-400/25 text-xs font-medium text-amber-200 hover:bg-amber-500/25"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-400/25 text-xs font-medium text-amber-200 hover:bg-amber-500/25"
               >
                 <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.75} />
                 Hapus {duplicateIndices.size} Duplikat
@@ -1120,27 +1128,27 @@ export function LocalPlaylistPage({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#B3F7D1]/80 hover:text-red-300 transition-colors"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl hover:bg-white/[0.11] border border-white/[0.11] text-xs font-medium text-[#B3F7D1]/80 hover:text-red-300 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                 Hapus Playlist
               </button>
             ) : (
-              <div className="inline-flex items-center gap-1.5">
+              <div className="inline-flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     deletePlaylist(playlist.id);
                     navigate({ name: 'library' });
                   }}
-                  className="px-3.5 py-2.5 rounded-xl bg-red-500/20 border border-red-400/30 text-xs font-semibold text-red-200 hover:bg-red-500/30"
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-red-500/20 border border-red-400/30 text-xs font-semibold text-red-200 hover:bg-red-500/30"
                 >
                   Konfirmasi Hapus
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(false)}
-                  className="px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] text-xs text-[#B3F7D1]/75"
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.1] text-xs text-[#B3F7D1]/75"
                 >
                   Batal
                 </button>
@@ -1164,22 +1172,22 @@ export function LocalPlaylistPage({
       )}
 
       {playlist.tracks.length === 0 ? (
-        <div className="glass-card rounded-2xl p-8 text-center space-y-3 max-w-lg">
+        <div className="glass-card rounded-2xl p-8 text-center space-y-4 max-w-lg">
           <p className="text-sm font-medium text-[#E8FFF3]/85">Playlist ini masih kosong</p>
-          <p className="text-xs text-[#B3F7D1]/55">
+          <p className="text-xs text-[#B3F7D1]/55 leading-relaxed max-w-[65ch] mx-auto">
             Tambahkan lagu dari hasil pencarian atau lagu yang sedang diputar.
           </p>
           <button
             type="button"
             onClick={() => navigate({ name: 'search' })}
-            className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.1] text-xs font-medium text-[#E8FFF3] transition-colors"
+            className="min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.1] text-xs font-medium text-[#E8FFF3] transition-colors"
           >
             Cari Lagu
           </button>
         </div>
       ) : (
-        <div className="space-y-1">
-          <p className="text-[11px] text-[#B3F7D1]/45 px-3 pb-1">
+        <div className="space-y-2">
+          <p className="text-[11px] text-[#B3F7D1]/45 px-4 pb-1">
             Seret baris lagu untuk mengatur ulang urutan
           </p>
           {playlist.tracks.map((track, idx) => (

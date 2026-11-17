@@ -120,7 +120,7 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
   return (
     <div className="space-y-6">
       <header
-        className={`rounded-2xl p-5 sm:p-7 bg-gradient-to-br ${mix.accentGradient} border border-white/[0.1] flex flex-col sm:flex-row sm:items-end gap-5`}
+        className={`rounded-2xl p-4 sm:p-6 bg-gradient-to-br ${mix.accentGradient} border border-white/[0.1] flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6`}
       >
         <div className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-xl overflow-hidden shadow-2xl shrink-0 border border-white/[0.15]">
           <ArtworkImage
@@ -154,10 +154,12 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
           <h1 className="text-2xl sm:text-4xl font-extrabold text-[#E8FFF3] tracking-tight">
             {mix.title}
           </h1>
-          <p className="text-xs sm:text-sm text-[#B3F7D1]/80">{mix.subtitle}</p>
+          <p className="text-xs sm:text-sm leading-relaxed max-w-[65ch] text-[#B3F7D1]/80">
+            {mix.subtitle}
+          </p>
           <p className="text-xs text-[#B3F7D1]/60">{mix.tracks.length} lagu pilihan</p>
 
-          <div className="flex flex-wrap items-center gap-2.5 pt-2">
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             <button
               type="button"
               onClick={() =>
@@ -168,7 +170,7 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
                   mixSettings.enabled ? { mixConfig: mixSettings } : undefined,
                 )
               }
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 transition"
+              className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-xs font-bold hover:brightness-105 transition"
             >
               <Play className="w-4 h-4 fill-current" strokeWidth={2} />
               Putar Mix
@@ -176,7 +178,7 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
             <button
               type="button"
               onClick={handleShufflePlay}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] text-xs font-semibold text-[#E8FFF3] transition"
+              className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] text-xs font-semibold text-[#E8FFF3] transition"
             >
               <Shuffle className="w-4 h-4" strokeWidth={1.85} />
               Acak
@@ -185,7 +187,7 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
               type="button"
               aria-pressed={mixSettings.enabled}
               onClick={() => handlePatchMix({ enabled: !mixSettings.enabled })}
-              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold transition border ${
+              className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full text-xs font-semibold transition border ${
                 mixSettings.enabled
                   ? 'bg-[#19EE8A]/20 text-[#19EE8A] border-[#19EE8A]/45'
                   : 'bg-white/[0.08] hover:bg-white/[0.14] border-white/[0.12] text-[#E8FFF3]'
@@ -210,7 +212,7 @@ export function MixDetailPage({ id, onAddToPlaylist }: MixDetailPageProps) {
         />
       )}
 
-      <div className="space-y-1">
+      <div className="space-y-2">
         {mix.tracks.map((track, idx) => (
           <TrackRow
             key={`${track.id}-${idx}`}

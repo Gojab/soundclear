@@ -149,13 +149,13 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
               setMobileExpanded(true);
             }
           }}
-          className={`md:hidden fixed left-2 right-2 bottom-[calc(66px+env(safe-area-inset-bottom,0px))] z-30 rounded-xl overflow-hidden border border-white/[0.14] shadow-2xl ${
+          className={`md:hidden fixed left-2 right-2 bottom-[calc(72px+env(safe-area-inset-bottom,0px))] z-30 rounded-xl overflow-hidden border border-white/[0.14] shadow-2xl ${
             glassPanels ? 'bg-black/60 backdrop-blur-2xl' : 'bg-[#0B0F0D]/85 backdrop-blur-2xl'
           }`}
         >
           {playerError && (
-            <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-red-500/20 border-b border-red-400/25 text-[11px] text-red-100">
-              <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center justify-between gap-2 px-4 py-2 bg-red-500/20 border-b border-red-400/25 text-[11px] leading-relaxed text-red-100">
+              <div className="flex items-center gap-2 min-w-0">
                 <AlertCircle className="w-3.5 h-3.5 text-red-300 shrink-0" />
                 <span className="truncate">{playerError}</span>
               </div>
@@ -163,29 +163,29 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                 type="button"
                 onClick={() => setPlayerError(null)}
                 aria-label="Tutup pesan kesalahan"
-                className="p-0.5 text-red-200/80 hover:text-white shrink-0"
+                className="min-w-[44px] min-h-[44px] -my-2 flex items-center justify-center text-red-200/80 hover:text-white shrink-0"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           )}
-          <div className="flex items-center gap-3 px-3 py-2">
+          <div className="flex items-center gap-2 px-2 py-2">
             <button
               type="button"
               onClick={() => setMobileExpanded(true)}
               aria-label="Buka pemutar layar penuh"
-              className="flex items-center gap-3 min-w-0 flex-1 text-left min-h-[44px]"
+              className="flex items-center gap-2 min-w-0 flex-1 text-left min-h-[44px] pl-1"
             >
               <ArtworkImage
                 src={currentTrack.thumbnail}
                 alt={currentTrack.title}
                 type={currentTrack.type}
-                className="w-10 h-10"
+                className="w-10 h-10 shrink-0"
                 roundedClass="rounded-lg"
               />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-[#E8FFF3] truncate">{currentTrack.title}</p>
-                <p className="text-[11px] text-[#B3F7D1]/65 truncate">
+                <p className="text-[11px] text-[#B3F7D1]/65 truncate leading-relaxed">
                   {formatArtists(currentTrack.artists)}
                 </p>
               </div>
@@ -195,7 +195,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
               type="button"
               onClick={() => navigate({ name: 'settings', tab: 'sound', focusEq: false })}
               aria-label="Pengaturan Audio DSP"
-              className="min-w-[38px] min-h-[44px] flex items-center justify-center text-[#B3F7D1]/75 hover:text-[#19EE8A]"
+              className="w-11 h-11 flex items-center justify-center rounded-full text-[#B3F7D1]/75 hover:text-[#19EE8A] shrink-0"
             >
               <Sliders className="w-4 h-4" strokeWidth={1.85} />
             </button>
@@ -204,7 +204,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
               type="button"
               onClick={() => toggleLike(currentTrack)}
               aria-label={liked ? 'Hapus dari lagu disukai' : 'Simpan lagu disukai'}
-              className={`min-w-[38px] min-h-[44px] flex items-center justify-center ${
+              className={`w-11 h-11 flex items-center justify-center rounded-full shrink-0 ${
                 liked ? 'text-[#19EE8A]' : 'text-[#B3F7D1]/75'
               }`}
             >
@@ -219,7 +219,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
               type="button"
               onClick={togglePlayPause}
               aria-label={isPlaying ? 'Jeda' : 'Putar'}
-              className="min-w-[40px] min-h-[44px] flex items-center justify-center text-[#E8FFF3]"
+              className="w-11 h-11 flex items-center justify-center rounded-full text-[#E8FFF3] shrink-0"
             >
               {isPlaying ? (
                 <Pause className="w-5 h-5 fill-current" strokeWidth={1.75} />
@@ -299,19 +299,19 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
               />
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-6">
               {/* Title + Artist on left, X (exclude) + Circular Plus/Check (like) on right */}
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <h2 className="text-xl font-bold text-white truncate tracking-tight">
                     {currentTrack.title}
                   </h2>
-                  <p className="text-sm text-white/70 truncate mt-0.5">
+                  <p className="text-sm text-white/70 truncate mt-1 leading-relaxed">
                     {formatArtists(currentTrack.artists)}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -320,7 +320,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                       nextTrack();
                     }}
                     aria-label="Kecualikan lagu dari selera"
-                    className="min-w-[40px] min-h-[40px] flex items-center justify-center text-white/80 hover:text-white"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/80 hover:text-white rounded-full"
                   >
                     <Ban className="w-5 h-5" strokeWidth={1.85} />
                   </button>
@@ -329,32 +329,36 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                     type="button"
                     onClick={() => toggleLike(currentTrack)}
                     aria-label={liked ? 'Hapus dari lagu disukai' : 'Simpan ke Lagu yang Disukai'}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                      liked
-                        ? 'bg-[#19EE8A] text-[#0F1F17]'
-                        : 'border-2 border-white/85 text-white'
-                    }`}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full"
                   >
-                    {liked ? (
-                      <Check className="w-4 h-4" strokeWidth={2.75} />
-                    ) : (
-                      <Plus className="w-4.5 h-4.5" strokeWidth={2.4} />
-                    )}
+                    <span
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                        liked
+                          ? 'bg-[#19EE8A] text-[#0F1F17]'
+                          : 'border-2 border-white/85 text-white'
+                      }`}
+                    >
+                      {liked ? (
+                        <Check className="w-4 h-4" strokeWidth={2.75} />
+                      ) : (
+                        <Plus className="w-4.5 h-4.5" strokeWidth={2.4} />
+                      )}
+                    </span>
                   </button>
                 </div>
               </div>
 
               {playerError && (
-                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-red-500/20 border border-red-400/30 text-xs text-red-100">
+                <div className="flex items-center justify-between gap-2 px-4 py-2 rounded-xl bg-red-500/20 border border-red-400/30 text-xs text-red-100">
                   <div className="flex items-center gap-2 min-w-0">
                     <AlertCircle className="w-4 h-4 text-red-300 shrink-0" />
-                    <span className="leading-snug">{playerError}</span>
+                    <span className="leading-relaxed max-w-[65ch]">{playerError}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setPlayerError(null)}
                     aria-label="Tutup pesan kesalahan"
-                    className="p-1 text-red-200/80 hover:text-white shrink-0"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center text-red-200/80 hover:text-white shrink-0"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -362,7 +366,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
               )}
 
               {/* Scrubber with elapsed and -remaining */}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <input
                   type="range"
                   aria-label="Posisi pemutaran"
@@ -450,7 +454,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
               </div>
 
               {/* Utility Row */}
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center justify-between pt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -463,7 +467,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                   <MonitorSpeaker className="w-5 h-5" strokeWidth={1.85} />
                 </button>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => void handleShareCurrent()}
@@ -510,13 +514,13 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           />
           <div className="relative z-10 w-full max-h-[82dvh] rounded-t-3xl bg-[#101513] border-t border-white/[0.12] flex flex-col overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-white/[0.08] flex items-center justify-between">
+            <div className="px-4 py-2 border-b border-white/[0.08] flex items-center justify-between gap-2">
               <h3 className="text-sm font-bold text-[#E8FFF3]">Antrean Pemutaran</h3>
               <button
                 type="button"
                 onClick={() => setQueueDrawerOpen(false)}
                 aria-label="Tutup antrean"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-[#B3F7D1]/70"
+                className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/70"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -539,15 +543,15 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
 
       {/* Quick Create Menu Sheet (triggered by "Buat" tab) */}
       {createMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center p-3 pb-[calc(76px+env(safe-area-inset-bottom,0px))]">
+        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center p-4 pb-[calc(80px+env(safe-area-inset-bottom,0px))]">
           <button
             type="button"
             aria-label="Tutup menu buat"
             onClick={() => setCreateMenuOpen(false)}
             className="absolute inset-0 bg-black/65 backdrop-blur-sm"
           />
-          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-[#0B0F0D]/90 backdrop-blur-2xl border border-white/[0.14] p-3 space-y-1.5 shadow-2xl">
-            <div className="flex items-center justify-between px-2 py-1">
+          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-[#0B0F0D]/90 backdrop-blur-2xl border border-white/[0.14] p-4 space-y-2 shadow-2xl">
+            <div className="flex items-center justify-between pl-2">
               <span className="text-xs font-bold uppercase tracking-wider text-[#B3F7D1]/65">
                 Buat &amp; Kelola
               </span>
@@ -555,7 +559,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                 type="button"
                 onClick={() => setCreateMenuOpen(false)}
                 aria-label="Tutup"
-                className="p-1 text-[#B3F7D1]/65 hover:text-[#E8FFF3]"
+                className="w-11 h-11 rounded-full flex items-center justify-center text-[#B3F7D1]/65 hover:text-[#E8FFF3]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -566,14 +570,16 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                 setCreateMenuOpen(false);
                 onOpenCreatePlaylist();
               }}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-left transition-colors"
+              className="w-full min-h-[48px] flex items-center gap-4 px-4 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-left transition-colors"
             >
-              <span className="w-9 h-9 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center shrink-0">
+              <span className="w-10 h-10 rounded-full bg-sc-gradient text-[#0F1F17] flex items-center justify-center shrink-0">
                 <ListPlus className="w-4.5 h-4.5" strokeWidth={2} />
               </span>
               <div>
                 <p className="text-sm font-semibold text-[#E8FFF3]">Buat Playlist Baru</p>
-                <p className="text-[11px] text-[#B3F7D1]/60">Kumpulkan lagu favoritmu dalam satu daftar putar</p>
+                <p className="text-[11px] leading-relaxed text-[#B3F7D1]/60 max-w-[65ch]">
+                  Kumpulkan lagu favoritmu dalam satu daftar putar
+                </p>
               </div>
             </button>
             <button
@@ -582,14 +588,14 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                 setCreateMenuOpen(false);
                 navigate({ name: 'create-mix' });
               }}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-left transition-colors"
+              className="w-full min-h-[48px] flex items-center gap-4 px-4 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-left transition-colors"
             >
-              <span className="w-9 h-9 rounded-full bg-white/[0.08] text-[#19EE8A] flex items-center justify-center shrink-0">
+              <span className="w-10 h-10 rounded-full bg-white/[0.08] text-[#19EE8A] flex items-center justify-center shrink-0">
                 <Disc3 className="w-4.5 h-4.5" strokeWidth={2} />
               </span>
               <div>
                 <p className="text-sm font-semibold text-[#E8FFF3]">Buat Mix Pilihan</p>
-                <p className="text-[11px] text-[#B3F7D1]/60">
+                <p className="text-[11px] leading-relaxed text-[#B3F7D1]/60 max-w-[65ch]">
                   Racik daftar lagu dari lagu atau genre pilihanmu
                 </p>
               </div>
@@ -600,14 +606,16 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
                 setCreateMenuOpen(false);
                 navigate({ name: 'moods' });
               }}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-left transition-colors"
+              className="w-full min-h-[48px] flex items-center gap-4 px-4 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-left transition-colors"
             >
-              <span className="w-9 h-9 rounded-full bg-white/[0.08] text-[#19EE8A] flex items-center justify-center shrink-0">
+              <span className="w-10 h-10 rounded-full bg-white/[0.08] text-[#19EE8A] flex items-center justify-center shrink-0">
                 <Compass className="w-4.5 h-4.5" strokeWidth={2} />
               </span>
               <div>
                 <p className="text-sm font-semibold text-[#E8FFF3]">Jelajahi Mood &amp; Genre</p>
-                <p className="text-[11px] text-[#B3F7D1]/60">Temukan musik sesuai suasana hati</p>
+                <p className="text-[11px] leading-relaxed text-[#B3F7D1]/60 max-w-[65ch]">
+                  Temukan musik sesuai suasana hati
+                </p>
               </div>
             </button>
           </div>
@@ -617,7 +625,7 @@ export function MobileShell({ onAddToPlaylist, onOpenCreatePlaylist }: MobileShe
       {/* Mobile Bottom Tab Bar (5 tabs) */}
       <nav
         aria-label="Navigasi seluler"
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(60px+env(safe-area-inset-bottom,0px))] pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-2xl border-t border-white/[0.1] grid grid-cols-5 ${
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(64px+env(safe-area-inset-bottom,0px))] pb-[env(safe-area-inset-bottom,0px)] px-2 backdrop-blur-2xl border-t border-white/[0.1] grid grid-cols-5 gap-2 ${
           glassPanels ? 'bg-black/65' : 'bg-[#080B09]/90'
         }`}
       >

@@ -84,7 +84,7 @@ export function LyricsView() {
           <button
             type="button"
             onClick={() => setKaraokeOpen(true)}
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#19EE8A] hover:underline"
+            className="inline-flex items-center gap-2 min-h-[44px] px-2 text-[11px] font-semibold text-[#19EE8A] hover:underline"
           >
             <Maximize2 className="w-3 h-3" strokeWidth={2} />
             Layar Penuh
@@ -99,7 +99,7 @@ export function LyricsView() {
               ref={isActive ? activeLineRef : undefined}
               type="button"
               onClick={() => requestSeek(line.startTimeMs / 1000)}
-              className={`block w-full text-left px-2.5 py-1.5 rounded-lg text-sm leading-relaxed transition-colors duration-150 ${
+              className={`block w-full min-h-[44px] text-left px-4 py-2 rounded-lg text-sm leading-relaxed transition-colors duration-150 ${
                 isActive
                   ? 'text-[#19EE8A] font-semibold bg-white/[0.09] backdrop-blur-md border border-[#19EE8A]/20'
                   : isPast
@@ -111,7 +111,7 @@ export function LyricsView() {
             </button>
           );
         })}
-        <p className="pt-4 px-2.5 text-[11px] text-[#B3F7D1]/40">
+        <p className="pt-4 px-4 text-[11px] text-[#B3F7D1]/40">
           {data.source || 'Sumber lirik: LRCLIB'}
         </p>
       </div>
@@ -120,19 +120,19 @@ export function LyricsView() {
 
   if (data?.plainText) {
     return (
-      <div className="py-2 px-1 space-y-3">
+      <div className="py-2 px-1 space-y-4">
         <div className="flex items-center justify-between px-1 pb-1">
           <span className="text-[11px] font-semibold text-[#B3F7D1]/60">Lirik</span>
           <button
             type="button"
             onClick={() => setKaraokeOpen(true)}
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#19EE8A] hover:underline"
+            className="inline-flex items-center gap-2 min-h-[44px] px-2 text-[11px] font-semibold text-[#19EE8A] hover:underline"
           >
             <Maximize2 className="w-3 h-3" strokeWidth={2} />
             Layar Penuh
           </button>
         </div>
-        <p className="text-sm text-[#E8FFF3]/85 whitespace-pre-line leading-relaxed">
+        <p className="text-sm text-[#E8FFF3]/85 whitespace-pre-line leading-relaxed max-w-[65ch]">
           {data.plainText}
         </p>
         <p className="text-[11px] text-[#B3F7D1]/40">{data.source || 'Sumber lirik: LRCLIB'}</p>

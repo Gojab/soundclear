@@ -57,14 +57,21 @@ function runCommandAsync(
   command: string,
   args: string[],
   options: { cwd?: string; stdio?: 'inherit' | 'ignore' | 'pipe' } = {},
-): Promise<{ code: number | null }> {
+): Promise<{ code: number | null; stderr?: string }> {
   return new Promise((resolve, reject) => {
+    const stdio = options.stdio ?? 'inherit';
     const child = spawn(command, args, {
       cwd: options.cwd ?? __dirname,
-      stdio: options.stdio ?? 'inherit',
+      stdio,
     });
+    let stderr = '';
+    if (stdio === 'pipe' && child.stderr) {
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString('utf8');
+      });
+    }
     child.on('error', reject);
-    child.on('exit', (code) => resolve({ code }));
+    child.on('exit', (code) => resolve({ code, stderr }));
   });
 }
 
@@ -103,17 +110,20 @@ async function ensurePythonDependencies(): Promise<string> {
   console.log('[soundclear] Menyiapkan lingkungan Python & dependensi SoundClear...');
 
   if (!fs.existsSync(VENV_PYTHON)) {
-    const venvRes = await runCommandAsync(sysPython, ['-m', 'venv', VENV_DIR]);
+    const venvRes = await runCommandAsync(sysPython, ['-m', 'venv', VENV_DIR], {
+      stdio: 'pipe',
+    });
     if (venvRes.code !== 0) {
       // Fallback for Debian/Ubuntu without ensurepip
-      const fallbackRes = await runCommandAsync(sysPython, [
-        '-m',
-        'venv',
-        '--without-pip',
-        VENV_DIR,
-      ]);
+      const fallbackRes = await runCommandAsync(
+        sysPython,
+        ['-m', 'venv', '--without-pip', VENV_DIR],
+        { stdio: 'pipe' },
+      );
       if (fallbackRes.code !== 0) {
-        throw new Error('Gagal membuat virtualenv Python di backend/.venv');
+        throw new Error(
+          `Gagal membuat virtualenv Python di backend/.venv: ${fallbackRes.stderr || ''}`.trim(),
+        );
       }
     }
   }
@@ -123,25 +133,27 @@ async function ensurePythonDependencies(): Promise<string> {
   });
   if (pipCheck.code !== 0) {
     console.log('[soundclear] Memasang pip ke virtualenv Python...');
-    const bootstrapRes = await runCommandAsync('bash', [
-      '-c',
-      `curl -sSL https://bootstrap.pypa.io/get-pip.py | "${VENV_PYTHON}"`,
-    ]);
+    const bootstrapRes = await runCommandAsync(
+      'bash',
+      ['-c', `curl -sSL https://bootstrap.pypa.io/get-pip.py | "${VENV_PYTHON}"`],
+      { stdio: 'pipe' },
+    );
     if (bootstrapRes.code !== 0) {
-      throw new Error('Gagal memasang pip ke virtualenv Python.');
+      throw new Error(
+        `Gagal memasang pip ke virtualenv Python: ${bootstrapRes.stderr || ''}`.trim(),
+      );
     }
   }
 
-  const pipInstall = await runCommandAsync(VENV_PYTHON, [
-    '-m',
-    'pip',
-    'install',
-    '--no-cache-dir',
-    '-r',
-    REQUIREMENTS_FILE,
-  ]);
+  const pipInstall = await runCommandAsync(
+    VENV_PYTHON,
+    ['-m', 'pip', 'install', '--quiet', '--no-input', '--no-cache-dir', '-r', REQUIREMENTS_FILE],
+    { stdio: 'pipe' },
+  );
   if (pipInstall.code !== 0) {
-    throw new Error('Gagal memasang dependensi Python dari backend/requirements.txt');
+    throw new Error(
+      `Gagal memasang dependensi Python dari backend/requirements.txt: ${pipInstall.stderr || ''}`.trim(),
+    );
   }
 
   return VENV_PYTHON;
@@ -194,6 +206,13 @@ function startPythonBackend(pythonBin: string): void {
       stdio: 'inherit',
     },
   );
+
+  pythonProc.on('error', (err) => {
+    pythonProc = null;
+    pythonReady = false;
+    pythonInitError = err.message;
+    console.error('[soundclear] Gagal menjalankan proses backend Python:', err.message);
+  });
 
   pythonProc.on('exit', (code, signal) => {
     pythonProc = null;
@@ -525,7 +544,10 @@ async function startServer(): Promise<void> {
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

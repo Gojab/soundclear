@@ -50,7 +50,7 @@ test('isMobileAudioEnvironment detects iOS, iPadOS desktop UA, Android, and igno
   );
 });
 
-test('shouldEngageDirectDeckOnHide triggers immediately on mobile or suspended context, never on iframe', () => {
+test('shouldEngageDirectDeckOnHide triggers only when AudioContext is suspended/interrupted on hide, never when running or on iframe', () => {
   assert.equal(
     shouldEngageDirectDeckOnHide({
       isPlaying: true,
@@ -58,6 +58,18 @@ test('shouldEngageDirectDeckOnHide triggers immediately on mobile or suspended c
       hasActiveDeckSrc: true,
       isMobile: true,
       contextState: 'running',
+      backgroundDirectActive: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldEngageDirectDeckOnHide({
+      isPlaying: true,
+      isYoutubeIframe: false,
+      hasActiveDeckSrc: true,
+      isMobile: false,
+      contextState: 'suspended',
       backgroundDirectActive: false,
     }),
     true,
@@ -68,7 +80,7 @@ test('shouldEngageDirectDeckOnHide triggers immediately on mobile or suspended c
       isPlaying: true,
       isYoutubeIframe: false,
       hasActiveDeckSrc: true,
-      isMobile: false,
+      isMobile: true,
       contextState: 'suspended',
       backgroundDirectActive: false,
     }),
@@ -100,7 +112,7 @@ test('shouldEngageDirectDeckOnHide triggers immediately on mobile or suspended c
   );
 });
 
-test('shouldLoadTrackDirectlyOnDirectDeck routes mobile, directMode, and hidden tabs directly onto HTML5 Audio', () => {
+test('shouldLoadTrackDirectlyOnDirectDeck routes directMode, interrupted, and hidden tabs directly onto HTML5 Audio while enabling DSP in mobile foreground', () => {
   assert.equal(
     shouldLoadTrackDirectlyOnDirectDeck({
       visibilityState: 'hidden',
@@ -126,7 +138,7 @@ test('shouldLoadTrackDirectlyOnDirectDeck routes mobile, directMode, and hidden 
       isMobile: true,
       contextState: 'running',
     }),
-    true,
+    false,
   );
   assert.equal(
     shouldLoadTrackDirectlyOnDirectDeck({
@@ -158,7 +170,7 @@ test('shouldLoadTrackDirectlyOnDirectDeck routes mobile, directMode, and hidden 
   );
 });
 
-test('shouldRestoreDspOnForeground restores DSP only on visible desktop when directMode is off', () => {
+test('shouldRestoreDspOnForeground restores DSP on visible desktop and mobile when directMode is off', () => {
   assert.equal(
     shouldRestoreDspOnForeground({
       backgroundDirectActive: true,
@@ -175,7 +187,7 @@ test('shouldRestoreDspOnForeground restores DSP only on visible desktop when dir
       directMode: false,
       visibilityState: 'visible',
     }),
-    false,
+    true,
   );
   assert.equal(
     shouldRestoreDspOnForeground({

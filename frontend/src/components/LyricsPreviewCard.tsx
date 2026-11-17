@@ -82,7 +82,7 @@ export function LyricsPreviewCard({ onOpenKaraoke }: LyricsPreviewCardProps) {
 
   if (!lyricsPreviewEnabled) {
     return (
-      <div className="w-full rounded-2xl bg-white/[0.06] border border-white/[0.1] px-4 py-3 flex items-center justify-between gap-3">
+      <div className="w-full rounded-2xl bg-white/[0.06] border border-white/[0.1] px-4 py-2 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-xs text-[#B3F7D1]/70">
           <Mic2 className="w-4 h-4 text-[#B3F7D1]/60" strokeWidth={1.85} />
           <span>Pratinjau lirik dinonaktifkan</span>
@@ -90,7 +90,7 @@ export function LyricsPreviewCard({ onOpenKaraoke }: LyricsPreviewCardProps) {
         <button
           type="button"
           onClick={() => updateSetting('lyricsPreviewEnabled', true)}
-          className="text-xs font-semibold text-[#19EE8A] hover:underline"
+          className="min-h-[44px] px-2 text-xs font-semibold text-[#19EE8A] hover:underline shrink-0"
         >
           Aktifkan
         </button>
@@ -103,15 +103,15 @@ export function LyricsPreviewCard({ onOpenKaraoke }: LyricsPreviewCardProps) {
   return (
     <div
       style={{ backgroundColor: cardBg }}
-      className="w-full rounded-2xl p-4 sm:p-5 border border-white/[0.12] shadow-lg transition-colors duration-300"
+      className="w-full rounded-2xl p-4 sm:p-6 border border-white/[0.12] shadow-lg transition-colors duration-300"
     >
-      <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="flex items-center justify-between gap-4 mb-2">
         <span className="text-sm font-bold text-white tracking-tight">Pratinjau lirik</span>
         <button
           type="button"
           onClick={onOpenKaraoke}
           aria-label="Perluas lirik layar penuh"
-          className="w-8 h-8 rounded-full bg-black/25 hover:bg-black/40 text-white flex items-center justify-center transition-colors"
+          className="w-11 h-11 rounded-full bg-black/25 hover:bg-black/40 text-white flex items-center justify-center transition-colors shrink-0"
         >
           <Maximize2 className="w-4 h-4" strokeWidth={2} />
         </button>
@@ -129,11 +129,11 @@ export function LyricsPreviewCard({ onOpenKaraoke }: LyricsPreviewCardProps) {
             <div className="h-5 w-2/3 rounded bg-white/10" />
           </div>
         ) : previewLines.length > 0 ? (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {previewLines.map((line, idx) => (
               <p
                 key={`${idx}-${line.text.slice(0, 16)}`}
-                className={`text-base sm:text-lg leading-snug font-bold transition-colors ${
+                className={`text-base sm:text-lg leading-relaxed font-bold transition-colors ${
                   line.active ? 'text-white' : 'text-white/70'
                 }`}
               >
@@ -142,7 +142,7 @@ export function LyricsPreviewCard({ onOpenKaraoke }: LyricsPreviewCardProps) {
             ))}
           </div>
         ) : (
-          <p className="text-sm font-semibold text-white/75">
+          <p className="text-sm font-semibold text-white/75 leading-relaxed">
             Lirik belum tersedia untuk lagu ini. Ketuk untuk membuka layar lirik.
           </p>
         )}

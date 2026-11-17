@@ -88,16 +88,16 @@ export function BackgroundSettingsSection() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Live Preview Card */}
-      <section className="glass-card rounded-2xl p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+      <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
             <h2 className="text-base font-bold text-[#E8FFF3] flex items-center gap-2">
               <Palette className="w-4 h-4 text-[#19EE8A]" strokeWidth={2} />
               Custom Background &amp; Tampilan
             </h2>
-            <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+            <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed max-w-[65ch]">
               Ubah latar belakang aplikasi dengan galeri wallpaper, gradasi, warna solid, sampul lagu, atau fotomu sendiri.
             </p>
           </div>
@@ -105,7 +105,7 @@ export function BackgroundSettingsSection() {
             <button
               type="button"
               onClick={() => void handleReset()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] backdrop-blur-md border border-white/[0.12] text-xs font-medium text-[#E8FFF3] transition-colors"
+              className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] backdrop-blur-md border border-white/[0.12] text-xs font-medium text-[#E8FFF3] transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.85} />
               Reset Default
@@ -226,17 +226,17 @@ export function BackgroundSettingsSection() {
                 role="radio"
                 aria-checked={active}
                 onClick={() => updateCustomBackground({ mode: opt.id })}
-                className={`text-left px-3 py-2.5 rounded-xl border transition-all backdrop-blur-md ${
+                className={`text-left min-h-[48px] px-4 py-2 rounded-xl border transition-all backdrop-blur-md ${
                   active
                     ? 'bg-[#19EE8A]/15 border-[#19EE8A] text-[#E8FFF3]'
                     : 'bg-white/[0.05] border-white/[0.1] text-[#E8FFF3]/80 hover:bg-white/[0.1]'
                 }`}
               >
-                <div className="flex items-center justify-between gap-1.5">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold">{opt.label}</span>
                   {active && <Check className="w-3.5 h-3.5 text-[#19EE8A] shrink-0" strokeWidth={2.5} />}
                 </div>
-                <p className="text-[11px] text-[#B3F7D1]/60 mt-0.5 truncate">{opt.desc}</p>
+                <p className="text-[11px] text-[#B3F7D1]/60 mt-1 truncate">{opt.desc}</p>
               </button>
             );
           })}
@@ -245,12 +245,12 @@ export function BackgroundSettingsSection() {
 
       {/* Mode-Specific Controls */}
       {customBackground.mode === 'preset' && (
-        <section className="glass-card rounded-2xl p-5 space-y-3">
+        <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
           <h3 className="text-sm font-bold text-[#E8FFF3] flex items-center gap-2">
             <Layers className="w-4 h-4 text-[#19EE8A]" strokeWidth={2} />
             Galeri Wallpaper &amp; Gradasi
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {BACKGROUND_PRESETS.map((preset) => {
               const selected = customBackground.presetId === preset.id;
               const assetUrl =
@@ -299,13 +299,13 @@ export function BackgroundSettingsSection() {
       )}
 
       {customBackground.mode === 'ambient' && (
-        <section className="glass-card rounded-2xl p-5 flex items-start gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#19EE8A]/15 text-[#19EE8A] flex items-center justify-center shrink-0">
+        <section className="glass-card rounded-2xl p-4 sm:p-6 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-[#19EE8A]/15 text-[#19EE8A] flex items-center justify-center shrink-0">
             <Palette className="w-4.5 h-4.5" strokeWidth={2} />
           </div>
           <div>
             <h3 className="text-sm font-bold text-[#E8FFF3]">Latar Sampul Lagu Aktif</h3>
-            <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed">
+            <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed max-w-[65ch]">
               Latar belakang secara otomatis menampilkan sampul dan warna dominan lagu yang sedang kamu putar secara jernih tanpa blur bawaan.
             </p>
           </div>
@@ -313,15 +313,15 @@ export function BackgroundSettingsSection() {
       )}
 
       {customBackground.mode === 'color' && (
-        <section className="glass-card rounded-2xl p-5 space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+        <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
               <h3 className="text-sm font-bold text-[#E8FFF3]">Pilih Warna Solid</h3>
-              <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+              <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed max-w-[65ch]">
                 Gunakan warna gelap agar teks dan tombol tetap nyaman dibaca.
               </p>
             </div>
-            <label className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/[0.06] backdrop-blur-md border border-white/[0.13] cursor-pointer">
+            <label className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.06] backdrop-blur-md border border-white/[0.13] cursor-pointer">
               <input
                 type="color"
                 aria-label="Pemilih warna solid"
@@ -348,7 +348,7 @@ export function BackgroundSettingsSection() {
                   onClick={() =>
                     updateCustomBackground({ mode: 'color', solidColor: swatch.value })
                   }
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-colors backdrop-blur-md ${
+                  className={`flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl border text-left transition-colors backdrop-blur-md ${
                     selected
                       ? 'border-[#19EE8A] bg-[#19EE8A]/12'
                       : 'border-white/[0.1] bg-white/[0.05] hover:bg-white/[0.1]'
@@ -367,11 +367,11 @@ export function BackgroundSettingsSection() {
       )}
 
       {customBackground.mode === 'gradient' && (
-        <section className="glass-card rounded-2xl p-5 space-y-4">
+        <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
           <h3 className="text-sm font-bold text-[#E8FFF3]">Kustomisasi Gradasi</h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-md border border-white/[0.12] cursor-pointer">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="flex items-center justify-between gap-4 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-md border border-white/[0.12] cursor-pointer">
               <span className="text-xs font-medium text-[#E8FFF3]/90">Warna Awal</span>
               <span className="inline-flex items-center gap-2">
                 <input
@@ -389,7 +389,7 @@ export function BackgroundSettingsSection() {
               </span>
             </label>
 
-            <label className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-white/[0.055] backdrop-blur-md border border-white/[0.12] cursor-pointer">
+            <label className="flex items-center justify-between gap-4 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-md border border-white/[0.12] cursor-pointer">
               <span className="text-xs font-medium text-[#E8FFF3]/90">Warna Akhir</span>
               <span className="inline-flex items-center gap-2">
                 <input
@@ -410,7 +410,7 @@ export function BackgroundSettingsSection() {
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-[#B3F7D1]/70">Sudut Gradasi</span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               {ANGLE_OPTIONS.map((deg) => (
                 <button
                   key={deg}
@@ -418,7 +418,7 @@ export function BackgroundSettingsSection() {
                   onClick={() =>
                     updateCustomBackground({ mode: 'gradient', gradientAngle: deg })
                   }
-                  className={`px-2.5 py-1 rounded-lg text-xs font-mono-num transition-colors border ${
+                  className={`min-h-[44px] min-w-[44px] px-3 py-2 rounded-lg text-xs font-mono-num transition-colors border ${
                     customBackground.gradientAngle === deg
                       ? 'bg-sc-gradient border-transparent text-[#0F1F17] font-semibold'
                       : 'bg-white/[0.055] border-white/[0.1] text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.11]'
@@ -461,14 +461,14 @@ export function BackgroundSettingsSection() {
       )}
 
       {customBackground.mode === 'image' && (
-        <section className="glass-card rounded-2xl p-5 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
+        <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
               <h3 className="text-sm font-bold text-[#E8FFF3] flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-[#19EE8A]" strokeWidth={2} />
                 Foto Latar Belakang Sendiri
               </h3>
-              <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+              <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed max-w-[65ch]">
                 Unggah gambar JPG, PNG, WebP, atau AVIF. Gambar otomatis dioptimalkan dan tersimpan lokal di browser.
               </p>
             </div>
@@ -490,8 +490,8 @@ export function BackgroundSettingsSection() {
           />
 
           {customBackground.customImageDataUrl ? (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3.5 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11]">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11]">
+              <div className="flex items-center gap-4 min-w-0">
                 <img
                   src={customBackground.customImageDataUrl}
                   alt={customBackground.customImageName || 'Foto latar kustom'}
@@ -501,7 +501,7 @@ export function BackgroundSettingsSection() {
                   <p className="text-xs font-semibold text-[#E8FFF3] truncate">
                     {customBackground.customImageName || 'Gambar kustom aktif'}
                   </p>
-                  <p className="text-[11px] text-[#19EE8A] mt-0.5">
+                  <p className="text-[11px] text-[#19EE8A] mt-1">
                     Tersimpan di browser (IndexedDB)
                   </p>
                 </div>
@@ -512,7 +512,7 @@ export function BackgroundSettingsSection() {
                   type="button"
                   disabled={uploading}
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 disabled:opacity-50"
                 >
                   <Upload className="w-3.5 h-3.5" strokeWidth={2} />
                   {uploading ? 'Memproses...' : 'Ganti Foto'}
@@ -520,7 +520,7 @@ export function BackgroundSettingsSection() {
                 <button
                   type="button"
                   onClick={() => void handleRemoveUploadedImage()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.07] hover:bg-red-500/20 border border-white/[0.1] text-xs font-medium text-[#E8FFF3]/85 hover:text-red-200 transition-colors"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-red-500/20 border border-white/[0.1] text-xs font-medium text-[#E8FFF3]/85 hover:text-red-200 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" strokeWidth={1.85} />
                   Hapus
@@ -532,7 +532,7 @@ export function BackgroundSettingsSection() {
               type="button"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-7 px-4 rounded-xl border border-dashed border-white/[0.2] hover:border-[#19EE8A] bg-white/[0.04] hover:bg-[#19EE8A]/[0.08] backdrop-blur-md flex flex-col items-center justify-center gap-2 transition-colors disabled:opacity-50"
+              className="w-full py-8 px-4 rounded-xl border border-dashed border-white/[0.2] hover:border-[#19EE8A] bg-white/[0.04] hover:bg-[#19EE8A]/[0.08] backdrop-blur-md flex flex-col items-center justify-center gap-2 transition-colors disabled:opacity-50"
             >
               <Upload className="w-6 h-6 text-[#19EE8A]" strokeWidth={1.85} />
               <span className="text-xs font-semibold text-[#E8FFF3]">
@@ -548,13 +548,13 @@ export function BackgroundSettingsSection() {
 
       {/* Fine Tuning Controls */}
       {customBackground.mode !== 'default' && (
-        <section className="glass-card rounded-2xl p-5 space-y-4">
+        <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
           <h3 className="text-sm font-bold text-[#E8FFF3]">Penyesuaian Kontras &amp; Kaca</h3>
 
           {(customBackground.mode === 'preset' && activePreset.kind === 'image') ||
           customBackground.mode === 'ambient' ||
           customBackground.mode === 'image' ? (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <label htmlFor="bg-blur-slider" className="font-medium text-[#E8FFF3]/90">
                   Blur Latar Belakang
@@ -573,12 +573,12 @@ export function BackgroundSettingsSection() {
                 onChange={(e) =>
                   updateCustomBackground({ blurPx: Number(e.target.value) })
                 }
-                className="sc-range-visible w-full"
+                className="sc-range-visible w-full min-h-[44px]"
               />
             </div>
           ) : null}
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <label htmlFor="bg-dim-slider" className="font-medium text-[#E8FFF3]/90">
                 Kegelapan Lapisan (Agar Teks Jelas)
@@ -595,7 +595,7 @@ export function BackgroundSettingsSection() {
               onChange={(e) =>
                 updateCustomBackground({ dimOpacity: Number(e.target.value) })
               }
-              className="sc-range-visible w-full"
+              className="sc-range-visible w-full min-h-[44px]"
             />
           </div>
 
@@ -604,7 +604,7 @@ export function BackgroundSettingsSection() {
               <p id="lbl-panel-glass" className="text-sm font-medium text-[#E8FFF3]">
                 Efek Kaca Transparan Panel
               </p>
-              <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+              <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed max-w-[65ch]">
                 Tampilkan latar menembus Sidebar, Beranda, Panel Kanan, dan Pemutar
               </p>
             </div>
@@ -616,17 +616,21 @@ export function BackgroundSettingsSection() {
               onClick={() =>
                 updateCustomBackground({ panelGlass: !customBackground.panelGlass })
               }
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#19EE8A] ${
-                customBackground.panelGlass ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
-              }`}
+              className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-[#19EE8A]"
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-                  customBackground.panelGlass
-                    ? 'translate-x-6 bg-[#E8FFF3]'
-                    : 'translate-x-1 bg-[#B3F7D1]/70'
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  customBackground.panelGlass ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
                 }`}
-              />
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                    customBackground.panelGlass
+                      ? 'translate-x-6 bg-[#E8FFF3]'
+                      : 'translate-x-1 bg-[#B3F7D1]/70'
+                  }`}
+                />
+              </span>
             </button>
           </div>
         </section>

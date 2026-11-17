@@ -83,9 +83,9 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
           openMenu(e.clientX, e.clientY, item, { onAddToPlaylist });
         }
       }}
-      className="group rounded-xl p-3 flex flex-col bg-white/[0.035] backdrop-blur-md border border-white/[0.07] hover:bg-white/[0.085] hover:border-white/[0.14] transition-all duration-150"
+      className="group rounded-xl p-4 flex flex-col bg-white/[0.035] backdrop-blur-md border border-white/[0.07] hover:bg-white/[0.085] hover:border-white/[0.14] transition-all duration-150"
     >
-      <div className="relative aspect-square w-full mb-2.5 overflow-hidden rounded-md shadow-md shadow-black/40">
+      <div className="relative aspect-square w-full mb-2 overflow-hidden rounded-md shadow-md shadow-black/40">
         <button
           type="button"
           onClick={handleCardClick}
@@ -125,11 +125,11 @@ export function MediaCard({ item, subtitle, onAddToPlaylist }: MediaCardProps) {
       <button
         type="button"
         onClick={handleCardClick}
-        className="text-left text-sm font-semibold text-[#E8FFF3] truncate hover:underline"
+        className="text-left text-sm font-semibold text-[#E8FFF3] truncate hover:underline min-h-[24px]"
       >
         {item.title}
       </button>
-      <p className="text-xs text-[#B3F7D1]/65 truncate mt-1 leading-snug">{resolvedSubtitle}</p>
+      <p className="text-xs text-[#B3F7D1]/65 truncate mt-1 leading-relaxed">{resolvedSubtitle}</p>
     </div>
   );
 }

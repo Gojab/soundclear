@@ -23,11 +23,18 @@
   body,
   #root {
     height: 100%;
+    max-width: 100%;
     background-color: #000000;
     color: #E8FFF3;
     margin: 0;
     padding: 0;
     overflow: hidden;
+  }
+
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
   }
 }
 

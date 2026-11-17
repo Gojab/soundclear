@@ -2,6 +2,127 @@
 <html lang="id" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function () {
+        try {
+          var realHiddenDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
+          var realVisDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState');
+          var realVisListeners = [];
+          var realPageHideListeners = [];
+
+          var readRealHidden = function () {
+            try {
+              return realHiddenDesc && realHiddenDesc.get
+                ? !!realHiddenDesc.get.call(document)
+                : false;
+            } catch (_) {
+              return false;
+            }
+          };
+
+          var readRealVisibilityState = function () {
+            try {
+              return realVisDesc && realVisDesc.get
+                ? String(realVisDesc.get.call(document))
+                : 'visible';
+            } catch (_) {
+              return 'visible';
+            }
+          };
+
+          window.__scGetRealHidden = readRealHidden;
+          window.__scGetRealVisibilityState = readRealVisibilityState;
+          window.__scSubscribeRealVisibility = function (fn) {
+            if (typeof fn !== 'function') return function () {};
+            realVisListeners.push(fn);
+            return function () {
+              var idx = realVisListeners.indexOf(fn);
+              if (idx >= 0) realVisListeners.splice(idx, 1);
+            };
+          };
+          window.__scSubscribeRealPageHide = function (fn) {
+            if (typeof fn !== 'function') return function () {};
+            realPageHideListeners.push(fn);
+            return function () {
+              var idx = realPageHideListeners.indexOf(fn);
+              if (idx >= 0) realPageHideListeners.splice(idx, 1);
+            };
+          };
+
+          window.addEventListener(
+            'visibilitychange',
+            function (e) {
+              var vis = readRealVisibilityState();
+              var hid = readRealHidden();
+              for (var i = 0; i < realVisListeners.length; i += 1) {
+                try {
+                  realVisListeners[i](vis, hid);
+                } catch (_) {}
+              }
+              e.stopImmediatePropagation();
+            },
+            true,
+          );
+          window.addEventListener(
+            'webkitvisibilitychange',
+            function (e) {
+              e.stopImmediatePropagation();
+            },
+            true,
+          );
+          window.addEventListener(
+            'blur',
+            function (e) {
+              e.stopImmediatePropagation();
+            },
+            true,
+          );
+          window.addEventListener(
+            'pagehide',
+            function (e) {
+              for (var i = 0; i < realPageHideListeners.length; i += 1) {
+                try {
+                  realPageHideListeners[i](e);
+                } catch (_) {}
+              }
+              e.stopImmediatePropagation();
+            },
+            true,
+          );
+
+          document.addEventListener(
+            'visibilitychange',
+            function (e) {
+              e.stopImmediatePropagation();
+            },
+            true,
+          );
+          document.addEventListener(
+            'webkitvisibilitychange',
+            function (e) {
+              e.stopImmediatePropagation();
+            },
+            true,
+          );
+
+          Object.defineProperty(document, 'hidden', {
+            configurable: true,
+            get: function () {
+              return false;
+            },
+          });
+          Object.defineProperty(document, 'visibilityState', {
+            configurable: true,
+            get: function () {
+              return 'visible';
+            },
+          });
+          document.hasFocus = function () {
+            return true;
+          };
+        } catch (_) {}
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>SoundClear — Pemutar Musik</title>
     <meta

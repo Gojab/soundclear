@@ -32,9 +32,13 @@ import { useSettingsStore } from '../store/settingsStore';
 import { clampYoutubeVolume } from '../utils/audioMath';
 import {
   clampSeekTarget,
+  getRealDocumentVisibilityState,
   isMobileAudioEnvironment,
+  isUserPaused,
+  setUserPaused,
   shouldRunSilentKeepalive,
   shouldTreatYoutubeAsAutoplayBlocked,
+  subscribeRealVisibilityChange,
 } from '../utils/backgroundAudioLogic';
 import { resolveEffectiveMediaSessionPlaybackState } from '../utils/mediaSessionLogic';
 import {
@@ -261,6 +265,7 @@ export function YouTubePlayerBridge() {
       onPlay: () => {
         const st = usePlayerStore.getState();
         if (!st.currentTrack) return;
+        setUserPaused(false);
         unlockPlaybackOnUserGesture();
         void resumeAudioContext();
         st.setIsPlaying(true);
@@ -281,7 +286,7 @@ export function YouTubePlayerBridge() {
             void el.play().catch((err: unknown) => {
               if (err instanceof DOMException && err.name === 'NotAllowedError') {
                 const latest = usePlayerStore.getState();
-                latest.setIsPlaying(false);
+                latest.setIsPlaying(false, { userInitiated: false });
                 latest.setAutoplayBlockedPendingResume(true);
                 syncMediaSessionPlaybackState('paused');
               }
@@ -291,7 +296,8 @@ export function YouTubePlayerBridge() {
       },
       onPause: () => {
         const st = usePlayerStore.getState();
-        stopSilentKeepaliveAudio();
+        setUserPaused(true);
+        stopSilentKeepaliveAudio(true);
         ytActuallyPlayingRef.current = false;
         if (isCapacitorNativeStreamActive()) {
           void pauseCapacitorNativeStream();
@@ -314,7 +320,8 @@ export function YouTubePlayerBridge() {
       },
       onStop: () => {
         const st = usePlayerStore.getState();
-        stopSilentKeepaliveAudio();
+        setUserPaused(true);
+        stopSilentKeepaliveAudio(true);
         ytActuallyPlayingRef.current = false;
         if (isCapacitorNativeStreamActive()) {
           void stopCapacitorNativeStream();
@@ -356,18 +363,17 @@ export function YouTubePlayerBridge() {
       },
     });
 
-    const syncVisibilityPosition = () => {
+    const unsubscribeVis = subscribeRealVisibilityChange(() => {
       const st = usePlayerStore.getState();
       syncMediaSessionPosition({
         duration: st.duration,
         currentTime: st.currentTime,
         playbackRate: st.playbackRate || 1,
       });
-    };
-    document.addEventListener('visibilitychange', syncVisibilityPosition);
+    });
     return () => {
       unregisterHandlers();
-      document.removeEventListener('visibilitychange', syncVisibilityPosition);
+      unsubscribeVis();
     };
   }, []);
 
@@ -495,7 +501,7 @@ export function YouTubePlayerBridge() {
               contextSuspended: false,
               hasPlayingHtmlAudio: false,
             }) &&
-            (document.visibilityState === 'hidden' || isMobileAudioEnvironment())
+            (getRealDocumentVisibilityState() === 'hidden' || isMobileAudioEnvironment())
           ) {
             startSilentKeepaliveAudio();
           }
@@ -509,8 +515,10 @@ export function YouTubePlayerBridge() {
         // PAUSED
         ytActuallyPlayingRef.current = false;
         st.setIsBuffering(false);
-        stopSilentKeepaliveAudio();
-        syncMediaSessionPlaybackState('paused');
+        if (!st.isPlaying || isUserPaused()) {
+          stopSilentKeepaliveAudio(true);
+          syncMediaSessionPlaybackState('paused');
+        }
         syncCapacitorPlaybackNotification({
           track: st.currentTrack,
           isPlaying: false,
@@ -520,14 +528,14 @@ export function YouTubePlayerBridge() {
           force: true,
         });
 
-        if (st.isPlaying) {
-          const elapsedSinceReq = Date.now() - ytPlayRequestedAtRef.current;
-          const shouldGraceRetry =
-            document.visibilityState === 'hidden' ||
-            (!ytEverPlayedForTrackRef.current &&
-              (isCapacitorAndroidPlatform() || elapsedSinceReq < 1600));
-
-          if (shouldGraceRetry) {
+        if (st.isPlaying && !isUserPaused()) {
+          const retryDelayMs = 300;
+          ytPauseVerifyTimerRef.current = window.setTimeout(() => {
+            ytPauseVerifyTimerRef.current = null;
+            const midState = usePlayerStore.getState();
+            if (!midState.isPlaying || isUserPaused() || !isYoutubeIframeActive(midState.activeStreamMeta)) {
+              return;
+            }
             try {
               event.target.playVideo();
             } catch {
@@ -536,43 +544,32 @@ export function YouTubePlayerBridge() {
             ytPauseVerifyTimerRef.current = window.setTimeout(() => {
               ytPauseVerifyTimerRef.current = null;
               const latest = usePlayerStore.getState();
-              if (!latest.isPlaying || !isYoutubeIframeActive(latest.activeStreamMeta)) return;
-              const checkState = event.target.getPlayerState?.();
-              if (checkState !== 1 && checkState !== 3) {
-                const blocked =
-                  document.visibilityState === 'visible' &&
-                  shouldTreatYoutubeAsAutoplayBlocked({
-                    isPlaying: latest.isPlaying,
-                    isYoutubeIframe: true,
-                    visibilityState: document.visibilityState,
-                    playerState: typeof checkState === 'number' ? checkState : 2,
-                    elapsedSincePlayRequestMs: Date.now() - ytPlayRequestedAtRef.current,
-                    wasEverPlayingForTrack: ytEverPlayedForTrackRef.current,
-                  });
-                ytActuallyPlayingRef.current = false;
-                stopSilentKeepaliveAudio();
-                latest.setIsPlaying(false);
-                if (blocked && !isCapacitorAndroidPlatform()) {
-                  latest.setAutoplayBlockedPendingResume(true);
-                }
-                syncMediaSessionPlaybackState('paused');
+              if (!latest.isPlaying || isUserPaused() || !isYoutubeIframeActive(latest.activeStreamMeta)) {
+                return;
               }
-            }, 900);
-          } else {
-            const elapsed = Date.now() - ytPlayRequestedAtRef.current;
-            const blocked = shouldTreatYoutubeAsAutoplayBlocked({
-              isPlaying: st.isPlaying,
-              isYoutubeIframe: true,
-              visibilityState: document.visibilityState,
-              playerState: 2,
-              elapsedSincePlayRequestMs: elapsed,
-              wasEverPlayingForTrack: ytEverPlayedForTrackRef.current,
-            });
-            st.setIsPlaying(false);
-            if (blocked && !isCapacitorAndroidPlatform()) {
-              st.setAutoplayBlockedPendingResume(true);
-            }
-          }
+              const checkState = event.target.getPlayerState?.();
+              const realVis = getRealDocumentVisibilityState();
+              if (checkState !== 1 && checkState !== 3 && realVis === 'visible') {
+                const blocked = shouldTreatYoutubeAsAutoplayBlocked({
+                  isPlaying: latest.isPlaying,
+                  isYoutubeIframe: true,
+                  visibilityState: realVis,
+                  playerState: typeof checkState === 'number' ? checkState : 2,
+                  elapsedSincePlayRequestMs: Date.now() - ytPlayRequestedAtRef.current,
+                  wasEverPlayingForTrack: ytEverPlayedForTrackRef.current,
+                });
+                if (blocked) {
+                  ytActuallyPlayingRef.current = false;
+                  stopSilentKeepaliveAudio(true);
+                  latest.setIsPlaying(false, { userInitiated: false });
+                  if (!isCapacitorAndroidPlatform()) {
+                    latest.setAutoplayBlockedPendingResume(true);
+                  }
+                  syncMediaSessionPlaybackState('paused');
+                }
+              }
+            }, 700);
+          }, retryDelayMs);
         }
       } else if (stateCode === 0) {
         // ENDED
@@ -653,6 +650,10 @@ export function YouTubePlayerBridge() {
           },
         });
         playerRef.current = instance;
+        const createdIframe = iframeHostRef.current?.querySelector('iframe');
+        if (createdIframe) {
+          createdIframe.setAttribute('allow', 'autoplay; encrypted-media');
+        }
       } catch {
         // Non-fatal: fallback creation happens on demand if blocked offline
       }
@@ -692,7 +693,7 @@ export function YouTubePlayerBridge() {
         const nav = navigator as Navigator & {
           wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> };
         };
-        if (nav.wakeLock && document.visibilityState === 'visible') {
+        if (nav.wakeLock && getRealDocumentVisibilityState() === 'visible') {
           const lock = await nav.wakeLock.request('screen');
           if (disposed) {
             void lock.release().catch(() => {});
@@ -711,6 +712,7 @@ export function YouTubePlayerBridge() {
       const st = usePlayerStore.getState();
       if (
         st.isPlaying &&
+        !isUserPaused() &&
         isYoutubeIframeActive(st.activeStreamMeta) &&
         playerRef.current &&
         playerReadyRef.current
@@ -719,10 +721,8 @@ export function YouTubePlayerBridge() {
         try {
           const pState = playerRef.current.getPlayerState?.();
           if (pState === 1) {
-            if (document.visibilityState === 'hidden' || isMobileAudioEnvironment()) {
+            if (getRealDocumentVisibilityState() === 'hidden' || isMobileAudioEnvironment()) {
               startSilentKeepaliveAudio();
-            } else {
-              stopSilentKeepaliveAudio();
             }
             if (st.currentTrack) {
               syncMediaSessionMetadata(st.currentTrack);
@@ -737,26 +737,28 @@ export function YouTubePlayerBridge() {
       }
     };
 
-    const onVisibilityRecover = () => {
-      if (document.visibilityState === 'visible') {
+    const onVisibilityRecover = (vis: string) => {
+      if (vis === 'visible') {
         void acquireWakeLock();
       }
       recoverTimers.forEach((id) => window.clearTimeout(id));
       recoverTimers.length = 0;
 
       checkAndRecoverYt();
-      if (document.visibilityState === 'hidden') {
-        recoverTimers.push(window.setTimeout(checkAndRecoverYt, 250));
-        recoverTimers.push(window.setTimeout(checkAndRecoverYt, 800));
+      if (vis === 'hidden') {
+        recoverTimers.push(window.setTimeout(checkAndRecoverYt, 300));
+        recoverTimers.push(window.setTimeout(checkAndRecoverYt, 850));
       }
     };
 
     void acquireWakeLock();
-    document.addEventListener('visibilitychange', onVisibilityRecover);
+    const unsubscribeVis = subscribeRealVisibilityChange((vis) => {
+      onVisibilityRecover(vis);
+    });
     return () => {
       disposed = true;
       recoverTimers.forEach((id) => window.clearTimeout(id));
-      document.removeEventListener('visibilitychange', onVisibilityRecover);
+      unsubscribeVis();
       if (wakeSentinel) {
         void wakeSentinel.release().catch(() => {});
         wakeSentinel = null;
@@ -909,7 +911,7 @@ export function YouTubePlayerBridge() {
 
       if (fallbackCountRef.current >= 3) {
         st.setIsBuffering(false);
-        st.setIsPlaying(false);
+        st.setIsPlaying(false, { userInitiated: false });
         st.setPlayerError(
           'Pemutar cloud tidak mengizinkan pemutaran untuk lagu ini di sesi saat ini.',
         );
@@ -952,7 +954,7 @@ export function YouTubePlayerBridge() {
         if (cancelled) return;
         const latest = usePlayerStore.getState();
         latest.setIsBuffering(false);
-        latest.setIsPlaying(false);
+        latest.setIsPlaying(false, { userInitiated: false });
         syncMediaSessionPlaybackState('paused');
         latest.setPlayerError(
           'Pemutar cloud tidak mengizinkan pemutaran untuk lagu ini di sesi saat ini.',
@@ -1047,6 +1049,10 @@ export function YouTubePlayerBridge() {
 
         loadedVideoIdRef.current = targetVideoId;
         playerRef.current = instance;
+        const createdIframe = iframeHostRef.current?.querySelector('iframe');
+        if (createdIframe) {
+          createdIframe.setAttribute('allow', 'autoplay; encrypted-media');
+        }
       } catch {
         if (!cancelled) {
           ytActuallyPlayingRef.current = false;
@@ -1054,7 +1060,7 @@ export function YouTubePlayerBridge() {
           syncMediaSessionPlaybackState('paused');
           const st = usePlayerStore.getState();
           st.setIsBuffering(false);
-          st.setIsPlaying(false);
+          st.setIsPlaying(false, { userInitiated: false });
           st.setPlayerError('Gagal memuat pemutar cloud.');
         }
       }
@@ -1173,7 +1179,7 @@ export function YouTubePlayerBridge() {
             shouldTreatYoutubeAsAutoplayBlocked({
               isPlaying: store.isPlaying,
               isYoutubeIframe: true,
-              visibilityState: document.visibilityState,
+              visibilityState: getRealDocumentVisibilityState(),
               playerState: typeof pState === 'number' ? pState : -1,
               elapsedSincePlayRequestMs: elapsed,
               wasEverPlayingForTrack: ytEverPlayedForTrackRef.current,
@@ -1182,7 +1188,7 @@ export function YouTubePlayerBridge() {
             stopSilentKeepaliveAudio();
             syncMediaSessionPlaybackState('paused');
             store.setIsBuffering(false);
-            store.setIsPlaying(false);
+            store.setIsPlaying(false, { userInitiated: false });
             if (!onCapAndroid) {
               store.setAutoplayBlockedPendingResume(true);
             }

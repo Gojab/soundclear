@@ -31,6 +31,11 @@ import {
   computeUnmutedVolume,
   resolveEffectiveCrossfadeSeconds,
 } from '../utils/audioMath';
+import {
+  setUserPaused,
+  subscribeRealPageHide,
+  subscribeRealVisibilityChange,
+} from '../utils/backgroundAudioLogic';
 import { normalizePlaylistMixSettings } from '../utils/djMixLogic';
 import {
   getPlayableVideoId,
@@ -145,7 +150,7 @@ interface PlayerState {
   clearSourceQueue: () => void;
   clearAllUpcoming: () => void;
 
-  setIsPlaying: (playing: boolean) => void;
+  setIsPlaying: (playing: boolean, options?: { userInitiated?: boolean }) => void;
   togglePlayPause: () => void;
   stopPlayback: () => void;
   setIsBuffering: (buffering: boolean) => void;
@@ -227,10 +232,10 @@ function installBackgroundLifecycleSync(): void {
     if (!state.hydrated || !state.currentTrack) return;
     beaconBackgroundSession(buildBgPayloadFromState(state));
   };
-  window.addEventListener('pagehide', flushNow);
+  subscribeRealPageHide(flushNow);
   window.addEventListener('beforeunload', flushNow);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
+  subscribeRealVisibilityChange((vis) => {
+    if (vis === 'hidden') {
       flushNow();
     }
   });
@@ -613,6 +618,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   playTrack: (track, options) => {
     if (!isPlayableTrack(track)) return;
+    setUserPaused(false);
+    setUserPaused(false);
     unlockPlaybackOnUserGesture();
     beginTrackTelemetry(track);
 
@@ -653,6 +660,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playTrackList: (tracks, startIndex = 0, sourceLabel = 'Daftar Putar', options) => {
     const playable = filterHiddenAndExplicit(tracks.filter((t) => isPlayableTrack(t)));
     if (playable.length === 0) return;
+    setUserPaused(false);
     unlockPlaybackOnUserGesture();
 
     const safeIdx = Math.max(0, Math.min(startIndex, playable.length - 1));
@@ -699,6 +707,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playFromManualQueue: (index) => {
     const { manualQueue, currentTrack } = get();
     if (index < 0 || index >= manualQueue.length) return;
+    setUserPaused(false);
     unlockPlaybackOnUserGesture();
     const target = manualQueue[index];
     const nextManual = manualQueue.slice(index + 1);
@@ -733,6 +742,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playFromSourceQueue: (index) => {
     const { sourceQueue, currentTrack } = get();
     if (index < 0 || index >= sourceQueue.length) return;
+    setUserPaused(false);
     unlockPlaybackOnUserGesture();
     const target = sourceQueue[index];
     const nextSource = sourceQueue.slice(index + 1);
@@ -851,11 +861,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     persistPlayerSession(get(), true);
   },
 
-  setIsPlaying: (playing) => {
+  setIsPlaying: (playing, options) => {
+    const userInitiated = options?.userInitiated !== false;
     if (playing) {
+      setUserPaused(false);
       unlockPlaybackOnUserGesture();
-    } else {
-      stopSilentKeepaliveAudio();
+    } else if (userInitiated) {
+      setUserPaused(true);
+      stopSilentKeepaliveAudio(true);
     }
     set((state) => ({
       isPlaying: playing,
@@ -869,10 +882,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   togglePlayPause: () => {
     if (!get().currentTrack) return;
     const nextPlaying = !get().isPlaying;
+    setUserPaused(!nextPlaying);
     if (nextPlaying) {
       unlockPlaybackOnUserGesture();
     } else {
-      stopSilentKeepaliveAudio();
+      stopSilentKeepaliveAudio(true);
     }
     set((state) => ({
       isPlaying: nextPlaying,
@@ -886,7 +900,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   stopPlayback: () => {
     const state = get();
     if (!state.currentTrack) return;
-    stopSilentKeepaliveAudio();
+    setUserPaused(true);
+    stopSilentKeepaliveAudio(true);
     set({
       isPlaying: false,
       isBuffering: false,
@@ -927,6 +942,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     // Check sleep timer minute countdown
     if (state.sleepTimerMode === 'minutes' && state.sleepTimerEndsAt && Date.now() >= state.sleepTimerEndsAt) {
+      setUserPaused(true);
+      stopSilentKeepaliveAudio(true);
       set({ isPlaying: false, sleepTimerMode: 'off', sleepTimerEndsAt: null, sleepTimerMinutes: null });
     }
 
@@ -1050,6 +1067,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     if (sourceQueue.length > 0) {
+      setUserPaused(false);
       unlockPlaybackOnUserGesture();
       const pickIdx = shuffle ? Math.floor(Math.random() * sourceQueue.length) : 0;
       const target = sourceQueue[pickIdx];
@@ -1085,6 +1103,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const autoplay = useSettingsStore.getState().autoplay;
     const vid = getPlayableVideoId(currentTrack);
     if (autoplay && vid) {
+      setUserPaused(false);
       unlockPlaybackOnUserGesture();
       fetchWatchPlaylist(vid, true)
         .then((watch) => {
@@ -1106,6 +1125,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   prevTrack: () => {
     const state = get();
     if (!state.currentTrack) return;
+    setUserPaused(false);
     unlockPlaybackOnUserGesture();
     if (state.currentTime > 3 || state.historyStack.length === 0) {
       get().requestSeek(0);
@@ -1158,11 +1178,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     if (state.sleepTimerMode === 'end_of_track') {
+      setUserPaused(true);
+      stopSilentKeepaliveAudio(true);
       set({ isPlaying: false, sleepTimerMode: 'off', sleepTimerEndsAt: null, sleepTimerMinutes: null });
       return;
     }
 
     if (state.repeat === 'one') {
+      setUserPaused(false);
       get().requestSeek(0);
       set({ isPlaying: true });
       return;
@@ -1258,6 +1281,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     if (!st.currentTrack) return;
     const upcoming = st.manualQueue[0] ?? st.sourceQueue[0] ?? null;
     if (!upcoming) return;
+    setUserPaused(false);
     unlockPlaybackOnUserGesture();
     set((state) => ({
       isPlaying: true,

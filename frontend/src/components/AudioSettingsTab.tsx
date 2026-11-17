@@ -75,15 +75,19 @@ function PillSwitch({
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-[#19EE8A] cursor-pointer ${
-        checked ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
-      }`}
+      className="min-w-[44px] min-h-[44px] shrink-0 inline-flex items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-[#19EE8A] cursor-pointer"
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-          checked ? 'translate-x-6 bg-[#E8FFF3]' : 'translate-x-1 bg-[#B3F7D1]/70'
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+          checked ? 'bg-sc-gradient' : 'bg-white/[0.12] hover:bg-white/[0.18]'
         }`}
-      />
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+            checked ? 'translate-x-6 bg-[#E8FFF3]' : 'translate-x-1 bg-[#B3F7D1]/70'
+          }`}
+        />
+      </span>
     </button>
   );
 }
@@ -208,16 +212,16 @@ function SectionHeader({
   resetLabel?: string;
 }) {
   return (
-    <div className="flex flex-col @[520px]:flex-row @[520px]:items-start justify-between gap-2">
+    <div className="flex flex-col @[520px]:flex-row @[520px]:items-start justify-between gap-4">
       <div className="min-w-0">
         <h2 className="text-base font-semibold text-[#E8FFF3]">{title}</h2>
-        <p className="text-xs text-[#B3F7D1]/60 mt-0.5">{subtitle}</p>
+        <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">{subtitle}</p>
       </div>
       {onReset && (
         <button
           type="button"
           onClick={onReset}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] backdrop-blur-md border border-white/[0.11] text-[11px] font-medium text-[#B3F7D1]/80 hover:text-[#E8FFF3] self-start shrink-0 transition-colors"
+          className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] backdrop-blur-md border border-white/[0.11] text-[11px] font-medium text-[#B3F7D1]/80 hover:text-[#E8FFF3] self-start shrink-0 transition-colors"
         >
           <RotateCcw className="w-3 h-3" strokeWidth={1.8} />
           {resetLabel}
@@ -378,12 +382,12 @@ export function AudioSettingsTab() {
   return (
     <div className="space-y-6">
       {/* Top Action & Global DSP Controls */}
-      <div className="glass-card rounded-2xl p-4 flex flex-col @[640px]:flex-row @[640px]:items-center justify-between gap-3">
+      <div className="glass-card rounded-2xl p-4 sm:p-6 flex flex-col @[640px]:flex-row @[640px]:items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[#E8FFF3]">
             Pengaturan Audio Lengkap ({accountKey})
           </p>
-          <p className="text-xs text-[#B3F7D1]/65 mt-0.5">
+          <p className="text-xs text-[#B3F7D1]/65 mt-1 leading-relaxed max-w-[65ch]">
             {playbackSummary.topBannerSummary}
           </p>
         </div>
@@ -394,7 +398,7 @@ export function AudioSettingsTab() {
               enableAllDsp();
               showToast('Semua modul DSP aktif (EQ, Bass Boost, Stereo Widener, Normalisasi, Limiter, Crossfade)');
             }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all whitespace-nowrap"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold hover:brightness-105 transition-all whitespace-nowrap"
           >
             <Sliders className="w-3.5 h-3.5" strokeWidth={2} />
             Aktifkan Semua DSP
@@ -402,7 +406,7 @@ export function AudioSettingsTab() {
           <button
             type="button"
             onClick={() => handleResetSection('all', 'Seluruh pengaturan audio')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] backdrop-blur-md border border-white/[0.12] text-xs font-medium text-[#E8FFF3] transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] backdrop-blur-md border border-white/[0.12] text-xs font-medium text-[#E8FFF3] transition-colors whitespace-nowrap"
           >
             <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.85} />
             Reset ke default
@@ -411,7 +415,7 @@ export function AudioSettingsTab() {
       </div>
 
       {/* 1. KUALITAS STREAMING */}
-      <section className="glass-card rounded-2xl p-5 space-y-5">
+      <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-6">
         <SectionHeader
           title="1. Kualitas Streaming"
           subtitle="Atur target bitrate dan resolusi lossless terpisah untuk WiFi serta data seluler"
@@ -419,7 +423,7 @@ export function AudioSettingsTab() {
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label className="space-y-1.5 block">
+          <label className="space-y-2 block">
             <span className="text-xs font-medium text-[#E8FFF3]/85 block">Kualitas WiFi</span>
             <select
               aria-label="Kualitas streaming WiFi"
@@ -427,7 +431,7 @@ export function AudioSettingsTab() {
               onChange={(e) =>
                 updateLocalProfile({ wifiQuality: e.target.value as StreamQualityTier })
               }
-              className="w-full h-10 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.13] text-xs text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
+              className="w-full h-11 px-4 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.13] text-xs text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
             >
               {STREAM_QUALITY_TIERS.map((tier) => (
                 <option key={tier.id} value={tier.id} className="bg-[#0B0F0D] text-[#E8FFF3]">
@@ -437,7 +441,7 @@ export function AudioSettingsTab() {
             </select>
           </label>
 
-          <label className="space-y-1.5 block">
+          <label className="space-y-2 block">
             <span className="text-xs font-medium text-[#E8FFF3]/85 block">Kualitas Data Seluler</span>
             <select
               aria-label="Kualitas streaming Data Seluler"
@@ -445,7 +449,7 @@ export function AudioSettingsTab() {
               onChange={(e) =>
                 updateLocalProfile({ cellularQuality: e.target.value as StreamQualityTier })
               }
-              className="w-full h-10 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.13] text-xs text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
+              className="w-full h-11 px-4 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.13] text-xs text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
             >
               {STREAM_QUALITY_TIERS.map((tier) => (
                 <option key={tier.id} value={tier.id} className="bg-[#0B0F0D] text-[#E8FFF3]">
@@ -456,11 +460,11 @@ export function AudioSettingsTab() {
           </label>
         </div>
 
-        <div className="space-y-3 pt-3 border-t border-[#B3F7D1]/[0.1]">
+        <div className="space-y-4 pt-4 border-t border-[#B3F7D1]/[0.1]">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Auto-Adjust Quality</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Turunkan kualitas saat jaringan melemah atau buffering berulang, lalu naikkan lagi saat stabil
                 {connectionApiSupported
                   ? ` (jaringan terdeteksi: ${networkEffectiveType || 'stabil'}, stall: ${bufferingStallCount})`
@@ -477,7 +481,7 @@ export function AudioSettingsTab() {
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Mode Hemat Data</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Paksa kualitas audio terendah yang tersedia dan perkecil resolusi gambar sampul
               </p>
             </div>
@@ -490,7 +494,7 @@ export function AudioSettingsTab() {
         </div>
 
         {/* Active stream status */}
-        <div className="pt-3 border-t border-[#B3F7D1]/[0.1] space-y-2.5">
+        <div className="pt-4 border-t border-[#B3F7D1]/[0.1] space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-[#E8FFF3]/85">
               Status Kualitas Pada Lagu Aktif
@@ -559,7 +563,7 @@ export function AudioSettingsTab() {
       </section>
 
       {/* 2. PENYIMPANAN & UNDUHAN OFFLINE */}
-      <section className="glass-card rounded-2xl p-5 space-y-4">
+      <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
         <SectionHeader
           title="2. Penyimpanan & Unduhan Offline"
           subtitle="Simpan semua lagu pilihan Anda—file audio lokal maupun katalog online—ke cache offline browser (IndexedDB + Cache Storage)"
@@ -567,7 +571,7 @@ export function AudioSettingsTab() {
         />
 
         <div className="grid grid-cols-1 @[520px]:grid-cols-2 gap-4 items-end">
-          <label className="space-y-1.5 block min-w-0">
+          <label className="space-y-2 block min-w-0">
             <span className="text-xs font-medium text-[#E8FFF3]/85 block">Preferensi Kualitas Offline</span>
             <select
               aria-label="Kualitas unduhan offline"
@@ -577,7 +581,7 @@ export function AudioSettingsTab() {
                   downloadQuality: e.target.value as ConcreteQualityTier,
                 })
               }
-              className="w-full h-10 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.13] text-xs text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
+              className="w-full h-11 px-4 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.13] text-xs text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
             >
               {STREAM_QUALITY_TIERS.filter((t) => t.id !== 'auto').map((tier) => (
                 <option key={tier.id} value={tier.id} className="bg-[#0B0F0D] text-[#E8FFF3]">
@@ -592,7 +596,7 @@ export function AudioSettingsTab() {
               type="button"
               disabled={!downloadAllowedForCurrent || downloadingOffline}
               onClick={() => void handleDownloadCurrentTrack()}
-              className="flex-1 min-w-[160px] h-10 px-3.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold inline-flex items-center justify-center gap-1.5 whitespace-nowrap hover:brightness-105 disabled:bg-none disabled:bg-white/[0.06] disabled:text-[#B3F7D1]/40 disabled:cursor-not-allowed transition-all"
+              className="flex-1 min-w-[160px] h-11 px-4 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold inline-flex items-center justify-center gap-2 whitespace-nowrap hover:brightness-105 disabled:bg-none disabled:bg-white/[0.06] disabled:text-[#B3F7D1]/40 disabled:cursor-not-allowed transition-all"
             >
               <Download className="w-4 h-4 shrink-0" strokeWidth={2} />
               {downloadingOffline
@@ -608,7 +612,7 @@ export function AudioSettingsTab() {
                 type="button"
                 disabled={downloadingOffline}
                 onClick={() => void handleDownloadLikedBatch()}
-                className="h-10 px-3.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] backdrop-blur-md border border-white/[0.12] text-xs font-medium text-[#E8FFF3] inline-flex items-center justify-center gap-1.5 whitespace-nowrap disabled:opacity-45 transition-colors shrink-0"
+                className="h-11 px-4 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] backdrop-blur-md border border-white/[0.12] text-xs font-medium text-[#E8FFF3] inline-flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-45 transition-colors shrink-0"
               >
                 <Download className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={2} />
                 Unduh Disukai ({likedTracks.length})
@@ -617,22 +621,22 @@ export function AudioSettingsTab() {
           </div>
         </div>
 
-        <p className="text-xs text-[#B3F7D1]/60">
+        <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
           Unduhan offline menyimpan berkas audio utuh (lokal maupun katalog online) beserta metadata dan sampul album ke IndexedDB &amp; Cache Storage browser.
         </p>
 
         {offlineDownloads.length > 0 && (
-          <div className="pt-3 border-t border-[#B3F7D1]/[0.1] space-y-2">
+          <div className="pt-4 border-t border-[#B3F7D1]/[0.1] space-y-2">
             <p className="text-xs font-semibold text-[#E8FFF3]/80">
               Tersimpan Offline ({offlineDownloads.length} lagu · IndexedDB + Cache Storage)
             </p>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            <div className="space-y-2 max-h-48 overflow-y-auto">
               {offlineDownloads.map((rec) => {
                 const fullBlob = hasPlayableOfflineAudio(rec);
                 return (
                   <div
                     key={rec.id}
-                    className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11]"
+                    className="flex items-center justify-between gap-2 px-4 py-2 rounded-xl bg-white/[0.055] backdrop-blur-xl border border-white/[0.11]"
                   >
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-[#E8FFF3] truncate">{rec.track.title}</p>
@@ -646,13 +650,13 @@ export function AudioSettingsTab() {
                           : 'Cache Katalog'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() =>
                           playTrack(rec.track, { sourceLabel: 'Unduhan Offline' })
                         }
-                        className="px-2.5 py-1 rounded-lg bg-[#19EE8A]/15 text-[#19EE8A] text-[11px] font-medium hover:bg-[#19EE8A]/25 inline-flex items-center gap-1"
+                        className="min-h-[44px] px-4 py-2 rounded-lg bg-[#19EE8A]/15 text-[#19EE8A] text-[11px] font-medium hover:bg-[#19EE8A]/25 inline-flex items-center gap-1"
                       >
                         <Play className="w-3 h-3 fill-current" strokeWidth={2} />
                         Putar
@@ -661,9 +665,9 @@ export function AudioSettingsTab() {
                         type="button"
                         onClick={() => void deleteOfflineDownload(rec.id)}
                         aria-label={`Hapus unduhan offline ${rec.track.title}`}
-                        className="p-1.5 rounded-lg text-[#B3F7D1]/60 hover:text-red-300 hover:bg-white/[0.1]"
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-[#B3F7D1]/60 hover:text-red-300 hover:bg-white/[0.1]"
                       >
-                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                       </button>
                     </div>
                   </div>
@@ -675,22 +679,22 @@ export function AudioSettingsTab() {
       </section>
 
       {/* 3. EQUALIZER & EFEK SPASIAL */}
-      <section className="glass-card rounded-2xl p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-[#E8FFF3]">3. Equalizer</h2>
-            <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+            <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
               10-band grafis ±12 dB dengan preamp dan kurva respons real-time
             </p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => {
                 handleResetSection('eq', 'Equalizer & Efek');
                 void resumeAudioContext();
               }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-[11px] font-medium text-[#B3F7D1]/80 hover:text-[#E8FFF3] transition-colors"
+              className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-[11px] font-medium text-[#B3F7D1]/80 hover:text-[#E8FFF3] transition-colors"
             >
               <RotateCcw className="w-3 h-3" strokeWidth={1.8} />
               Reset EQ
@@ -707,17 +711,19 @@ export function AudioSettingsTab() {
         </div>
 
         {playbackSummary.eqBypassNotice && (
-          <p className="text-[11px] text-amber-200/85 bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-2">
+          <p className="text-[11px] text-amber-200/85 bg-amber-500/10 border border-amber-400/20 rounded-xl px-4 py-2 leading-relaxed max-w-[65ch]">
             {playbackSummary.eqBypassNotice}
           </p>
         )}
 
         {/* Clean Preset Bar (Spotify-style dropdown + custom preset controls) */}
-        <div className="flex flex-col @[640px]:flex-row @[640px]:items-center gap-2.5">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <div className="flex flex-col @[640px]:flex-row @[640px]:items-center gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <select
               aria-label="Pilih preset equalizer"
               value={localProfile.presetId}
+              onPointerDown={() => void resumeAudioContext()}
+              onTouchStart={() => void resumeAudioContext()}
               onChange={(e) => {
                 const nextId = e.target.value;
                 if (nextId !== 'custom') {
@@ -725,7 +731,7 @@ export function AudioSettingsTab() {
                   void resumeAudioContext();
                 }
               }}
-              className="flex-1 min-w-0 h-9 px-3 rounded-xl bg-white/[0.06] border border-white/[0.12] text-xs font-medium text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
+              className="flex-1 min-w-0 h-11 px-4 rounded-xl bg-white/[0.06] border border-white/[0.12] text-xs font-medium text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
             >
               {localProfile.presetId === 'custom' && (
                 <option value="custom" className="bg-[#0B0F0D] text-[#19EE8A]">
@@ -757,7 +763,7 @@ export function AudioSettingsTab() {
               if (!selectedCustom) return null;
               if (renamingPresetId === selectedCustom.id) {
                 return (
-                  <div className="flex items-center gap-1 bg-white/[0.06] border border-white/[0.12] rounded-xl px-2 h-9 shrink-0">
+                  <div className="flex items-center gap-2 bg-white/[0.06] border border-white/[0.12] rounded-xl px-2 h-11 shrink-0">
                     <input
                       type="text"
                       aria-label={`Ubah nama preset ${selectedCustom.name}`}
@@ -786,23 +792,23 @@ export function AudioSettingsTab() {
                         }
                         setRenamingPresetId(null);
                       }}
-                      className="p-1 text-[#19EE8A] hover:opacity-80"
+                      className="w-11 h-11 inline-flex items-center justify-center text-[#19EE8A] hover:opacity-80"
                     >
-                      <Check className="w-3.5 h-3.5" strokeWidth={2.2} />
+                      <Check className="w-4 h-4" strokeWidth={2.2} />
                     </button>
                     <button
                       type="button"
                       aria-label="Batal ubah nama"
                       onClick={() => setRenamingPresetId(null)}
-                      className="p-1 text-[#B3F7D1]/70 hover:text-white"
+                      className="w-11 h-11 inline-flex items-center justify-center text-[#B3F7D1]/70 hover:text-white"
                     >
-                      <X className="w-3.5 h-3.5" strokeWidth={2.2} />
+                      <X className="w-4 h-4" strokeWidth={2.2} />
                     </button>
                   </div>
                 );
               }
               return (
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -810,24 +816,24 @@ export function AudioSettingsTab() {
                       setRenameDraft(selectedCustom.name);
                     }}
                     aria-label={`Ganti nama preset ${selectedCustom.name}`}
-                    className="h-9 w-9 inline-flex items-center justify-center rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.12] text-[#B3F7D1]/80 hover:text-[#E8FFF3]"
+                    className="h-11 w-11 inline-flex items-center justify-center rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.12] text-[#B3F7D1]/80 hover:text-[#E8FFF3]"
                   >
-                    <Edit2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <Edit2 className="w-4 h-4" strokeWidth={1.75} />
                   </button>
                   <button
                     type="button"
                     onClick={() => deleteCustomPreset(selectedCustom.id)}
                     aria-label={`Hapus preset ${selectedCustom.name}`}
-                    className="h-9 w-9 inline-flex items-center justify-center rounded-xl bg-white/[0.06] hover:bg-red-500/20 border border-white/[0.12] text-[#B3F7D1]/80 hover:text-red-300"
+                    className="h-11 w-11 inline-flex items-center justify-center rounded-xl bg-white/[0.06] hover:bg-red-500/20 border border-white/[0.12] text-[#B3F7D1]/80 hover:text-red-300"
                   >
-                    <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                   </button>
                 </div>
               );
             })()}
           </div>
 
-          <div className="flex items-center gap-1.5 w-full @[640px]:w-60 shrink-0">
+          <div className="flex items-center gap-2 w-full @[640px]:w-64 shrink-0">
             <input
               type="text"
               value={presetNameInput}
@@ -843,7 +849,7 @@ export function AudioSettingsTab() {
                 }
               }}
               placeholder="Nama preset kustom baru..."
-              className="flex-1 min-w-0 h-9 px-3 rounded-xl bg-white/[0.06] border border-white/[0.12] text-xs text-[#E8FFF3] placeholder:text-[#B3F7D1]/40 focus:outline-none focus:border-[#19EE8A]"
+              className="flex-1 min-w-0 h-11 px-4 rounded-xl bg-white/[0.06] border border-white/[0.12] text-xs text-[#E8FFF3] placeholder:text-[#B3F7D1]/40 focus:outline-none focus:border-[#19EE8A]"
             />
             <button
               type="button"
@@ -855,7 +861,7 @@ export function AudioSettingsTab() {
                   showToast(`Preset "${created.name}" disimpan`);
                 }
               }}
-              className="inline-flex items-center gap-1 px-3 h-9 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] text-xs font-medium text-[#E8FFF3] disabled:opacity-40 transition-colors shrink-0"
+              className="inline-flex items-center gap-2 px-4 h-11 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] text-xs font-medium text-[#E8FFF3] disabled:opacity-40 transition-colors shrink-0"
             >
               <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
               Simpan
@@ -944,6 +950,8 @@ export function AudioSettingsTab() {
                         max={12}
                         step={0.5}
                         value={val}
+                        onPointerDown={() => void resumeAudioContext()}
+                        onTouchStart={() => void resumeAudioContext()}
                         onChange={(e) => {
                           setEqBandGain(idx, Number(e.target.value));
                           void resumeAudioContext();
@@ -962,7 +970,7 @@ export function AudioSettingsTab() {
           </div>
 
           {/* Preamp Compact Bar */}
-          <div className="flex items-center gap-3 pt-3 border-t border-white/[0.08]">
+          <div className="flex items-center gap-4 pt-4 border-t border-white/[0.08]">
             <span className="text-xs font-medium text-[#E8FFF3]/80 shrink-0">Preamp</span>
             <input
               type="range"
@@ -971,6 +979,8 @@ export function AudioSettingsTab() {
               max={12}
               step={0.5}
               value={localProfile.preampDb}
+              onPointerDown={() => void resumeAudioContext()}
+              onTouchStart={() => void resumeAudioContext()}
               onChange={(e) => {
                 setEqPreamp(Number(e.target.value));
                 void resumeAudioContext();
@@ -978,7 +988,7 @@ export function AudioSettingsTab() {
               style={{
                 background: `linear-gradient(to right, #19EE8A ${((localProfile.preampDb + 12) / 24) * 100}%, rgba(179,247,209,0.2) ${((localProfile.preampDb + 12) / 24) * 100}%)`,
               }}
-              className="sc-range-visible flex-1 min-w-0"
+              className="sc-range-visible flex-1 min-w-0 min-h-[44px]"
             />
             <span className="w-14 text-right text-xs font-mono-num text-[#19EE8A] shrink-0">
               {formatEqDb(localProfile.preampDb)} dB
@@ -990,8 +1000,8 @@ export function AudioSettingsTab() {
 
         {/* Bass Boost & Stereo Widener */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-          <div className="rounded-xl bg-white/[0.045] border border-white/[0.09] p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between gap-3">
+          <div className="rounded-xl bg-white/[0.045] border border-white/[0.09] p-4 space-y-2">
+            <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-[#E8FFF3]">Bass Boost (Lowshelf 80 Hz)</p>
                 <p className="text-[11px] text-[#B3F7D1]/60">
@@ -1014,6 +1024,8 @@ export function AudioSettingsTab() {
               max={100}
               step={5}
               value={localProfile.bassBoostLevel}
+              onPointerDown={() => void resumeAudioContext()}
+              onTouchStart={() => void resumeAudioContext()}
               onChange={(e) => {
                 const level = Number(e.target.value);
                 updateLocalProfile({
@@ -1025,12 +1037,12 @@ export function AudioSettingsTab() {
               style={{
                 background: `linear-gradient(to right, #19EE8A ${localProfile.bassBoostLevel}%, rgba(179,247,209,0.2) ${localProfile.bassBoostLevel}%)`,
               }}
-              className="sc-range-visible w-full"
+              className="sc-range-visible w-full min-h-[44px]"
             />
           </div>
 
-          <div className="rounded-xl bg-white/[0.045] border border-white/[0.09] p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between gap-3">
+          <div className="rounded-xl bg-white/[0.045] border border-white/[0.09] p-4 space-y-2">
+            <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-[#E8FFF3]">Stereo Widener (Matriks M/S)</p>
                 <p className="text-[11px] text-[#B3F7D1]/60">
@@ -1054,6 +1066,8 @@ export function AudioSettingsTab() {
               max={100}
               step={5}
               value={localProfile.stereoWidenerLevel}
+              onPointerDown={() => void resumeAudioContext()}
+              onTouchStart={() => void resumeAudioContext()}
               onChange={(e) => {
                 const level = Number(e.target.value);
                 updateLocalProfile({
@@ -1065,14 +1079,14 @@ export function AudioSettingsTab() {
               style={{
                 background: `linear-gradient(to right, #19EE8A ${localProfile.stereoWidenerLevel}%, rgba(179,247,209,0.2) ${localProfile.stereoWidenerLevel}%)`,
               }}
-              className="sc-range-visible w-full"
+              className="sc-range-visible w-full min-h-[44px]"
             />
           </div>
         </div>
       </section>
 
       {/* 4. VOLUME & NORMALISASI */}
-      <section className="glass-card rounded-2xl p-5 space-y-5">
+      <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-6">
         <SectionHeader
           title="4. Volume & Normalisasi Loudness"
           subtitle="Target Keras (-11 LUFS), Normal (-14 LUFS), Pelan (-19 LUFS), ReplayGain, dan limiter anti-clipping"
@@ -1080,15 +1094,15 @@ export function AudioSettingsTab() {
         />
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-medium text-[#E8FFF3]">Volume Master</span>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               <span className="text-xs text-[#19EE8A] tabular-nums">{effectiveVolume}%</span>
               <button
                 type="button"
                 onClick={toggleMute}
                 aria-pressed={isMuted}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
+                className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-lg text-xs font-medium transition-colors border ${
                   isMuted
                     ? 'bg-sc-gradient border-transparent text-[#0F1F17] font-semibold'
                     : 'bg-white/[0.06] border-white/[0.11] text-[#B3F7D1]/85 hover:text-[#E8FFF3] hover:bg-white/[0.12]'
@@ -1118,12 +1132,12 @@ export function AudioSettingsTab() {
             style={{
               background: `linear-gradient(to right, #19EE8A ${(effectiveVolume / maxVolumeCap) * 100}%, rgba(179,247,209,0.2) ${(effectiveVolume / maxVolumeCap) * 100}%)`,
             }}
-            className="sc-range-visible w-full"
+            className="sc-range-visible w-full min-h-[44px]"
           />
         </div>
 
-        <div className="space-y-2 pt-3 border-t border-[#B3F7D1]/[0.1]">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4 pt-4 border-t border-[#B3F7D1]/[0.1]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium text-[#E8FFF3]">Target Normalisasi</p>
             <span className="text-[11px] text-[#B3F7D1]/60">
               {diagnostics.measuredLufs !== null
@@ -1144,7 +1158,7 @@ export function AudioSettingsTab() {
                 key={opt.id}
                 type="button"
                 onClick={() => updateLocalProfile({ normalizationTarget: opt.id })}
-                className={`py-2 px-2.5 rounded-xl text-xs font-medium transition-colors border ${
+                className={`min-h-[44px] py-2 px-4 rounded-xl text-xs font-medium transition-colors border ${
                   localProfile.normalizationTarget === opt.id
                     ? 'bg-sc-gradient border-transparent text-[#0F1F17] font-semibold'
                     : 'bg-white/[0.055] border-white/[0.1] text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.11]'
@@ -1158,7 +1172,7 @@ export function AudioSettingsTab() {
           <div className="flex items-center justify-between gap-4 pt-2">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Prioritaskan Tag ReplayGain</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Gunakan tag ReplayGain bila tersedia di metadata berkas, jika tidak ukur loudness
                 awal secara dinamis
               </p>
@@ -1173,7 +1187,7 @@ export function AudioSettingsTab() {
           <div className="flex items-center justify-between gap-4 pt-1">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Limiter Anti-Clipping</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 DynamicsCompressorNode (-1 dB, rasio 20:1) agar gain normalisasi/EQ tidak pecah
               </p>
             </div>
@@ -1185,15 +1199,15 @@ export function AudioSettingsTab() {
           </div>
         </div>
 
-        <div className="space-y-2 pt-3 border-t border-[#B3F7D1]/[0.1]">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="space-y-2 pt-4 border-t border-[#B3F7D1]/[0.1]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Batas Volume Maksimum (Player Web)</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Pembatas volume pelindung pendengaran untuk pemutar streaming
               </p>
             </div>
-            <span className="text-xs text-[#19EE8A] tabular-nums">
+            <span className="text-xs text-[#19EE8A] tabular-nums shrink-0">
               {youtubeSound.maxVolumeLimit}%
             </span>
           </div>
@@ -1212,13 +1226,13 @@ export function AudioSettingsTab() {
             style={{
               background: `linear-gradient(to right, #19EE8A ${((youtubeSound.maxVolumeLimit - 20) / 80) * 100}%, rgba(179,247,209,0.2) ${((youtubeSound.maxVolumeLimit - 20) / 80) * 100}%)`,
             }}
-            className="sc-range-visible w-full"
+            className="sc-range-visible w-full min-h-[44px]"
           />
         </div>
       </section>
 
       {/* 5. PEMUTARAN */}
-      <section className="glass-card rounded-2xl p-5 space-y-5">
+      <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-6">
         <SectionHeader
           title="5. Pemutaran"
           subtitle="Crossfade equal-power 0–12 detik, gapless, fade play/pause, skip silence, dan kecepatan 0,5x–2x"
@@ -1228,11 +1242,11 @@ export function AudioSettingsTab() {
         {/* Crossfade */}
         <CrossfadeControl variant="audio-tab" />
 
-        <div className="space-y-3 pt-3 border-t border-[#B3F7D1]/[0.1]">
+        <div className="space-y-4 pt-4 border-t border-[#B3F7D1]/[0.1]">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Gapless Playback</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Praload lagu berikutnya dan mulai tepat waktu. Catatan: File MP3 dapat memiliki
                 jeda mikro karena padding encoder, sedangkan FLAC dan OGG lebih aman untuk gapless.
               </p>
@@ -1247,7 +1261,7 @@ export function AudioSettingsTab() {
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Fade In / Out Saat Play & Jeda</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Transisi volume lembut saat memulai atau menjeda pemutaran
               </p>
             </div>
@@ -1263,7 +1277,7 @@ export function AudioSettingsTab() {
               <p className="text-sm font-medium text-[#E8FFF3]">
                 Skip Silence (Deteksi Hening Real-Time)
               </p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Pantau level RMS via AnalyserNode dan lompati bagian hening panjang
                 {diagnostics.skipSilenceCount > 0
                   ? ` (terlompati: ${diagnostics.skipSilenceCount} kali)`
@@ -1279,17 +1293,17 @@ export function AudioSettingsTab() {
         </div>
 
         {/* Playback speed 0.5x - 2x with pitch preserved */}
-        <div className="space-y-2.5 pt-3 border-t border-[#B3F7D1]/[0.1]">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="space-y-2 pt-4 border-t border-[#B3F7D1]/[0.1]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Kecepatan Putar (0,5x – 2x)</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Pitch tetap terjaga (preservesPitch &amp; webkitPreservesPitch aktif)
               </p>
             </div>
-            <span className="text-xs text-[#19EE8A] font-mono-num">{playbackRate}x</span>
+            <span className="text-xs text-[#19EE8A] font-mono-num shrink-0">{playbackRate}x</span>
           </div>
-          <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
             {PLAYBACK_RATE_OPTIONS.map((rate) => (
               <button
                 key={rate}
@@ -1298,7 +1312,7 @@ export function AudioSettingsTab() {
                   updateYoutubeSound('defaultPlaybackRate', rate);
                   setPlaybackRate(rate);
                 }}
-                className={`py-1.5 rounded-xl text-xs font-medium tabular-nums transition-colors border ${
+                className={`min-h-[44px] py-2 rounded-xl text-xs font-medium tabular-nums transition-colors border ${
                   playbackRate === rate
                     ? 'bg-sc-gradient border-transparent text-[#0F1F17] font-semibold'
                     : 'bg-white/[0.055] border-white/[0.1] text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.11]'
@@ -1323,13 +1337,13 @@ export function AudioSettingsTab() {
             style={{
               background: `linear-gradient(to right, #19EE8A ${((playbackRate - 0.5) / 1.5) * 100}%, rgba(179,247,209,0.2) ${((playbackRate - 0.5) / 1.5) * 100}%)`,
             }}
-            className="sc-range-visible w-full"
+            className="sc-range-visible w-full min-h-[44px]"
           />
         </div>
 
         {/* Sleep Timer & Continuity */}
-        <div className="space-y-3 pt-3 border-t border-[#B3F7D1]/[0.1]">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4 pt-4 border-t border-[#B3F7D1]/[0.1]">
+          <div className="flex items-center justify-between gap-4">
             <p className="text-sm font-medium text-[#E8FFF3]">Sleep Timer</p>
             <span className="text-xs text-[#19EE8A] tabular-nums">
               {sleepTimerMode === 'end_of_track'
@@ -1339,12 +1353,12 @@ export function AudioSettingsTab() {
                   : 'Mati'}
             </span>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             <button
               type="button"
               aria-pressed={sleepTimerMode === 'off'}
               onClick={() => setSleepTimer('off')}
-              className={`py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+              className={`min-h-[44px] py-2 rounded-xl text-xs font-medium border transition-colors ${
                 sleepTimerMode === 'off'
                   ? 'bg-sc-gradient border-transparent text-[#0F1F17] font-semibold'
                   : 'bg-white/[0.055] border-white/[0.1] text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.11]'
@@ -1360,7 +1374,7 @@ export function AudioSettingsTab() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => setSleepTimer('minutes', min)}
-                  className={`py-1.5 rounded-xl text-xs font-medium tabular-nums border transition-colors ${
+                  className={`min-h-[44px] py-2 rounded-xl text-xs font-medium tabular-nums border transition-colors ${
                     active
                       ? 'bg-sc-gradient border-transparent text-[#0F1F17] font-semibold'
                       : 'bg-white/[0.055] border-white/[0.1] text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.11]'
@@ -1374,7 +1388,7 @@ export function AudioSettingsTab() {
               type="button"
               aria-pressed={sleepTimerMode === 'end_of_track'}
               onClick={() => setSleepTimer('end_of_track')}
-              className={`py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+              className={`min-h-[44px] py-2 rounded-xl text-xs font-medium border transition-colors ${
                 sleepTimerMode === 'end_of_track'
                   ? 'bg-sc-gradient border-transparent text-[#0F1F17] font-semibold'
                   : 'bg-white/[0.055] border-white/[0.1] text-[#B3F7D1]/80 hover:text-[#E8FFF3] hover:bg-white/[0.11]'
@@ -1384,10 +1398,10 @@ export function AudioSettingsTab() {
             </button>
           </div>
 
-          <div className="flex items-center justify-between gap-4 pt-1">
+          <div className="flex items-center justify-between gap-4 pt-2">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Autoplay lagu terkait</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Lanjutkan otomatis dengan lagu radio terkait saat antrean selesai
               </p>
             </div>
@@ -1401,7 +1415,7 @@ export function AudioSettingsTab() {
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Lanjut dari posisi terakhir</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Simpan posisi detik terakhir ketika aplikasi ditutup
               </p>
             </div>
@@ -1415,7 +1429,7 @@ export function AudioSettingsTab() {
       </section>
 
       {/* 6. OUTPUT AUDIO */}
-      <section className="glass-card rounded-2xl p-5 space-y-5">
+      <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-6">
         <SectionHeader
           title="6. Output Audio"
           subtitle="Mono downmix, balance kiri-kanan, pemilih perangkat output (setSinkId), dan Mode Direct"
@@ -1425,7 +1439,7 @@ export function AudioSettingsTab() {
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-sm font-medium text-[#E8FFF3]">Audio Mono</p>
-            <p className="text-xs text-[#B3F7D1]/60">
+            <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
               Gabungkan kanal kiri &amp; kanan (channelCount = 1, channelCountMode = explicit)
             </p>
           </div>
@@ -1436,13 +1450,13 @@ export function AudioSettingsTab() {
           />
         </div>
 
-        <div className="space-y-1.5 pt-3 border-t border-[#B3F7D1]/[0.1]">
-          <div className="flex items-center justify-between">
+        <div className="space-y-2 pt-4 border-t border-[#B3F7D1]/[0.1]">
+          <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-medium text-[#E8FFF3]">Balance Kiri / Kanan</span>
             <button
               type="button"
               onClick={() => updateLocalProfile({ balance: 0 })}
-              className="text-xs text-[#19EE8A] tabular-nums hover:underline"
+              className="text-xs text-[#19EE8A] tabular-nums hover:underline min-h-[44px] inline-flex items-center"
             >
               {localProfile.balance === 0
                 ? 'Tengah (0%)'
@@ -1451,7 +1465,7 @@ export function AudioSettingsTab() {
                   : `Kanan ${Math.round(localProfile.balance * 100)}%`}
             </button>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-[#B3F7D1]/60">
+          <div className="flex items-center gap-4 text-[11px] text-[#B3F7D1]/60">
             <span>Kiri</span>
             <input
               type="range"
@@ -1464,18 +1478,18 @@ export function AudioSettingsTab() {
               style={{
                 background: `linear-gradient(to right, #19EE8A ${((localProfile.balance + 1) / 2) * 100}%, rgba(179,247,209,0.2) ${((localProfile.balance + 1) / 2) * 100}%)`,
               }}
-              className="sc-range-visible flex-1"
+              className="sc-range-visible flex-1 min-h-[44px]"
             />
             <span>Kanan</span>
           </div>
         </div>
 
         {/* Output Device Picker via setSinkId */}
-        <div className="space-y-2 pt-3 border-t border-[#B3F7D1]/[0.1]">
-          <div className="flex items-center justify-between gap-2">
-            <div>
+        <div className="space-y-2 pt-4 border-t border-[#B3F7D1]/[0.1]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Perangkat Output Audio (setSinkId)</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 {outputDevicesState.supported
                   ? 'Arahkan keluaran Web Audio ke speaker atau DAC pilihan'
                   : outputDevicesState.reason ||
@@ -1486,7 +1500,7 @@ export function AudioSettingsTab() {
               <button
                 type="button"
                 onClick={() => void refreshOutputDevices()}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] backdrop-blur-md border border-white/[0.11] text-[11px] text-[#E8FFF3]/85 shrink-0 transition-colors"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] backdrop-blur-md border border-white/[0.11] text-[11px] text-[#E8FFF3]/85 shrink-0 transition-colors"
               >
                 <RefreshCw className="w-3 h-3" strokeWidth={1.8} />
                 Segarkan
@@ -1508,7 +1522,7 @@ export function AudioSettingsTab() {
                 showToast('Perangkat output audio diperbarui');
               }
             }}
-            className="w-full h-10 px-3 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.13] text-xs text-[#E8FFF3] disabled:opacity-45 disabled:cursor-not-allowed focus:outline-none focus:border-[#19EE8A]"
+            className="w-full h-11 px-4 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.13] text-xs text-[#E8FFF3] disabled:opacity-45 disabled:cursor-not-allowed focus:outline-none focus:border-[#19EE8A]"
           >
             <option value="" className="bg-[#0B0F0D] text-[#E8FFF3]">Default Sistem</option>
             {outputDevicesState.devices.map((dev, idx) => (
@@ -1520,11 +1534,11 @@ export function AudioSettingsTab() {
         </div>
 
         {/* Mode Direct */}
-        <div className="pt-3 border-t border-[#B3F7D1]/[0.1] space-y-1.5">
+        <div className="pt-4 border-t border-[#B3F7D1]/[0.1] space-y-2">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#E8FFF3]">Mode Direct (Bypass DSP)</p>
-              <p className="text-xs text-[#B3F7D1]/60">
+              <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch]">
                 Melewati EQ, normalisasi, limiter, crossfade, bass boost, dan stereo widener agar
                 sinyal lossless tidak dimodifikasi
               </p>
@@ -1535,7 +1549,7 @@ export function AudioSettingsTab() {
               onChange={(next) => updateLocalProfile({ directMode: next })}
             />
           </div>
-          <p className="text-[11px] text-amber-200/80 bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-2">
+          <p className="text-[11px] text-amber-200/80 bg-amber-500/10 border border-amber-400/20 rounded-xl px-4 py-2 leading-relaxed max-w-[65ch]">
             Catatan kejujuran: Mode Direct melewati seluruh pengolahan DSP internal browser, tetapi
             browser web tetap melalui mixer audio sistem operasi dan tidak menjamin keluaran
             bit-perfect eksklusif ke DAC eksternal.
@@ -1544,14 +1558,14 @@ export function AudioSettingsTab() {
       </section>
 
       {/* 7. DIAGNOSTIK AUDIO & TES NADA */}
-      <section className="glass-card rounded-2xl p-5 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <section className="glass-card rounded-2xl p-4 sm:p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-[#E8FFF3] flex items-center gap-2">
               <Activity className="w-4 h-4 text-[#19EE8A]" strokeWidth={2} />
               7. Diagnostik Audio &amp; Tes Nada
             </h2>
-            <p className="text-xs text-[#B3F7D1]/60 mt-0.5">
+            <p className="text-xs text-[#B3F7D1]/60 mt-1 leading-relaxed max-w-[65ch]">
               Status AudioContext, rantai node aktif, metadata stream aktual, dan generator tes nada
               melalui rantai efek yang sama
             </p>
@@ -1560,7 +1574,7 @@ export function AudioSettingsTab() {
             <button
               type="button"
               onClick={() => void resumeAudioContext()}
-              className="px-3 py-1.5 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold shrink-0 self-start sm:self-auto hover:brightness-105 transition"
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-sc-gradient text-[#0F1F17] text-xs font-semibold shrink-0 self-start sm:self-auto hover:brightness-105 transition"
             >
               Aktifkan AudioContext
             </button>
@@ -1568,29 +1582,29 @@ export function AudioSettingsTab() {
         </div>
 
         {/* AudioContext & Engine Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-          <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-4">
             <p className="text-[#B3F7D1]/60 text-[11px]">Status AudioContext</p>
-            <p className="font-semibold text-[#E8FFF3] mt-0.5 uppercase">
+            <p className="font-semibold text-[#E8FFF3] mt-1 uppercase">
               {diagnostics.contextState}
             </p>
           </div>
-          <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-3">
+          <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-4">
             <p className="text-[#B3F7D1]/60 text-[11px]">Sample Rate Context</p>
-            <p className="font-semibold text-[#E8FFF3] mt-0.5 tabular-nums">
+            <p className="font-semibold text-[#E8FFF3] mt-1 tabular-nums">
               {diagnostics.sampleRate ? `${diagnostics.sampleRate.toLocaleString('id-ID')} Hz` : '—'}
             </p>
           </div>
-          <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-3">
+          <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-4">
             <p className="text-[#B3F7D1]/60 text-[11px]">Latensi Dasar / Output</p>
-            <p className="font-semibold text-[#E8FFF3] mt-0.5 tabular-nums">
+            <p className="font-semibold text-[#E8FFF3] mt-1 tabular-nums">
               {diagnostics.baseLatencyMs !== null ? `${diagnostics.baseLatencyMs} ms` : '—'} /{' '}
               {diagnostics.outputLatencyMs !== null ? `${diagnostics.outputLatencyMs} ms` : '—'}
             </p>
           </div>
-          <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-3">
+          <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-4">
             <p className="text-[#B3F7D1]/60 text-[11px]">setSinkId Browser</p>
-            <p className="font-semibold text-[#E8FFF3] mt-0.5">
+            <p className="font-semibold text-[#E8FFF3] mt-1">
               {diagnostics.sinkIdSupported ? `Didukung (${diagnostics.sinkIdMethod})` : 'Tidak didukung'}
             </p>
           </div>
@@ -1598,7 +1612,7 @@ export function AudioSettingsTab() {
 
         {/* Live Active Node Chain */}
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-[#E8FFF3]/80 flex items-center gap-1.5">
+          <p className="text-xs font-semibold text-[#E8FFF3]/80 flex items-center gap-2">
             <Sliders className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.9} />
             Rantai Node Web Audio Aktif
           </p>
@@ -1606,7 +1620,7 @@ export function AudioSettingsTab() {
             {diagnostics.activeNodes.map((node, idx) => (
               <div
                 key={node.id}
-                className={`rounded-xl px-3 py-2 border backdrop-blur-md text-[11px] ${
+                className={`rounded-xl px-4 py-2 border backdrop-blur-md text-[11px] ${
                   node.status === 'active'
                     ? 'bg-[#19EE8A]/12 border-[#19EE8A]/35 text-[#E8FFF3]'
                     : node.status === 'bypassed'
@@ -1617,7 +1631,7 @@ export function AudioSettingsTab() {
                 <p className="font-semibold truncate">
                   {idx + 1}. {node.label}
                 </p>
-                <p className="mt-0.5 text-[10px]">
+                <p className="mt-1 text-[10px]">
                   {node.status === 'active'
                     ? `Aktif${node.detail ? ` (${node.detail})` : ''}`
                     : node.status === 'bypassed'
@@ -1630,9 +1644,9 @@ export function AudioSettingsTab() {
         </div>
 
         {/* Requested vs Actual Stream Metadata Comparison */}
-        <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-3.5 space-y-2 text-xs">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold text-[#E8FFF3] flex items-center gap-1.5">
+        <div className="rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.1] p-4 space-y-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-semibold text-[#E8FFF3] flex items-center gap-2">
               <Headphones className="w-3.5 h-3.5 text-[#19EE8A]" strokeWidth={1.9} />
               Perbandingan Kualitas Diminta vs Aktual Diputar
             </span>
@@ -1678,7 +1692,7 @@ export function AudioSettingsTab() {
               </div>
             </div>
           ) : (
-            <p className="text-[11px] text-[#B3F7D1]/55">
+            <p className="text-[11px] text-[#B3F7D1]/55 leading-relaxed max-w-[65ch]">
               Belum ada stream lagu aktif. Putar lagu atau jalankan Tes Nada untuk memeriksa
               metadata aktual.
             </p>
@@ -1686,13 +1700,13 @@ export function AudioSettingsTab() {
         </div>
 
         {/* Tes Nada Generator */}
-        <div className="pt-3 border-t border-[#B3F7D1]/[0.1] space-y-2.5">
+        <div className="pt-4 border-t border-[#B3F7D1]/[0.1] space-y-2">
           <div>
-            <p className="text-sm font-medium text-[#E8FFF3] flex items-center gap-1.5">
+            <p className="text-sm font-medium text-[#E8FFF3] flex items-center gap-2">
               <Waves className="w-4 h-4 text-[#19EE8A]" strokeWidth={1.9} />
               Tes Nada (Uji Rantai Web Audio Tanpa Lagu)
             </p>
-            <p className="text-xs text-[#B3F7D1]/60">
+            <p className="text-xs text-[#B3F7D1]/60 leading-relaxed max-w-[65ch] mt-1">
               Putar sweep 20 Hz–20 kHz atau pink noise stereo melalui Preamp, EQ, Bass Boost,
               Stereo Widener, Normalisasi/Limiter, Mono, Balance, dan Volume secara real-time.
             </p>
@@ -1701,7 +1715,7 @@ export function AudioSettingsTab() {
             <button
               type="button"
               onClick={() => void handleToggleTestTone('sweep')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors border ${
+              className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-colors border ${
                 diagnostics.testToneMode === 'sweep'
                   ? 'bg-sc-gradient border-transparent text-[#0F1F17]'
                   : 'bg-white/[0.07] hover:bg-white/[0.13] backdrop-blur-md border-white/[0.12] text-[#E8FFF3]'
@@ -1714,7 +1728,7 @@ export function AudioSettingsTab() {
             <button
               type="button"
               onClick={() => void handleToggleTestTone('pink')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors border ${
+              className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-colors border ${
                 diagnostics.testToneMode === 'pink'
                   ? 'bg-sc-gradient border-transparent text-[#0F1F17]'
                   : 'bg-white/[0.07] hover:bg-white/[0.13] backdrop-blur-md border-white/[0.12] text-[#E8FFF3]'
@@ -1728,7 +1742,7 @@ export function AudioSettingsTab() {
               <button
                 type="button"
                 onClick={stopTestTone}
-                className="px-3.5 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs font-semibold"
+                className="min-h-[44px] px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs font-semibold"
               >
                 Stop Tes Nada
               </button>

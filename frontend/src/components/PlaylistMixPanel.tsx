@@ -53,7 +53,7 @@ export function PlaylistMixPanel({
     <section
       aria-label="Pengaturan Mix DJ"
       className={`rounded-2xl bg-white/[0.045] backdrop-blur-xl border border-[#19EE8A]/25 ${
-        compact ? 'p-3 space-y-3' : 'p-4 space-y-3.5'
+        compact ? 'p-4 space-y-4' : 'p-4 sm:p-6 space-y-4'
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -77,7 +77,7 @@ export function PlaylistMixPanel({
           <button
             type="button"
             onClick={onStartMixPlayback}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sc-gradient text-[#0F1F17] text-[11px] font-bold hover:brightness-105 transition-all shrink-0"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-full bg-sc-gradient text-[#0F1F17] text-[11px] font-bold hover:brightness-105 transition-all shrink-0"
           >
             <AudioWaveform className="w-3.5 h-3.5" strokeWidth={2} />
             Putar dengan Mix
@@ -86,13 +86,13 @@ export function PlaylistMixPanel({
       </div>
 
       {directModeActive && (
-        <p className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-1.5">
+        <p className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-400/20 rounded-xl px-4 py-2 leading-relaxed max-w-[65ch]">
           Mode Direct sedang aktif — transisi DJ dan EQ dilewati hingga Mode Direct dimatikan.
         </p>
       )}
 
       {/* Duration slider */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <div className="flex items-center justify-between text-xs">
           <span className="text-[#B3F7D1]/75 font-medium">Durasi transisi</span>
           <span className="text-[#19EE8A] font-semibold font-mono-num tabular-nums">
@@ -110,7 +110,7 @@ export function PlaylistMixPanel({
           style={{
             background: `linear-gradient(to right, #19EE8A ${durationPct}%, rgba(179,247,209,0.18) ${durationPct}%)`,
           }}
-          className="sc-range-visible w-full"
+          className="sc-range-visible w-full min-h-[44px]"
         />
         <div className="flex items-center justify-between text-[10px] text-[#B3F7D1]/45 tabular-nums">
           <span>1 dtk</span>
@@ -120,12 +120,12 @@ export function PlaylistMixPanel({
       </div>
 
       {/* Transition styles */}
-      <div className="space-y-1.5">
-        <p className="text-[11px] font-medium text-[#B3F7D1]/75 flex items-center gap-1.5">
+      <div className="space-y-2">
+        <p className="text-[11px] font-medium text-[#B3F7D1]/75 flex items-center gap-2">
           <SlidersHorizontal className="w-3 h-3 text-[#19EE8A]" strokeWidth={1.9} />
           Gaya transisi
         </p>
-        <div className={`grid gap-1.5 ${compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
+        <div className={`grid gap-2 ${compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
           {DJ_TRANSITION_STYLES.map((st) => {
             const active = settings.transitionStyle === st.id;
             return (
@@ -135,7 +135,7 @@ export function PlaylistMixPanel({
                 aria-pressed={active}
                 title={st.description}
                 onClick={() => onChange({ transitionStyle: st.id })}
-                className={`px-2.5 py-2 rounded-xl text-[11px] font-semibold text-left transition-colors border ${
+                className={`min-h-[44px] px-4 py-2 rounded-xl text-[11px] font-semibold text-left transition-colors border ${
                   active
                     ? 'bg-[#19EE8A]/15 text-[#19EE8A] border-[#19EE8A]/40'
                     : 'bg-white/[0.045] text-[#B3F7D1]/75 hover:text-[#E8FFF3] hover:bg-white/[0.08] border-white/[0.08]'
@@ -149,8 +149,8 @@ export function PlaylistMixPanel({
       </div>
 
       {/* EQ Blend, Beat Match, & Volume Curve */}
-      <div className={`grid gap-2 pt-1 ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}>
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2">
+      <div className={`grid gap-2 pt-2 ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}>
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2">
           <div className="min-w-0">
             <p id={beatMatchId} className="text-xs font-medium text-[#E8FFF3] truncate">
               Beat Matching
@@ -165,19 +165,23 @@ export function PlaylistMixPanel({
             aria-checked={settings.beatMatch}
             aria-labelledby={beatMatchId}
             onClick={() => onChange({ beatMatch: !settings.beatMatch })}
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-              settings.beatMatch ? 'bg-sc-gradient' : 'bg-white/[0.14]'
-            }`}
+            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center shrink-0 rounded-full"
           >
             <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${
-                settings.beatMatch ? 'translate-x-5 bg-[#E8FFF3]' : 'translate-x-0.5 bg-[#B3F7D1]/75'
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                settings.beatMatch ? 'bg-sc-gradient' : 'bg-white/[0.14]'
               }`}
-            />
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${
+                  settings.beatMatch ? 'translate-x-5 bg-[#E8FFF3]' : 'translate-x-0.5 bg-[#B3F7D1]/75'
+                }`}
+              />
+            </span>
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2">
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2">
           <div className="min-w-0">
             <p id={eqBlendId} className="text-xs font-medium text-[#E8FFF3] truncate">
               Blend EQ
@@ -192,19 +196,23 @@ export function PlaylistMixPanel({
             aria-checked={settings.eqBlend}
             aria-labelledby={eqBlendId}
             onClick={() => onChange({ eqBlend: !settings.eqBlend })}
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-              settings.eqBlend ? 'bg-sc-gradient' : 'bg-white/[0.14]'
-            }`}
+            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center shrink-0 rounded-full"
           >
             <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${
-                settings.eqBlend ? 'translate-x-5 bg-[#E8FFF3]' : 'translate-x-0.5 bg-[#B3F7D1]/75'
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                settings.eqBlend ? 'bg-sc-gradient' : 'bg-white/[0.14]'
               }`}
-            />
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${
+                  settings.eqBlend ? 'translate-x-5 bg-[#E8FFF3]' : 'translate-x-0.5 bg-[#B3F7D1]/75'
+                }`}
+              />
+            </span>
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2">
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2">
           <label
             htmlFor="dj-volume-curve"
             className="text-xs font-medium text-[#E8FFF3] shrink-0 flex items-center gap-1"
@@ -216,7 +224,7 @@ export function PlaylistMixPanel({
             id="dj-volume-curve"
             value={settings.volumeCurve}
             onChange={(e) => onChange({ volumeCurve: e.target.value as DjVolumeCurve })}
-            className="bg-black/40 border border-white/[0.12] rounded-lg px-2 py-1 text-[11px] font-medium text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
+            className="min-h-[44px] bg-black/40 border border-white/[0.12] rounded-lg px-2 py-1 text-[11px] font-medium text-[#E8FFF3] focus:outline-none focus:border-[#19EE8A]"
           >
             {DJ_VOLUME_CURVES.map((c) => (
               <option key={c.id} value={c.id} className="bg-[#0B0F0D] text-[#E8FFF3]">
