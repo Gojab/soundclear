@@ -58,7 +58,30 @@ import { usePlayerStore } from './store/playerStore';
 import { useSettingsStore } from './store/settingsStore';
 import { hasActiveCustomBackground } from './utils/backgroundTheme';
 import { isExcludedRegionalText, parseDeepLinkSearch } from './utils/playerLogic';
-import type { LocalPlaylist, MediaItem, SearchFilter } from './types/music';
+import type { LocalPlaylist, MediaItem, RouteView, SearchFilter } from './types/music';
+
+function getRouteTransitionKey(route: RouteView): string {
+  switch (route.name) {
+    case 'search':
+      return `search:${route.query ?? ''}:${route.filter ?? 'all'}`;
+    case 'mood-detail':
+      return `mood-detail:${route.params}`;
+    case 'create-mix':
+      return `create-mix:${route.seedTrack?.id ?? ''}:${route.seedGenre ?? ''}`;
+    case 'artist':
+    case 'album':
+    case 'playlist':
+    case 'podcast':
+    case 'episode':
+    case 'local-playlist':
+    case 'mix':
+      return `${route.name}:${route.id}`;
+    case 'settings':
+      return `settings:${route.tab ?? 'general'}:${Boolean(route.focusEq)}`;
+    default:
+      return route.name;
+  }
+}
 
 export default function App() {
   const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
@@ -627,7 +650,8 @@ export default function App() {
 
           {/* Scrollable page body */}
           <div
-            className={`relative z-10 flex-1 px-4 sm:px-6 lg:px-8 pb-4 sm:pb-6 ${
+            key={getRouteTransitionKey(currentRoute)}
+            className={`sc-route-enter relative z-10 flex-1 px-4 sm:px-6 lg:px-8 pb-4 sm:pb-6 ${
               currentRoute.name === 'home' ||
               currentRoute.name === 'settings' ||
               currentRoute.name === 'search'
